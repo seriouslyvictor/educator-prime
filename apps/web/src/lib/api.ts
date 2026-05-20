@@ -22,7 +22,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   authMe: () => request<AuthState>("/api/auth/me"),
   connectGoogle: (scopes: string[]) =>
-    request<{ mock_connected: boolean; scopes: string[] }>("/api/auth/google/start", {
+    request<{
+      authorization_url: string | null;
+      mock_connected: boolean;
+      scopes: string[];
+    }>("/api/auth/google/start", {
       method: "POST",
       body: JSON.stringify(scopes),
     }),

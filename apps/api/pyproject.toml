@@ -9,6 +9,9 @@ dependencies = [
   "sqlmodel>=0.0.22",
   "pydantic-settings>=2.4.0",
   "python-multipart>=0.0.9",
+  "google-api-python-client>=2.170.0",
+  "google-auth>=2.40.0",
+  "google-auth-oauthlib>=1.2.0",
 ]
 
 [project.optional-dependencies]

@@ -5,6 +5,17 @@ export function isFolderExportSupported(): boolean {
   return typeof window.showDirectoryPicker === "function";
 }
 
+export async function pickExportFolder(): Promise<FileSystemDirectoryHandle> {
+  if (!window.showDirectoryPicker) {
+    throw new Error("Folder export requires Chrome or Edge.");
+  }
+
+  return window.showDirectoryPicker({
+    id: "classroom-downloader-export",
+    mode: "readwrite",
+  });
+}
+
 async function ensureDirectory(
   root: FileSystemDirectoryHandle,
   segments: string[],
@@ -40,17 +51,9 @@ async function writeExportFile(
 
 export async function exportJobToFolder(
   job: ExportJob,
+  root: FileSystemDirectoryHandle,
   onProgress: (completed: number, total: number, currentPath: string) => void,
 ): Promise<void> {
-  if (!window.showDirectoryPicker) {
-    throw new Error("Folder export requires Chrome or Edge.");
-  }
-
-  const root = await window.showDirectoryPicker({
-    id: "classroom-downloader-export",
-    mode: "readwrite",
-  });
-
   let completed = 0;
   for (const file of job.files) {
     await writeExportFile(root, job.id, file);

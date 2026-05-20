@@ -12,7 +12,11 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { api } from "./lib/api";
-import { exportJobToFolder, isFolderExportSupported } from "./lib/folder-export";
+import {
+  exportJobToFolder,
+  isFolderExportSupported,
+  pickExportFolder,
+} from "./lib/folder-export";
 import type { Activity, AuthState, Course, ExportJob } from "./types";
 import {
   Badge,
@@ -28,11 +32,12 @@ import {
 } from "./components/ui";
 
 const classroomScopes = [
-  "classroom.courses.readonly",
-  "classroom.coursework.students.readonly",
-  "classroom.student-submissions.students.readonly",
-  "classroom.profile.emails",
-  "drive.readonly",
+  "https://www.googleapis.com/auth/classroom.courses.readonly",
+  "https://www.googleapis.com/auth/classroom.coursework.students.readonly",
+  "https://www.googleapis.com/auth/classroom.rosters.readonly",
+  "https://www.googleapis.com/auth/classroom.student-submissions.students.readonly",
+  "https://www.googleapis.com/auth/classroom.profile.emails",
+  "https://www.googleapis.com/auth/drive.readonly",
 ];
 
 export function App() {
@@ -50,15 +55,15 @@ export function App() {
     total: 0,
     currentPath: "",
   });
+  const [folderSupported, setFolderSupported] = useState(false);
 
   const selectedCourse = useMemo(
     () => courses.find((course) => course.id === selectedCourseId),
     [courses, selectedCourseId],
   );
 
-  const folderSupported = isFolderExportSupported();
-
   useEffect(() => {
+    setFolderSupported(isFolderExportSupported());
     void bootstrap();
   }, []);
 
@@ -98,7 +103,11 @@ export function App() {
     setBusy(true);
     setError(null);
     try {
-      await api.connectGoogle(classroomScopes);
+      const authStart = await api.connectGoogle(classroomScopes);
+      if (authStart.authorization_url) {
+        window.location.href = authStart.authorization_url;
+        return;
+      }
       setAuth(await api.authMe());
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Failed to connect Google.");
@@ -114,9 +123,10 @@ export function App() {
     setError(null);
     setExportProgress({ completed: 0, total: 0, currentPath: "" });
     try {
+      const root = await pickExportFolder();
       const exportJob = await api.createExport(selectedCourse.id, selectedActivityIds);
       setJob(exportJob);
-      await exportJobToFolder(exportJob, (completed, total, currentPath) => {
+      await exportJobToFolder(exportJob, root, (completed, total, currentPath) => {
         setExportProgress({ completed, total, currentPath });
       });
     } catch (caught) {

@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     google_client_id: str | None = None
     google_client_secret: str | None = None
     google_redirect_uri: str = "http://localhost:8000/api/auth/google/callback"
+    google_token_path: str = ".tokens/google-user.json"
+    google_oauth_state_path: str = ".tokens/google-oauth-state.txt"
 
 
 @lru_cache

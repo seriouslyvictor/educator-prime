@@ -1,6 +1,7 @@
 import os
 
 os.environ["CD_DATABASE_URL"] = "sqlite:///:memory:"
+os.environ["CD_GOOGLE_PROVIDER"] = "mock"
 
 from fastapi.testclient import TestClient
 

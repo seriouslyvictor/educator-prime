@@ -13,6 +13,7 @@ The MVP runs with `CD_GOOGLE_PROVIDER=mock` by default. Real Google access shoul
 
 - `classroom.courses.readonly`
 - `classroom.coursework.students.readonly`
+- `classroom.rosters.readonly`
 - `classroom.student-submissions.students.readonly`
 - `classroom.profile.emails`
 - `drive.readonly`

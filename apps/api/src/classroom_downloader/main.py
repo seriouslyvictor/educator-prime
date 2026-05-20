@@ -1,14 +1,24 @@
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
+import json
+import os
+from pathlib import Path
+from secrets import token_urlsafe
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import RedirectResponse, Response
 from sqlmodel import Session, select
 
 from .database import get_session, init_db
-from .google_provider import GOOGLE_NATIVE_EXPORTS, GoogleProvider, get_google_provider
+from .google_provider import (
+    GOOGLE_NATIVE_EXPORTS,
+    GoogleProvider,
+    TokenStore,
+    build_oauth_authorization_url,
+    get_google_provider,
+)
 from .models import Activity, Course, ExportError, ExportFile, ExportJob, ExportStatus
 from .naming import build_output_path
 from .schemas import (
@@ -53,6 +63,24 @@ def health() -> dict[str, str]:
 
 @app.get("/api/auth/me", response_model=AuthState)
 def auth_me() -> AuthState:
+    if settings.google_provider == "google":
+        token_store = TokenStore(settings.google_token_path)
+        scopes: set[str] = set()
+        if token_store.exists():
+            try:
+                credentials = token_store.load_credentials()
+                scopes = set(credentials.scopes or [])
+            except Exception:
+                scopes = set()
+        return AuthState(
+            signed_in=token_store.exists(),
+            identity_scopes={"openid", "email", "profile"}.issubset(scopes),
+            classroom_scopes=any(scope.startswith("classroom.") for scope in scopes)
+            or any("classroom" in scope for scope in scopes),
+            drive_scopes=any("drive.readonly" in scope for scope in scopes),
+            email=None,
+            provider=settings.google_provider,
+        )
     return AuthState(
         signed_in=True,
         identity_scopes=True,
@@ -67,12 +95,60 @@ def auth_me() -> AuthState:
 def auth_start(scopes: list[str]) -> AuthStart:
     if settings.google_provider == "mock":
         return AuthStart(mock_connected=True, scopes=scopes)
-    if not settings.google_client_id:
+    if not settings.google_client_id or not settings.google_client_secret:
         raise HTTPException(status_code=503, detail="Google OAuth is not configured.")
-    raise HTTPException(
-        status_code=501,
-        detail="Real Google OAuth callback flow is reserved for credential configuration.",
+    state = token_urlsafe(24)
+    state_path = Path(settings.google_oauth_state_path)
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(
+        json.dumps({"state": state, "scopes": scopes}),
+        encoding="utf-8",
     )
+    return AuthStart(
+        authorization_url=build_oauth_authorization_url(
+            client_id=settings.google_client_id,
+            client_secret=settings.google_client_secret,
+            redirect_uri=settings.google_redirect_uri,
+            scopes=scopes,
+            state=state,
+        ),
+        scopes=scopes,
+    )
+
+
+@app.get("/api/auth/google/callback")
+def auth_callback(request: Request, code: str, state: str) -> RedirectResponse:
+    if not settings.google_client_id or not settings.google_client_secret:
+        raise HTTPException(status_code=503, detail="Google OAuth is not configured.")
+    state_path = Path(settings.google_oauth_state_path)
+    state_payload = (
+        json.loads(state_path.read_text(encoding="utf-8")) if state_path.exists() else {}
+    )
+    expected_state = state_payload.get("state")
+    if not expected_state or state != expected_state:
+        raise HTTPException(status_code=400, detail="Invalid OAuth state.")
+
+    from google_auth_oauthlib.flow import Flow
+
+    flow = Flow.from_client_config(
+        {
+            "web": {
+                "client_id": settings.google_client_id,
+                "client_secret": settings.google_client_secret,
+                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                "token_uri": "https://oauth2.googleapis.com/token",
+                "redirect_uris": [settings.google_redirect_uri],
+            }
+        },
+        scopes=state_payload.get("scopes", []),
+        state=state,
+    )
+    flow.redirect_uri = settings.google_redirect_uri
+    os.environ["OAUTHLIB_RELAX_TOKEN_SCOPE"] = "1"
+    flow.fetch_token(authorization_response=str(request.url), code=code)
+    TokenStore(settings.google_token_path).save(flow.credentials.to_json())
+    state_path.unlink(missing_ok=True)
+    return RedirectResponse(f"{settings.frontend_origin}/?google=connected")
 
 
 @app.get("/api/courses", response_model=list[CourseRead])
