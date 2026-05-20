@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+*.pyc
+*.db
+*.db-journal
+*.egg-info/
+node_modules/
+dist/
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+.superpowers/
