@@ -4,6 +4,8 @@ export interface AuthState {
   classroom_scopes: boolean;
   drive_scopes: boolean;
   email: string | null;
+  name: string | null;
+  picture: string | null;
   provider: string;
 }
 

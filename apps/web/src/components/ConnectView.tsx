@@ -27,19 +27,16 @@ export function ConnectView({
           <ScopeItem title="Read attached Drive files" copy="Read-only access so files can be copied locally." />
         </div>
 
-        <div className={`browser-note ${deliveryMode}`}>
-          <AppIcon name={deliveryMode === "folder" ? "folderOpen" : "archive"} />
-          <div>
-            <div className="bn-title">
-              {deliveryMode === "folder" ? "Direct-to-folder ready" : ".zip delivery placeholder"}
-            </div>
-            <div className="bn-desc">
-              {deliveryMode === "folder"
-                ? "Chrome and Edge can write files straight into a folder you pick."
-                : "This browser cannot write to a folder. Zip delivery is planned, but not active in this build."}
-            </div>
-          </div>
-        </div>
+        <Notice
+          icon={deliveryMode === "folder" ? "folderOpen" : "archive"}
+          tone={deliveryMode === "folder" ? "info" : "warning"}
+          title={deliveryMode === "folder" ? "Direct-to-folder ready" : ".zip delivery placeholder"}
+          copy={
+            deliveryMode === "folder"
+              ? "Chrome and Edge can write files straight into a folder you pick."
+              : "This browser cannot write to a folder. Zip delivery is planned, but not active in this build."
+          }
+        />
 
         {error ? <InlineError message={error} /> : null}
 
@@ -62,6 +59,30 @@ export function InlineError({ message }: { message: string }) {
     <div className="inline-error">
       <AppIcon name="triangleAlert" />
       <span>{message}</span>
+    </div>
+  );
+}
+
+function Notice({
+  icon,
+  tone,
+  title,
+  copy,
+}: {
+  icon: "folderOpen" | "archive";
+  tone: "info" | "warning";
+  title: string;
+  copy: string;
+}) {
+  return (
+    <div className={`notice notice-${tone}`}>
+      <div className="notice-icon">
+        <AppIcon name={icon} />
+      </div>
+      <div className="notice-copy">
+        <div className="notice-title">{title}</div>
+        <div className="notice-desc">{copy}</div>
+      </div>
     </div>
   );
 }

@@ -19,6 +19,8 @@ export function Rail({
   onThemeChange: (mode: ThemeMode) => void;
 }) {
   const connected = Boolean(auth?.signed_in && auth.classroom_scopes && auth.drive_scopes);
+  const accountName = auth?.name ?? auth?.email ?? (connected ? "Google account connected" : "Not signed in");
+  const fallbackInitials = getInitials(auth?.name, auth?.email);
   return (
     <aside className="rail">
       <div className="rail-brand">
@@ -60,11 +62,11 @@ export function Rail({
       </div>
 
       <div className="rail-account">
-        <div className="avatar">{auth?.email ? auth.email.slice(0, 2).toUpperCase() : "CD"}</div>
+        <div className="avatar" aria-hidden="true">
+          {auth?.picture ? <img src={auth.picture} alt="" referrerPolicy="no-referrer" /> : fallbackInitials}
+        </div>
         <div className="account-copy">
-          <div className="acct-name">
-            {auth?.email ?? (connected ? "Google account connected" : "Not signed in")}
-          </div>
+          <div className="acct-name">{accountName}</div>
           <div className={`acct-status ${connected ? "ready" : ""}`}>
             {connected ? "Ready to export" : "Connect to begin"}
           </div>
@@ -72,6 +74,13 @@ export function Rail({
       </div>
     </aside>
   );
+}
+
+function getInitials(name?: string | null, email?: string | null) {
+  const source = name?.trim() || email?.split("@")[0] || "";
+  const parts = source.split(/[\s._-]+/).filter(Boolean);
+  if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+  return source.slice(0, 2).toUpperCase() || "CD";
 }
 
 function ConnectionItem({ label, ready }: { label: string; ready: boolean }) {

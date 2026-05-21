@@ -197,4 +197,4 @@ function workTypeIcon(type: string): "sparkle" | "info" | "fileText" | "file" {
   return "file";
 }
 
-const palette = ["#2A2FE0", "#1F8A5B", "#B8740B", "#6b3fe0", "#C7421E", "#0aa3a3"];
+const palette = ["#059669", "#10b981", "#047857", "#34d399", "#1f8a5b", "#0f766e"];

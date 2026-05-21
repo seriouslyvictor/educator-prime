@@ -42,7 +42,17 @@ class SubmissionFile:
     content: bytes = b""
 
 
+@dataclass(frozen=True)
+class AccountProfile:
+    name: str | None
+    email: str | None
+    picture: str | None
+
+
 class GoogleProvider:
+    def account_profile(self) -> AccountProfile:
+        return AccountProfile(name=None, email=None, picture=None)
+
     def list_courses(self) -> list[ClassroomCourse]:
         raise NotImplementedError
 
@@ -146,6 +156,17 @@ class GoogleApiProvider(GoogleProvider):
         self.drive = build("drive", "v3", credentials=credentials, cache_discovery=False)
         self._profile_cache: dict[str, tuple[str | None, str | None]] = {}
         self._roster_cache: dict[str, dict[str, tuple[str | None, str | None]]] = {}
+
+    def account_profile(self) -> AccountProfile:
+        try:
+            profile = self.classroom.userProfiles().get(userId="me").execute()
+        except Exception:
+            return AccountProfile(name=None, email=None, picture=None)
+        return AccountProfile(
+            name=profile.get("name", {}).get("fullName"),
+            email=profile.get("emailAddress"),
+            picture=profile.get("photoUrl"),
+        )
 
     def list_courses(self) -> list[ClassroomCourse]:
         courses: list[ClassroomCourse] = []
@@ -406,6 +427,13 @@ class MockGoogleProvider(GoogleProvider):
             b"Mock DOCX bytes for Diego Lima\n",
         ),
     ]
+
+    def account_profile(self) -> AccountProfile:
+        return AccountProfile(
+            name="Teacher Example",
+            email="teacher@example.edu",
+            picture=None,
+        )
 
     def list_courses(self) -> list[ClassroomCourse]:
         return self.courses

@@ -19,11 +19,15 @@ import { useThemePreference } from "./lib/theme";
 import type { Activity, AppView, AuthState, Course, ExportJob, LocalExportHistoryItem } from "./types";
 
 const classroomScopes = [
+  "openid",
+  "email",
+  "profile",
   "https://www.googleapis.com/auth/classroom.courses.readonly",
   "https://www.googleapis.com/auth/classroom.coursework.students.readonly",
   "https://www.googleapis.com/auth/classroom.rosters.readonly",
   "https://www.googleapis.com/auth/classroom.student-submissions.students.readonly",
   "https://www.googleapis.com/auth/classroom.profile.emails",
+  "https://www.googleapis.com/auth/classroom.profile.photos",
   "https://www.googleapis.com/auth/drive.readonly",
 ];
 
@@ -168,10 +172,16 @@ export function App() {
         setView("connect");
         return;
       }
-      await loadCourses();
+      try {
+        await loadCourses();
+      } catch (caught) {
+        setError(caught instanceof Error ? caught.message : "Failed to load app state.");
+        setView("connect");
+        return;
+      }
       setView("workspace");
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Failed to load app state.");
+    } catch {
+      setAuth(null);
       setView("connect");
     } finally {
       setLoading(false);

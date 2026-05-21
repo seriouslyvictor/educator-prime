@@ -61,6 +61,8 @@ class AuthState(BaseModel):
     classroom_scopes: bool
     drive_scopes: bool
     email: str | None = None
+    name: str | None = None
+    picture: str | None = None
     provider: str
 
 

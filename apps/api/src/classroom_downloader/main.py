@@ -66,27 +66,44 @@ def auth_me() -> AuthState:
     if settings.google_provider == "google":
         token_store = TokenStore(settings.google_token_path)
         scopes: set[str] = set()
+        name = None
+        email = None
+        picture = None
         if token_store.exists():
             try:
                 credentials = token_store.load_credentials()
                 scopes = set(credentials.scopes or [])
+                profile = get_google_provider().account_profile()
+                name = profile.name
+                email = profile.email
+                picture = profile.picture
             except Exception:
                 scopes = set()
+                name = None
+                email = None
+                picture = None
+        has_google_identity = {"openid", "email", "profile"}.issubset(scopes)
+        has_classroom_identity = any("classroom.profile.emails" in scope for scope in scopes)
         return AuthState(
             signed_in=token_store.exists(),
-            identity_scopes={"openid", "email", "profile"}.issubset(scopes),
+            identity_scopes=has_google_identity or has_classroom_identity,
             classroom_scopes=any(scope.startswith("classroom.") for scope in scopes)
             or any("classroom" in scope for scope in scopes),
             drive_scopes=any("drive.readonly" in scope for scope in scopes),
-            email=None,
+            email=email,
+            name=name,
+            picture=picture,
             provider=settings.google_provider,
         )
+    profile = get_google_provider().account_profile()
     return AuthState(
         signed_in=True,
         identity_scopes=True,
         classroom_scopes=settings.google_provider == "mock",
         drive_scopes=settings.google_provider == "mock",
-        email="teacher@example.edu" if settings.google_provider == "mock" else None,
+        email=profile.email,
+        name=profile.name,
+        picture=profile.picture,
         provider=settings.google_provider,
     )
 

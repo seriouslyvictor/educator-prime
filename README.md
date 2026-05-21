@@ -14,9 +14,7 @@ Backend:
 
 ```powershell
 cd apps/api
-python -m venv .venv
-.\.venv\Scripts\python -m pip install -e ".[dev]"
-.\.venv\Scripts\python -m uvicorn classroom_downloader.main:app --reload --port 8000
+uv run --extra dev python -m uvicorn classroom_downloader.main:app --app-dir src --reload --port 8000
 ```
 
 Frontend:
@@ -28,5 +26,9 @@ npm run dev
 ```
 
 Open `http://localhost:5173`.
+
+Keep the backend running while using the frontend. Vite proxies `/api/*` requests to
+`http://127.0.0.1:8000`; if the API is not listening, the browser will show a generic
+request failure from the proxy.
 
 The backend runs in mock Google mode by default, so the product workflow can be tested before Google OAuth credentials are configured.
