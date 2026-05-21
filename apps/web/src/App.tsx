@@ -1,35 +1,22 @@
-import {
-  BookOpenCheck,
-  CheckCircle2,
-  Download,
-  FileDown,
-  FolderOpen,
-  GraduationCap,
-  Loader2,
-  RefreshCw,
-  ShieldCheck,
-  TriangleAlert,
-} from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ActionBar } from "./components/ActionBar";
+import { ConnectView, InlineError } from "./components/ConnectView";
+import { DoneView } from "./components/DoneView";
+import { DryRunDrawer } from "./components/DryRunDrawer";
+import { HistoryView } from "./components/HistoryView";
+import { ProgressView, type ProgressLogItem } from "./components/ProgressView";
+import { Rail } from "./components/Rail";
+import { ActivityList, ClassroomList } from "./components/Workspace";
 import { api } from "./lib/api";
 import {
   exportJobToFolder,
   isFolderExportSupported,
   pickExportFolder,
 } from "./lib/folder-export";
-import type { Activity, AuthState, Course, ExportJob } from "./types";
-import {
-  Badge,
-  Button,
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-  Empty,
-  Progress,
-  Skeleton,
-} from "./components/ui";
+import { useLocalExportHistory } from "./lib/local-history";
+import { buildPreviewTree } from "./lib/preview-tree";
+import { useThemePreference } from "./lib/theme";
+import type { Activity, AppView, AuthState, Course, ExportJob, LocalExportHistoryItem } from "./types";
 
 const classroomScopes = [
   "https://www.googleapis.com/auth/classroom.courses.readonly",
@@ -41,53 +28,168 @@ const classroomScopes = [
 ];
 
 export function App() {
+  const { mode: themeMode, setMode: setThemeMode } = useThemePreference();
+  const { history, addHistoryItem } = useLocalExportHistory();
+  const folderSupported = isFolderExportSupported();
+  const deliveryMode: "folder" | "zip" = folderSupported ? "folder" : "zip";
+
+  const [view, setView] = useState<AppView>("connect");
   const [auth, setAuth] = useState<AuthState | null>(null);
   const [courses, setCourses] = useState<Course[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
-  const [selectedCourseId, setSelectedCourseId] = useState<string>("");
+  const [selectedCourseId, setSelectedCourseId] = useState("");
   const [selectedActivityIds, setSelectedActivityIds] = useState<string[]>([]);
+  const [classQuery, setClassQuery] = useState("");
+  const [activityQuery, setActivityQuery] = useState("");
+  const [cursorIndex, setCursorIndex] = useState(0);
+  const [keyboardActive, setKeyboardActive] = useState(false);
+  const [dryRunOpen, setDryRunOpen] = useState(false);
   const [job, setJob] = useState<ExportJob | null>(null);
+  const [lastResult, setLastResult] = useState<LocalExportHistoryItem | null>(null);
   const [loading, setLoading] = useState(true);
+  const [activitiesLoading, setActivitiesLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [exportProgress, setExportProgress] = useState({
-    completed: 0,
-    total: 0,
-    currentPath: "",
-  });
-  const [folderSupported, setFolderSupported] = useState(false);
+  const [progress, setProgress] = useState({ completed: 0, total: 0, currentPath: "" });
+  const [progressLog, setProgressLog] = useState<ProgressLogItem[]>([]);
 
+  const connected = Boolean(auth?.signed_in && auth.classroom_scopes && auth.drive_scopes);
   const selectedCourse = useMemo(
     () => courses.find((course) => course.id === selectedCourseId),
     [courses, selectedCourseId],
   );
+  const selectedActivities = useMemo(
+    () => activities.filter((activity) => selectedActivityIds.includes(activity.id)),
+    [activities, selectedActivityIds],
+  );
+  const filteredActivities = useMemo(
+    () =>
+      activities.filter((activity) =>
+        `${activity.title} ${activity.work_type}`.toLowerCase().includes(activityQuery.toLowerCase()),
+      ),
+    [activities, activityQuery],
+  );
+  const previewTree = selectedCourse
+    ? buildPreviewTree(selectedCourse, selectedActivities, job)
+    : null;
 
   useEffect(() => {
-    setFolderSupported(isFolderExportSupported());
     void bootstrap();
   }, []);
+
+  useEffect(() => {
+    if (connected && view === "connect") {
+      setView("workspace");
+    }
+  }, [connected, view]);
+
+  useEffect(() => {
+    setCursorIndex(0);
+  }, [selectedCourseId, activityQuery]);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const tag = target?.tagName.toLowerCase();
+      const inField = tag === "input" || tag === "textarea";
+
+      if (event.key === "Escape" && dryRunOpen) {
+        event.preventDefault();
+        setDryRunOpen(false);
+        return;
+      }
+
+      if (view === "progress" && event.key === "Escape") {
+        event.preventDefault();
+        setView("workspace");
+        return;
+      }
+
+      if (view === "done" && event.key === "Enter") {
+        event.preventDefault();
+        setView("history");
+        return;
+      }
+
+      if (view !== "workspace") return;
+      if (inField && event.key !== "Escape") return;
+
+      if (event.ctrlKey && event.key.toLowerCase() === "a") {
+        event.preventDefault();
+        toggleAllActivities(filteredActivities, true);
+        return;
+      }
+
+      if (event.ctrlKey && event.key.toLowerCase() === "d") {
+        event.preventDefault();
+        if (selectedActivityIds.length > 0) setDryRunOpen(true);
+        return;
+      }
+
+      if (event.ctrlKey && event.key === "Enter") {
+        event.preventDefault();
+        void startExport();
+        return;
+      }
+
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        setKeyboardActive(true);
+        setCursorIndex((index) => Math.min(filteredActivities.length - 1, index + 1));
+      }
+
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        setKeyboardActive(true);
+        setCursorIndex((index) => Math.max(0, index - 1));
+      }
+
+      if (event.key === " ") {
+        const activity = filteredActivities[cursorIndex];
+        if (activity) {
+          event.preventDefault();
+          toggleActivity(activity.id);
+        }
+      }
+    };
+
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [cursorIndex, dryRunOpen, filteredActivities, selectedActivityIds.length, view]);
 
   async function bootstrap() {
     setLoading(true);
     setError(null);
     try {
-      const [authState, courseList] = await Promise.all([api.authMe(), api.courses()]);
+      const authState = await api.authMe();
       setAuth(authState);
-      setCourses(courseList);
-      if (courseList[0]) {
-        setSelectedCourseId(courseList[0].id);
-        await loadActivities(courseList[0].id);
+      const hasConnection = authState.signed_in && authState.classroom_scopes && authState.drive_scopes;
+      if (!hasConnection) {
+        setView("connect");
+        return;
       }
+      await loadCourses();
+      setView("workspace");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Failed to load app state.");
+      setView("connect");
     } finally {
       setLoading(false);
     }
   }
 
+  async function loadCourses() {
+    const courseList = await api.courses();
+    setCourses(courseList);
+    if (courseList[0]) {
+      setSelectedCourseId(courseList[0].id);
+      await loadActivities(courseList[0].id);
+    }
+  }
+
   async function loadActivities(courseId: string) {
+    setActivitiesLoading(true);
     setError(null);
-    setActivities([]);
     setSelectedActivityIds([]);
     setJob(null);
     try {
@@ -95,7 +197,10 @@ export function App() {
       setActivities(activityList);
       setSelectedActivityIds(activityList.map((activity) => activity.id));
     } catch (caught) {
+      setActivities([]);
       setError(caught instanceof Error ? caught.message : "Failed to load activities.");
+    } finally {
+      setActivitiesLoading(false);
     }
   }
 
@@ -108,7 +213,7 @@ export function App() {
         window.location.href = authStart.authorization_url;
         return;
       }
-      setAuth(await api.authMe());
+      await bootstrap();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Failed to connect Google.");
     } finally {
@@ -116,21 +221,55 @@ export function App() {
     }
   }
 
-  async function createAndDownloadExport() {
-    if (!selectedCourse || selectedActivityIds.length === 0) return;
+  async function startExport() {
+    if (!selectedCourse || selectedActivityIds.length === 0 || busy) return;
+    if (deliveryMode === "zip") {
+      setError("Zip delivery is only a placeholder in this build. Use Chrome or Edge for folder export.");
+      return;
+    }
 
     setBusy(true);
     setError(null);
-    setExportProgress({ completed: 0, total: 0, currentPath: "" });
+    setDryRunOpen(false);
+    setProgress({ completed: 0, total: 0, currentPath: "" });
+    setProgressLog([]);
+
     try {
       const root = await pickExportFolder();
       const exportJob = await api.createExport(selectedCourse.id, selectedActivityIds);
       setJob(exportJob);
+      setProgress({ completed: 0, total: exportJob.files.length, currentPath: "Preparing files..." });
+      setView("progress");
+
       await exportJobToFolder(exportJob, root, (completed, total, currentPath) => {
-        setExportProgress({ completed, total, currentPath });
+        setProgress({ completed, total, currentPath });
+        setProgressLog((current) => [
+          ...current.slice(-80),
+          { id: `${completed}-${currentPath}`, kind: "ok", text: currentPath },
+        ]);
       });
+
+      const historyItem = {
+        courseName: selectedCourse.name,
+        activityCount: selectedActivityIds.length,
+        fileCount: exportJob.files.length,
+        outputLabel: `${root.name}/${selectedCourse.name}`,
+      };
+      addHistoryItem(historyItem);
+      setLastResult({
+        ...historyItem,
+        id: crypto.randomUUID(),
+        completedAt: new Date().toISOString(),
+      });
+      setView("done");
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Export failed.");
+      const message = caught instanceof Error ? caught.message : "Export failed.";
+      setError(message);
+      setProgressLog((current) => [
+        ...current,
+        { id: `error-${Date.now()}`, kind: "err", text: message },
+      ]);
+      if (view !== "progress") setView("workspace");
     } finally {
       setBusy(false);
     }
@@ -144,239 +283,118 @@ export function App() {
     );
   }
 
+  const toggleAllActivities = useCallback((rows: Activity[], selected: boolean) => {
+    setSelectedActivityIds((current) => {
+      const next = new Set(current);
+      for (const row of rows) {
+        if (selected) next.add(row.id);
+        else next.delete(row.id);
+      }
+      return Array.from(next);
+    });
+  }, []);
+
+  function pickCourse(courseId: string) {
+    setSelectedCourseId(courseId);
+    void loadActivities(courseId);
+  }
+
+  function navigate(nextView: AppView) {
+    if (!connected && nextView !== "connect") return;
+    setView(nextView);
+  }
+
   return (
-    <div className="app-shell">
-      <aside className="sidebar">
-        <div className="brand">
-          <div className="brand-mark">CD</div>
-          <div>
-            <strong>Classroom Downloader</strong>
-            <span>Exports & manifests</span>
-          </div>
-        </div>
-        <nav>
-          <a className="active">
-            <BookOpenCheck />
-            Classrooms
-          </a>
-          <a>
-            <FileDown />
-            Export Jobs
-          </a>
-          <a>
-            <ShieldCheck />
-            Permissions
-          </a>
-        </nav>
-      </aside>
+    <div className="shell" data-screen-label={view}>
+      <Rail
+        view={view}
+        auth={auth}
+        history={history}
+        onNavigate={navigate}
+        themeMode={themeMode}
+        onThemeChange={setThemeMode}
+      />
 
-      <main>
-        <header className="topbar">
-          <div>
-            <p className="eyebrow">MVP workspace</p>
-            <h1>Classroom exports</h1>
-          </div>
-          <div className="topbar-actions">
-            <Badge variant={folderSupported ? "success" : "warning"}>
-              {folderSupported ? "Folder export ready" : "Chrome/Edge required"}
-            </Badge>
-            <Button variant="outline" onClick={() => void bootstrap()} disabled={loading || busy}>
-              <RefreshCw data-icon="inline-start" />
-              Refresh
-            </Button>
-          </div>
-        </header>
+      <main className="main">
+        {view === "connect" ? (
+          <ConnectView
+            connecting={busy}
+            deliveryMode={deliveryMode}
+            error={error}
+            onConnect={connectClassroom}
+          />
+        ) : null}
 
-        <section className="content-grid">
-          <Card className="hero-card">
-            <CardHeader>
-              <CardTitle>Download student submissions into regular folders</CardTitle>
-              <CardDescription>
-                Choose a course, select activities, pick a destination folder, and the browser
-                writes the class/activity/student file tree locally.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="hero-actions">
-                <Button onClick={connectClassroom} disabled={busy}>
-                  {busy ? <Loader2 className="spin" data-icon="inline-start" /> : <ShieldCheck data-icon="inline-start" />}
-                  Connect Classroom & Drive
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={createAndDownloadExport}
-                  disabled={
-                    busy ||
-                    !folderSupported ||
-                    !selectedCourse ||
-                    selectedActivityIds.length === 0
-                  }
-                >
-                  <FolderOpen data-icon="inline-start" />
-                  Pick folder & export
-                </Button>
-              </div>
-              {error ? (
-                <div className="alert">
-                  <TriangleAlert />
-                  <span>{error}</span>
-                </div>
-              ) : null}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Google connection</CardTitle>
-              <CardDescription>Progressive OAuth status for this user.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {auth ? (
-                <div className="status-list">
-                  <StatusRow label="Signed in" ok={auth.signed_in} />
-                  <StatusRow label="Classroom scopes" ok={auth.classroom_scopes} />
-                  <StatusRow label="Drive readonly scope" ok={auth.drive_scopes} />
-                  <p className="muted">{auth.email ?? "OAuth credentials not configured yet"}</p>
-                </div>
-              ) : (
-                <Skeleton className="status-skeleton" />
-              )}
-            </CardContent>
-          </Card>
-        </section>
-
-        <section className="content-grid columns">
-          <Card>
-            <CardHeader>
-              <CardTitle>Active classrooms</CardTitle>
-              <CardDescription>Archived courses are excluded by the API.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {loading ? (
-                <Skeleton className="table-skeleton" />
-              ) : courses.length === 0 ? (
-                <Empty
-                  icon={<GraduationCap />}
-                  title="No active courses"
-                  description="Connect Classroom to list non-archived classes."
-                />
-              ) : (
-                <div className="table-list">
-                  {courses.map((course) => (
-                    <button
-                      className={course.id === selectedCourseId ? "row selected" : "row"}
-                      key={course.id}
-                      onClick={() => {
-                        setSelectedCourseId(course.id);
-                        void loadActivities(course.id);
-                      }}
-                    >
-                      <span>
-                        <strong>{course.name}</strong>
-                        <small>{course.section ?? "No section"}</small>
-                      </span>
-                      <Badge>{course.course_state}</Badge>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Activities</CardTitle>
-              <CardDescription>Select the work to include in the export.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {activities.length === 0 ? (
-                <Empty
-                  icon={<Download />}
-                  title="No activities loaded"
-                  description="Select a classroom to fetch coursework."
-                />
-              ) : (
-                <div className="table-list">
-                  {activities.map((activity) => (
-                    <label className="row checkbox-row" key={activity.id}>
-                      <input
-                        type="checkbox"
-                        checked={selectedActivityIds.includes(activity.id)}
-                        onChange={() => toggleActivity(activity.id)}
-                      />
-                      <span>
-                        <strong>{activity.title}</strong>
-                        <small>{activity.due_label ?? activity.work_type}</small>
-                      </span>
-                      <Badge>{activity.state}</Badge>
-                    </label>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </section>
-
-        <section className="content-grid">
-          <Card>
-            <CardHeader>
-              <CardTitle>Export progress</CardTitle>
-              <CardDescription>
-                Files are streamed from FastAPI and written by the browser into your selected folder.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Progress
-                value={
-                  exportProgress.total
-                    ? (exportProgress.completed / exportProgress.total) * 100
-                    : 0
-                }
+        {view === "workspace" ? (
+          <>
+            <div className="workspace">
+              <ClassroomList
+                courses={courses}
+                activeId={selectedCourseId}
+                query={classQuery}
+                loading={loading}
+                onPick={pickCourse}
+                onQuery={setClassQuery}
               />
-              <div className="progress-copy">
-                <strong>
-                  {exportProgress.completed}/{exportProgress.total || job?.total_files || 0} files
-                </strong>
-                <span>{exportProgress.currentPath || "No export running."}</span>
-              </div>
-            </CardContent>
-          </Card>
+              <ActivityList
+                course={selectedCourse}
+                activities={activities}
+                selectedIds={selectedActivityIds}
+                query={activityQuery}
+                cursorIndex={cursorIndex}
+                keyboardActive={keyboardActive}
+                loading={activitiesLoading}
+                onToggle={toggleActivity}
+                onToggleAll={toggleAllActivities}
+                onQuery={setActivityQuery}
+              />
+            </div>
+            {error ? <InlineError message={error} /> : null}
+            <ActionBar
+              selectedCount={selectedActivityIds.length}
+              fileEstimate={job?.files.length ?? 0}
+              deliveryMode={deliveryMode}
+              disabled={selectedActivityIds.length === 0 || deliveryMode === "zip"}
+              busy={busy}
+              onDryRun={() => setDryRunOpen(true)}
+              onDownload={() => void startExport()}
+            />
+            {dryRunOpen && previewTree ? (
+              <DryRunDrawer
+                tree={previewTree}
+                fileCount={job?.files.length ?? 0}
+                deliveryMode={deliveryMode}
+                onClose={() => setDryRunOpen(false)}
+                onProceed={() => void startExport()}
+              />
+            ) : null}
+          </>
+        ) : null}
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Manifest preview</CardTitle>
-              <CardDescription>Email-first filenames generated by the backend.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {!job ? (
-                <Empty
-                  icon={<FileDown />}
-                  title="No manifest yet"
-                  description="Run an export to preview the generated file paths."
-                />
-              ) : (
-                <div className="manifest">
-                  {job.files.map((file) => (
-                    <div className="manifest-row" key={file.id}>
-                      <CheckCircle2 />
-                      <span>{file.output_path}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </section>
+        {view === "progress" && selectedCourse ? (
+          <ProgressView
+            courseName={selectedCourse.name}
+            total={progress.total}
+            completed={progress.completed}
+            failed={job?.errors.length ?? 0}
+            currentPath={progress.currentPath}
+            log={progressLog}
+            error={error}
+            deliveryMode={deliveryMode}
+            onCancel={() => setView("workspace")}
+          />
+        ) : null}
+
+        {view === "done" && lastResult ? (
+          <DoneView
+            result={lastResult}
+            onDownloadAnother={() => setView("workspace")}
+            onViewHistory={() => setView("history")}
+          />
+        ) : null}
+
+        {view === "history" ? <HistoryView items={history} onBack={() => setView("workspace")} /> : null}
       </main>
-    </div>
-  );
-}
-
-function StatusRow({ label, ok }: { label: string; ok: boolean }) {
-  return (
-    <div className="status-row">
-      <span>{label}</span>
-      <Badge variant={ok ? "success" : "warning"}>{ok ? "Ready" : "Needed"}</Badge>
     </div>
   );
 }

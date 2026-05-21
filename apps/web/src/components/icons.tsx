@@ -1,0 +1,66 @@
+import {
+  Archive,
+  BookOpenCheck,
+  Check,
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  Download,
+  Eye,
+  File,
+  FileDown,
+  FileText,
+  Folder,
+  FolderOpen,
+  History,
+  Info,
+  Loader2,
+  Moon,
+  RefreshCw,
+  Search,
+  Settings,
+  ShieldCheck,
+  Sparkles,
+  Sun,
+  TriangleAlert,
+  Users,
+  X,
+  Zap,
+} from "lucide-react";
+
+export const icons = {
+  archive: Archive,
+  classroom: BookOpenCheck,
+  check: Check,
+  checkCircle: CheckCircle2,
+  chevronDown: ChevronDown,
+  chevronRight: ChevronRight,
+  download: Download,
+  eye: Eye,
+  file: File,
+  fileDown: FileDown,
+  fileText: FileText,
+  folder: Folder,
+  folderOpen: FolderOpen,
+  history: History,
+  info: Info,
+  loader: Loader2,
+  moon: Moon,
+  refresh: RefreshCw,
+  search: Search,
+  settings: Settings,
+  shield: ShieldCheck,
+  sparkle: Sparkles,
+  sun: Sun,
+  triangleAlert: TriangleAlert,
+  users: Users,
+  x: X,
+  zap: Zap,
+};
+
+export type IconName = keyof typeof icons;
+
+export function AppIcon({ name, className }: { name: IconName; className?: string }) {
+  const Icon = icons[name];
+  return <Icon className={className ?? "ico"} aria-hidden="true" />;
+}

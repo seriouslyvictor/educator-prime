@@ -47,3 +47,16 @@ export interface ExportJob {
   files: ExportFile[];
   errors: Array<{ id: string; message: string; file_id: string | null }>;
 }
+
+export type AppView = "connect" | "workspace" | "progress" | "done" | "history";
+
+export type ThemeMode = "system" | "light" | "dark";
+
+export interface LocalExportHistoryItem {
+  id: string;
+  courseName: string;
+  activityCount: number;
+  fileCount: number;
+  completedAt: string;
+  outputLabel: string;
+}
