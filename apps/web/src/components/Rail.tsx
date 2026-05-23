@@ -34,6 +34,14 @@ export function Rail({
       <div className="rail-nav-label">Workspace</div>
       <nav className="rail-nav">
         <button
+          className={`nav-item ${view.startsWith("grader") ? "active" : ""}`}
+          onClick={() => onNavigate("graderQueue")}
+          disabled={!connected}
+        >
+          <AppIcon name="sparkle" />
+          Grade with AI
+        </button>
+        <button
           className={`nav-item ${view === "workspace" || view === "connect" ? "active" : ""}`}
           onClick={() => onNavigate(connected ? "workspace" : "connect")}
         >

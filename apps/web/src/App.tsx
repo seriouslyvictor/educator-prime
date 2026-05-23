@@ -3,6 +3,7 @@ import { ActionBar } from "./components/ActionBar";
 import { ConnectView, InlineError } from "./components/ConnectView";
 import { DoneView } from "./components/DoneView";
 import { DryRunDrawer } from "./components/DryRunDrawer";
+import { GraderQueue, GraderReview, GraderSetup, GraderWrap } from "./components/Grader";
 import { HistoryView } from "./components/HistoryView";
 import { ProgressView, type ProgressLogItem } from "./components/ProgressView";
 import { Rail } from "./components/Rail";
@@ -16,7 +17,19 @@ import {
 import { useLocalExportHistory } from "./lib/local-history";
 import { buildPreviewTree } from "./lib/preview-tree";
 import { useThemePreference } from "./lib/theme";
-import type { Activity, AppView, AuthState, Course, ExportJob, LocalExportHistoryItem } from "./types";
+import type {
+  Activity,
+  AppView,
+  AuthState,
+  Course,
+  ExportJob,
+  GradingJob,
+  GradingQueueItem,
+  GradingSubmission,
+  LocalExportHistoryItem,
+  RubricMode,
+  TeacherLoopMode,
+} from "./types";
 
 const classroomScopes = [
   "openid",
@@ -56,6 +69,11 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState({ completed: 0, total: 0, currentPath: "" });
   const [progressLog, setProgressLog] = useState<ProgressLogItem[]>([]);
+  const [gradingQueue, setGradingQueue] = useState<GradingQueueItem[]>([]);
+  const [selectedGradingItem, setSelectedGradingItem] = useState<GradingQueueItem | null>(null);
+  const [gradingJob, setGradingJob] = useState<GradingJob | null>(null);
+  const [activeGradingSubmissionId, setActiveGradingSubmissionId] = useState<string | null>(null);
+  const [graderBusy, setGraderBusy] = useState(false);
 
   const connected = Boolean(auth?.signed_in && auth.classroom_scopes && auth.drive_scopes);
   const selectedCourse = useMemo(
@@ -214,6 +232,18 @@ export function App() {
     }
   }
 
+  async function loadGradingQueue() {
+    setGraderBusy(true);
+    setError(null);
+    try {
+      setGradingQueue(await api.gradingQueue());
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Failed to load grading queue.");
+    } finally {
+      setGraderBusy(false);
+    }
+  }
+
   async function connectClassroom() {
     setBusy(true);
     setError(null);
@@ -311,7 +341,107 @@ export function App() {
 
   function navigate(nextView: AppView) {
     if (!connected && nextView !== "connect") return;
+    if (nextView === "graderQueue") void loadGradingQueue();
     setView(nextView);
+  }
+
+  async function openGradingJob(jobId: string) {
+    setGraderBusy(true);
+    setError(null);
+    try {
+      const nextJob = await api.gradingJob(jobId);
+      setGradingJob(nextJob);
+      setActiveGradingSubmissionId(nextJob.submissions[0]?.id ?? null);
+      setView(nextJob.status === "completed" ? "graderWrap" : "graderReview");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Failed to open grading job.");
+    } finally {
+      setGraderBusy(false);
+    }
+  }
+
+  async function startGradingDraft(payload: {
+    rubricMode: RubricMode;
+    teacherLoop: TeacherLoopMode;
+    rubricText: string;
+  }) {
+    if (!selectedGradingItem) return;
+    setGraderBusy(true);
+    setError(null);
+    try {
+      const created = await api.createGradingJob({
+        course_id: selectedGradingItem.course_id,
+        activity_id: selectedGradingItem.activity_id,
+        rubric_mode: payload.rubricMode,
+        teacher_loop: payload.teacherLoop,
+        rubric_text: payload.rubricText,
+      });
+      const drafted = await api.draftGradingJob(created.id);
+      setGradingJob(drafted);
+      setActiveGradingSubmissionId(drafted.submissions[0]?.id ?? null);
+      setView("graderReview");
+      void loadGradingQueue();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Failed to draft grades.");
+    } finally {
+      setGraderBusy(false);
+    }
+  }
+
+  async function acceptGradingDraft(submission: GradingSubmission, score: number, feedback: string) {
+    if (!gradingJob) return;
+    setGraderBusy(true);
+    setError(null);
+    try {
+      const updated = await api.reviewGradingSubmission(gradingJob.id, submission.id, {
+        final_score: score,
+        feedback,
+        reviewed: true,
+      });
+      setGradingJob(updated);
+      const index = updated.submissions.findIndex((row) => row.id === submission.id);
+      const next =
+        updated.submissions.slice(index + 1).find((row) => !row.reviewed) ??
+        updated.submissions.find((row) => !row.reviewed) ??
+        updated.submissions[index] ??
+        updated.submissions[0];
+      setActiveGradingSubmissionId(next?.id ?? null);
+      if (updated.reviewed_submissions === updated.total_submissions && updated.total_submissions > 0) {
+        setView("graderWrap");
+      }
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Failed to save review.");
+    } finally {
+      setGraderBusy(false);
+    }
+  }
+
+  async function retryGradingDraft(submission: GradingSubmission) {
+    if (!gradingJob) return;
+    setGraderBusy(true);
+    setError(null);
+    try {
+      const updated = await api.retryGradingSubmission(gradingJob.id, submission.id);
+      setGradingJob(updated);
+      setActiveGradingSubmissionId(submission.id);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Failed to re-grade submission.");
+    } finally {
+      setGraderBusy(false);
+    }
+  }
+
+  async function deleteGradingCache() {
+    if (!gradingJob) return;
+    setGraderBusy(true);
+    setError(null);
+    try {
+      setGradingJob(await api.deleteGradingCache(gradingJob.id));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Failed to delete cached files.");
+    } finally {
+      setGraderBusy(false);
+    }
   }
 
   return (
@@ -404,6 +534,72 @@ export function App() {
         ) : null}
 
         {view === "history" ? <HistoryView items={history} onBack={() => setView("workspace")} /> : null}
+
+        {view === "graderQueue" ? (
+          <>
+            <GraderQueue
+              items={gradingQueue}
+              loading={graderBusy}
+              onRefresh={() => void loadGradingQueue()}
+              onSetup={(item) => {
+                setSelectedGradingItem(item);
+                setView("graderSetup");
+              }}
+              onOpenJob={(jobId) => void openGradingJob(jobId)}
+              onDownloadInstead={() => setView("workspace")}
+            />
+            {error ? <InlineError message={error} /> : null}
+          </>
+        ) : null}
+
+        {view === "graderSetup" && selectedGradingItem ? (
+          <>
+            <GraderSetup
+              item={selectedGradingItem}
+              busy={graderBusy}
+              onBack={() => setView("graderQueue")}
+              onStart={(payload) => void startGradingDraft(payload)}
+            />
+            {error ? <InlineError message={error} /> : null}
+          </>
+        ) : null}
+
+        {view === "graderReview" && gradingJob ? (
+          <>
+            <GraderReview
+              job={gradingJob}
+              busy={graderBusy}
+              activeSubmissionId={activeGradingSubmissionId}
+              onActiveSubmission={setActiveGradingSubmissionId}
+              onBack={() => {
+                setView("graderQueue");
+                void loadGradingQueue();
+              }}
+              onWrap={() => setView("graderWrap")}
+              onAccept={(submission, score, feedback) =>
+                void acceptGradingDraft(submission, score, feedback)
+              }
+              onRetry={(submission) => void retryGradingDraft(submission)}
+            />
+            {error ? <InlineError message={error} /> : null}
+          </>
+        ) : null}
+
+        {view === "graderWrap" && gradingJob ? (
+          <>
+            <GraderWrap
+              job={gradingJob}
+              busy={graderBusy}
+              onBack={() => setView("graderReview")}
+              onQueue={() => {
+                setView("graderQueue");
+                void loadGradingQueue();
+              }}
+              onDeleteCache={() => void deleteGradingCache()}
+            />
+            {error ? <InlineError message={error} /> : null}
+          </>
+        ) : null}
       </main>
     </div>
   );

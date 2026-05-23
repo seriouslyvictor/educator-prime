@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     google_redirect_uri: str = "http://localhost:8000/api/auth/google/callback"
     google_token_path: str = ".tokens/google-user.json"
     google_oauth_state_path: str = ".tokens/google-oauth-state.txt"
+    grading_cache_path: str = ".cache/grading"
+    grading_cache_ttl_hours: int = 24
 
 
 @lru_cache

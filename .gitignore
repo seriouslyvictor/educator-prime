@@ -14,3 +14,4 @@ dist/
 !.env.example
 .tokens/
 .superpowers/
+.cache/

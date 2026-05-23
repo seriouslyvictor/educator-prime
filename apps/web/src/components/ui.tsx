@@ -34,6 +34,56 @@ export function CardContent({ className, ...props }: HTMLAttributes<HTMLDivEleme
   return <div className={cn("card-content", className)} {...props} />;
 }
 
+export function CardFooter({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
+  return <div className={cn("card-footer", className)} {...props} />;
+}
+
+export function Tabs({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
+  return <div className={cn("tabs", className)} {...props} />;
+}
+
+export function TabsList({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
+  return <div className={cn("tabs-list", className)} role="tablist" {...props} />;
+}
+
+export function TabsTrigger({
+  className,
+  active,
+  ...props
+}: ButtonHTMLAttributes<HTMLButtonElement> & { active?: boolean }) {
+  return (
+    <button
+      className={cn("tabs-trigger", active && "active", className)}
+      role="tab"
+      aria-selected={active}
+      {...props}
+    />
+  );
+}
+
+export function RadioGroup({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
+  return <div className={cn("radio-group", className)} role="radiogroup" {...props} />;
+}
+
+export function RadioItem({
+  className,
+  active,
+  children,
+  ...props
+}: ButtonHTMLAttributes<HTMLButtonElement> & { active?: boolean }) {
+  return (
+    <button
+      className={cn("radio-item", active && "active", className)}
+      role="radio"
+      aria-checked={active}
+      {...props}
+    >
+      <span className="radio-dot" aria-hidden="true" />
+      <span className="radio-copy">{children}</span>
+    </button>
+  );
+}
+
 export function Badge({
   className,
   variant = "secondary",

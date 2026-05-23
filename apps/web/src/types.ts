@@ -50,7 +50,88 @@ export interface ExportJob {
   errors: Array<{ id: string; message: string; file_id: string | null }>;
 }
 
-export type AppView = "connect" | "workspace" | "progress" | "done" | "history";
+export type GradingStatus = "ready" | "drafting" | "reviewing" | "completed";
+
+export interface GradingQueueItem {
+  course_id: string;
+  course_name: string;
+  activity_id: string;
+  activity_title: string;
+  due_label: string | null;
+  submission_count: number;
+  status: GradingStatus | "ready";
+  latest_job_id: string | null;
+  reviewed_submissions: number;
+  total_submissions: number;
+}
+
+export interface GradingCriterion {
+  id: string;
+  name: string;
+  weight: number;
+  description: string | null;
+}
+
+export interface GradingSubmission {
+  id: string;
+  student_email: string | null;
+  student_name: string | null;
+  source_file_id: string;
+  source_name: string;
+  mime_type: string;
+  ai_score: number | null;
+  confidence: number | null;
+  final_score: number | null;
+  feedback: string | null;
+  reviewed: boolean;
+  flag: string | null;
+  error: string | null;
+}
+
+export interface GradingFileCache {
+  id: string;
+  submission_id: string;
+  source_file_id: string;
+  source_name: string;
+  mime_type: string;
+  content_hash: string;
+  byte_size: number;
+  expires_at: string;
+  deleted_at: string | null;
+}
+
+export interface GradingJob {
+  id: string;
+  course_id: string;
+  course_name: string;
+  activity_id: string;
+  activity_title: string;
+  rubric_mode: string;
+  teacher_loop: string;
+  status: GradingStatus;
+  total_submissions: number;
+  reviewed_submissions: number;
+  flagged_submissions: number;
+  cache_expires_at: string | null;
+  criteria: GradingCriterion[];
+  submissions: GradingSubmission[];
+  cache_files: GradingFileCache[];
+}
+
+export type RubricMode = "infer" | "brief" | "structured" | "saved" | "calibrate";
+
+export type TeacherLoopMode = "auto" | "approve" | "cowrite" | "off";
+
+export type AppView =
+  | "connect"
+  | "workspace"
+  | "progress"
+  | "done"
+  | "history"
+  | "graderQueue"
+  | "graderSetup"
+  | "graderReview"
+  | "graderWrap";
 
 export type ThemeMode = "system" | "light" | "dark";
 

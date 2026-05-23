@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 
-from .models import ExportStatus
+from .models import ExportStatus, GradingStatus
 
 
 class CourseRead(BaseModel):
@@ -70,3 +70,90 @@ class AuthStart(BaseModel):
     authorization_url: str | None = None
     mock_connected: bool = False
     scopes: list[str]
+
+
+class GradingQueueItem(BaseModel):
+    course_id: str
+    course_name: str
+    activity_id: str
+    activity_title: str
+    due_label: str | None = None
+    submission_count: int
+    status: str
+    latest_job_id: str | None = None
+    reviewed_submissions: int = 0
+    total_submissions: int = 0
+
+
+class GradingCriterionInput(BaseModel):
+    name: str
+    weight: int
+    description: str | None = None
+
+
+class GradingJobCreate(BaseModel):
+    course_id: str
+    activity_id: str
+    rubric_mode: str
+    teacher_loop: str = "approve"
+    rubric_text: str | None = None
+    criteria: list[GradingCriterionInput] | None = None
+
+
+class GradingReviewUpdate(BaseModel):
+    final_score: float
+    feedback: str | None = None
+    reviewed: bool = True
+
+
+class GradingCriterionRead(BaseModel):
+    id: str
+    name: str
+    weight: int
+    description: str | None = None
+
+
+class GradingSubmissionRead(BaseModel):
+    id: str
+    student_email: str | None = None
+    student_name: str | None = None
+    source_file_id: str
+    source_name: str
+    mime_type: str
+    ai_score: float | None = None
+    confidence: float | None = None
+    final_score: float | None = None
+    feedback: str | None = None
+    reviewed: bool
+    flag: str | None = None
+    error: str | None = None
+
+
+class GradingFileCacheRead(BaseModel):
+    id: str
+    submission_id: str
+    source_file_id: str
+    source_name: str
+    mime_type: str
+    content_hash: str
+    byte_size: int
+    expires_at: str
+    deleted_at: str | None = None
+
+
+class GradingJobRead(BaseModel):
+    id: str
+    course_id: str
+    course_name: str
+    activity_id: str
+    activity_title: str
+    rubric_mode: str
+    teacher_loop: str
+    status: GradingStatus
+    total_submissions: int
+    reviewed_submissions: int
+    flagged_submissions: int
+    cache_expires_at: str | None = None
+    criteria: list[GradingCriterionRead] = []
+    submissions: list[GradingSubmissionRead] = []
+    cache_files: list[GradingFileCacheRead] = []
