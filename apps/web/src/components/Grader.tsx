@@ -383,7 +383,9 @@ export function GraderReview({
               onClick={() => onActiveSubmission(submission.id)}
             >
               <span>{submission.student_name ?? submission.student_email ?? "Unknown student"}</span>
-              <small>{submission.reviewed ? "Reviewed" : submission.flag ? "Check" : "Draft"}</small>
+              <small className={`student-state ${statusTone(submission)}`}>
+                {submission.reviewed ? "Reviewed" : submission.error ? "Blocked" : submission.flag ? "Check" : "Draft"}
+              </small>
             </button>
           ))}
         </aside>
@@ -405,8 +407,8 @@ export function GraderReview({
               <span />
             </div>
             <p>
-              Structured preview placeholder for V1. The mock grader uses Classroom and Drive file metadata plus cached
-              source bytes; full document rendering and OCR can layer in later.
+              Structured preview placeholder for V1. Privacy status:{" "}
+              {privacyLabel(active?.privacy_status)}. Extraction: {extractionLabel(active?.extraction_status)}.
             </p>
           </div>
         </section>
@@ -415,6 +417,11 @@ export function GraderReview({
           <div className="suggestion-head">
             <span>AI draft</span>
             <strong>{active?.confidence ? `${Math.round(active.confidence * 100)}%` : "new"}</strong>
+          </div>
+          <div className="privacy-status-grid">
+            <StatusPill label="Privacy" value={privacyLabel(active?.privacy_status)} tone={privacyTone(active)} />
+            <StatusPill label="Input" value={extractionLabel(active?.extraction_status)} tone={extractionTone(active)} />
+            <StatusPill label="Engine" value={attemptLabel(active?.ai_attempt_status)} tone={attemptTone(active)} />
           </div>
           {active?.flag ? <div className="flag-note">{active.flag.replace("_", " ")}</div> : null}
           <div className="criteria-list">
@@ -451,6 +458,59 @@ export function GraderReview({
       </div>
     </div>
   );
+}
+
+function StatusPill({ label, value, tone }: { label: string; value: string; tone: string }) {
+  return (
+    <div className={`status-pill ${tone}`}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function privacyLabel(status?: string | null) {
+  if (!status) return "Not checked";
+  return status.replaceAll("_", " ");
+}
+
+function extractionLabel(status?: string | null) {
+  if (!status) return "Pending";
+  return status.replaceAll("_", " ");
+}
+
+function attemptLabel(status?: string | null) {
+  if (!status) return "Pending";
+  return status.replaceAll("_", " ");
+}
+
+function privacyTone(submission?: GradingSubmission) {
+  if (!submission?.privacy_status) return "neutral";
+  if (submission.privacy_status === "clean") return "ok";
+  if (submission.privacy_status === "redacted") return "warn";
+  return "danger";
+}
+
+function extractionTone(submission?: GradingSubmission) {
+  if (!submission?.extraction_status) return "neutral";
+  if (submission.extraction_status === "supported") return "ok";
+  if (submission.extraction_status === "degraded") return "warn";
+  return "danger";
+}
+
+function attemptTone(submission?: GradingSubmission) {
+  if (!submission?.ai_attempt_status) return "neutral";
+  if (submission.ai_attempt_status === "completed") return "ok";
+  if (submission.ai_attempt_status === "blocked") return "danger";
+  return "warn";
+}
+
+function statusTone(submission: GradingSubmission) {
+  if (submission.error || submission.ai_attempt_status === "blocked") return "danger";
+  if (submission.flag || submission.privacy_status === "redacted" || submission.extraction_status === "degraded") {
+    return "warn";
+  }
+  return "ok";
 }
 
 export function GraderWrap({

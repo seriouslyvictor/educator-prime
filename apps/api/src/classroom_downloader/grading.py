@@ -5,17 +5,22 @@ from io import StringIO
 from pathlib import Path
 import shutil
 from uuid import uuid4
+import json
 
 from sqlmodel import Session, select
 
+from .content_extraction import extract_submission_content
+from .grading_engine import DEFAULT_GRADING_ENGINE, GradingEngine, GradingEngineRequest
 from .google_provider import GoogleProvider, SubmissionFile
 from .models import (
+    GradingAiAttempt,
     GradingCriterion,
     GradingFileCache,
     GradingJob,
     GradingStatus,
     GradingSubmission,
 )
+from .privacy import scrub_submission
 from .schemas import (
     GradingCriterionInput,
     GradingCriterionRead,
@@ -83,6 +88,14 @@ def grading_job_snapshot(session: Session, job: GradingJob) -> GradingJobRead:
     cache_files = session.exec(
         select(GradingFileCache).where(GradingFileCache.job_id == job.id)
     ).all()
+    attempts = session.exec(
+        select(GradingAiAttempt)
+        .where(GradingAiAttempt.job_id == job.id)
+        .order_by(GradingAiAttempt.created_at.desc())
+    ).all()
+    latest_attempts: dict[str, GradingAiAttempt] = {}
+    for attempt in attempts:
+        latest_attempts.setdefault(attempt.submission_id, attempt)
     return GradingJobRead(
         id=job.id,
         course_id=job.course_id,
@@ -101,7 +114,7 @@ def grading_job_snapshot(session: Session, job: GradingJob) -> GradingJobRead:
             for row in criteria
         ],
         submissions=[
-            GradingSubmissionRead.model_validate(row, from_attributes=True)
+            _submission_read(row, latest_attempts.get(row.id))
             for row in submissions
         ],
         cache_files=[
@@ -125,7 +138,9 @@ def draft_grading_job(
     session: Session,
     job: GradingJob,
     provider: GoogleProvider,
+    grading_engine: GradingEngine | None = None,
 ) -> GradingJob:
+    grading_engine = grading_engine or DEFAULT_GRADING_ENGINE
     now = datetime.now(UTC)
     job.status = GradingStatus.drafting
     job.updated_at = now
@@ -136,23 +151,8 @@ def draft_grading_job(
     files = provider.list_submission_files(job.course_id, [job.activity_id])
     for file in files:
         submission = _submission_for_file(session, job, file)
-        cache_submission_file(session, job, submission, file, provider)
-        ai_score, confidence, flag = mock_grade(file)
-        submission.ai_score = ai_score
-        submission.confidence = confidence
-        submission.final_score = submission.final_score or ai_score
-        submission.feedback = submission.feedback or mock_feedback(
-            student_name=file.student_name,
-            activity_title=job.activity_title,
-            source_name=file.source_name,
-            score=ai_score,
-            confidence=confidence,
-            flag=flag,
-        )
-        submission.flag = flag
-        submission.error = None
-        submission.updated_at = datetime.now(UTC)
-        session.add(submission)
+        cache_file = cache_submission_file(session, job, submission, file, provider)
+        _draft_submission(session, job, submission, cache_file, grading_engine)
 
     _refresh_counts(session, job)
     job.status = GradingStatus.completed if job.reviewed_submissions == job.total_submissions and job.total_submissions else GradingStatus.reviewing
@@ -168,7 +168,9 @@ def retry_submission(
     job: GradingJob,
     submission: GradingSubmission,
     provider: GoogleProvider,
+    grading_engine: GradingEngine | None = None,
 ) -> GradingJob:
+    grading_engine = grading_engine or DEFAULT_GRADING_ENGINE
     file = SubmissionFile(
         id=submission.id,
         course_id=job.course_id,
@@ -179,24 +181,8 @@ def retry_submission(
         source_name=submission.source_name,
         mime_type=submission.mime_type,
     )
-    cache_submission_file(session, job, submission, file, provider)
-    ai_score, confidence, flag = mock_grade(file)
-    submission.ai_score = ai_score
-    submission.confidence = confidence
-    submission.final_score = ai_score
-    submission.feedback = mock_feedback(
-        student_name=file.student_name,
-        activity_title=job.activity_title,
-        source_name=file.source_name,
-        score=ai_score,
-        confidence=confidence,
-        flag=flag,
-    )
-    submission.reviewed = False
-    submission.flag = flag
-    submission.error = None
-    submission.updated_at = datetime.now(UTC)
-    session.add(submission)
+    cache_file = cache_submission_file(session, job, submission, file, provider)
+    _draft_submission(session, job, submission, cache_file, grading_engine, reset_review=True)
     _refresh_counts(session, job)
     job.status = GradingStatus.reviewing
     job.updated_at = datetime.now(UTC)
@@ -313,44 +299,154 @@ def grading_csv(session: Session, job: GradingJob) -> str:
     return buffer.getvalue()
 
 
-def mock_grade(file: SubmissionFile) -> tuple[float, float, str | None]:
-    seed = sha256(
-        f"{file.id}|{file.source_file_id}|{file.source_name}|{file.student_email}".encode(
-            "utf-8"
-        )
-    ).hexdigest()
-    score = 62 + (int(seed[:4], 16) % 36)
-    confidence = round(0.72 + ((int(seed[4:8], 16) % 24) / 100), 2)
-    flag = None
-    if file.student_email is None:
-        flag = "identity_review"
-        confidence = min(confidence, 0.78)
-    elif file.mime_type.startswith("image/"):
-        flag = "visual_submission"
-    return float(score), confidence, flag
-
-
-def mock_feedback(
-    student_name: str | None,
-    activity_title: str,
-    source_name: str,
-    score: float,
-    confidence: float,
-    flag: str | None,
-) -> str:
-    learner = student_name or "This student"
-    band = "strong" if score >= 85 else "developing" if score >= 72 else "emerging"
-    note = (
-        f"{learner} submitted {source_name} for {activity_title}. "
-        f"The draft assessment is {band}: it recognizes the assignment goal, "
-        "but the teacher should confirm evidence quality before finalizing."
+def _draft_submission(
+    session: Session,
+    job: GradingJob,
+    submission: GradingSubmission,
+    cache_file: GradingFileCache,
+    grading_engine: GradingEngine,
+    reset_review: bool = False,
+) -> None:
+    extracted = extract_submission_content(cache_file)
+    scrubbed = scrub_submission(session, job, submission, extracted)
+    retry_count = len(
+        session.exec(
+            select(GradingAiAttempt).where(GradingAiAttempt.submission_id == submission.id)
+        ).all()
     )
-    if flag == "identity_review":
-        note += " Student identity needs a quick check before export."
-    if flag == "visual_submission":
-        note += " Visual work may need manual inspection alongside the AI draft."
-    note += f" Confidence: {int(confidence * 100)}%."
-    return note
+
+    if scrubbed.report.status in {"failed", "high_reidentification_risk"}:
+        attempt = _record_attempt(
+            session=session,
+            job=job,
+            submission=submission,
+            engine=grading_engine,
+            status="blocked",
+            extraction_status=extracted.status,
+            privacy_status=scrubbed.report.status,
+            flags=scrubbed.report.flags,
+            retry_count=retry_count,
+            safe_error=extracted.error or scrubbed.report.status,
+        )
+        submission.flag = attempt.safe_error
+        submission.error = attempt.safe_error
+        submission.updated_at = datetime.now(UTC)
+        session.add(submission)
+        return
+
+    try:
+        result = grading_engine.grade(
+            GradingEngineRequest(
+                job_id=job.id,
+                submission_id=submission.id,
+                activity_title=job.activity_title,
+                rubric_mode=job.rubric_mode,
+                teacher_loop=job.teacher_loop,
+                student_label=scrubbed.student_label,
+                source_label=scrubbed.source_label,
+                mime_type=submission.mime_type,
+                content=scrubbed.content,
+            )
+        )
+    except Exception:
+        attempt = _record_attempt(
+            session=session,
+            job=job,
+            submission=submission,
+            engine=grading_engine,
+            status="failed",
+            extraction_status=extracted.status,
+            privacy_status=scrubbed.report.status,
+            flags=scrubbed.report.flags,
+            retry_count=retry_count,
+            safe_error="grading_engine_failed",
+        )
+        submission.flag = attempt.safe_error
+        submission.error = attempt.safe_error
+        submission.updated_at = datetime.now(UTC)
+        session.add(submission)
+        return
+
+    flags = sorted(set([*scrubbed.report.flags, *result.flags]))
+    _record_attempt(
+        session=session,
+        job=job,
+        submission=submission,
+        engine=grading_engine,
+        status="completed",
+        extraction_status=extracted.status,
+        privacy_status=scrubbed.report.status,
+        flags=flags,
+        retry_count=retry_count,
+    )
+    submission.ai_score = result.score
+    submission.confidence = result.confidence
+    submission.final_score = result.score if reset_review else submission.final_score or result.score
+    submission.feedback = result.feedback if reset_review else submission.feedback or result.feedback
+    submission.reviewed = False if reset_review else submission.reviewed
+    submission.flag = flags[0] if flags else None
+    submission.error = None
+    submission.updated_at = datetime.now(UTC)
+    session.add(submission)
+
+
+def _record_attempt(
+    session: Session,
+    job: GradingJob,
+    submission: GradingSubmission,
+    engine: GradingEngine,
+    status: str,
+    extraction_status: str,
+    privacy_status: str,
+    flags: list[str],
+    retry_count: int,
+    safe_error: str | None = None,
+) -> GradingAiAttempt:
+    attempt = GradingAiAttempt(
+        id=str(uuid4()),
+        job_id=job.id,
+        submission_id=submission.id,
+        engine=engine.name,
+        model=getattr(engine, "model", None),
+        status=status,
+        extraction_status=extraction_status,
+        privacy_status=privacy_status,
+        safe_error=safe_error,
+        flags_json=json.dumps(flags),
+        retry_count=retry_count,
+    )
+    session.add(attempt)
+    session.commit()
+    session.refresh(attempt)
+    return attempt
+
+
+def _submission_read(
+    submission: GradingSubmission,
+    attempt: GradingAiAttempt | None,
+) -> GradingSubmissionRead:
+    return GradingSubmissionRead(
+        id=submission.id,
+        student_email=submission.student_email,
+        student_name=submission.student_name,
+        source_file_id=submission.source_file_id,
+        source_name=submission.source_name,
+        mime_type=submission.mime_type,
+        ai_score=submission.ai_score,
+        confidence=submission.confidence,
+        final_score=submission.final_score,
+        feedback=submission.feedback,
+        reviewed=submission.reviewed,
+        flag=submission.flag,
+        error=submission.error,
+        privacy_status=attempt.privacy_status if attempt else None,
+        extraction_status=attempt.extraction_status if attempt else None,
+        ai_attempt_status=attempt.status if attempt else None,
+        ai_engine=attempt.engine if attempt else None,
+        ai_model=attempt.model if attempt else None,
+        ai_safe_error=attempt.safe_error if attempt else None,
+        ai_flags=json.loads(attempt.flags_json) if attempt else [],
+    )
 
 
 def _submission_for_file(

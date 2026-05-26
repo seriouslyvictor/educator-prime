@@ -129,3 +129,29 @@ class GradingFileCache(SQLModel, table=True):
     expires_at: datetime
     deleted_at: datetime | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class GradingPseudonym(SQLModel, table=True):
+    id: str = Field(primary_key=True)
+    job_id: str = Field(index=True)
+    submission_id: str = Field(index=True)
+    student_label: str
+    source_label: str
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class GradingAiAttempt(SQLModel, table=True):
+    id: str = Field(primary_key=True)
+    job_id: str = Field(index=True)
+    submission_id: str = Field(index=True)
+    engine: str
+    model: str | None = None
+    status: str
+    extraction_status: str
+    privacy_status: str
+    safe_error: str | None = None
+    flags_json: str = "[]"
+    token_count: int | None = None
+    cost_cents: float | None = None
+    retry_count: int = 0
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

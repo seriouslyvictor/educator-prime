@@ -127,6 +127,13 @@ class GradingSubmissionRead(BaseModel):
     reviewed: bool
     flag: str | None = None
     error: str | None = None
+    privacy_status: str | None = None
+    extraction_status: str | None = None
+    ai_attempt_status: str | None = None
+    ai_engine: str | None = None
+    ai_model: str | None = None
+    ai_safe_error: str | None = None
+    ai_flags: list[str] = []
 
 
 class GradingFileCacheRead(BaseModel):

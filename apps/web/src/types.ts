@@ -86,6 +86,13 @@ export interface GradingSubmission {
   reviewed: boolean;
   flag: string | null;
   error: string | null;
+  privacy_status: string | null;
+  extraction_status: string | null;
+  ai_attempt_status: string | null;
+  ai_engine: string | null;
+  ai_model: string | null;
+  ai_safe_error: string | null;
+  ai_flags: string[];
 }
 
 export interface GradingFileCache {

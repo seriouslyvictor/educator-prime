@@ -1789,6 +1789,33 @@ button:disabled {
   font-size: 11px;
 }
 
+.student-state {
+  flex: 0 0 auto;
+  padding: 3px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  text-transform: capitalize;
+}
+
+.student-state.ok {
+  color: var(--success);
+  border-color: color-mix(in srgb, var(--success) 36%, var(--border));
+  background: color-mix(in srgb, var(--success) 10%, var(--surface));
+}
+
+.student-state.warn {
+  color: var(--warning);
+  border-color: color-mix(in srgb, var(--warning) 36%, var(--border));
+  background: color-mix(in srgb, var(--warning) 12%, var(--surface));
+}
+
+.student-state.danger {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 36%, var(--border));
+  background: color-mix(in srgb, var(--danger) 10%, var(--surface));
+}
+
 .submission-preview {
   min-width: 0;
   overflow: auto;
@@ -1878,6 +1905,53 @@ button:disabled {
   color: var(--primary);
   font-size: 18px;
   letter-spacing: 0;
+}
+
+.privacy-status-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.status-pill {
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.status-pill span {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--muted-2);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.status-pill strong {
+  display: block;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-size: 12px;
+  text-transform: capitalize;
+}
+
+.status-pill.ok {
+  border-color: color-mix(in srgb, var(--success) 32%, var(--border));
+  background: color-mix(in srgb, var(--success) 8%, var(--surface));
+}
+
+.status-pill.warn {
+  border-color: color-mix(in srgb, var(--warning) 32%, var(--border));
+  background: color-mix(in srgb, var(--warning) 10%, var(--surface));
+}
+
+.status-pill.danger {
+  border-color: color-mix(in srgb, var(--danger) 32%, var(--border));
+  background: color-mix(in srgb, var(--danger) 8%, var(--surface));
 }
 
 .flag-note {
