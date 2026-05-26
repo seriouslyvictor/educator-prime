@@ -148,6 +148,36 @@ class GradingFileCacheRead(BaseModel):
     deleted_at: str | None = None
 
 
+class PrivacyAuditRowRead(BaseModel):
+    id: str
+    submission_id: str
+    student_label: str
+    redacted_source_name: str
+    mime_type: str
+    byte_size: int
+    extraction_status: str
+    extraction_error: str | None = None
+    privacy_status: str
+    privacy_flags: list[str] = []
+    remaining_direct_identifier_hits: list[str] = []
+    audit_pass: bool
+    blocked_reason: str | None = None
+
+
+class PrivacyAuditRead(BaseModel):
+    id: str
+    job_id: str
+    status: str
+    total_files: int
+    passed_files: int
+    redacted_files: int
+    blocked_files: int
+    high_risk_files: int
+    created_at: str
+    updated_at: str
+    rows: list[PrivacyAuditRowRead] = []
+
+
 class GradingJobRead(BaseModel):
     id: str
     course_id: str

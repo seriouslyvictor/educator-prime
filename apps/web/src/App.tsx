@@ -3,7 +3,7 @@ import { ActionBar } from "./components/ActionBar";
 import { ConnectView, InlineError } from "./components/ConnectView";
 import { DoneView } from "./components/DoneView";
 import { DryRunDrawer } from "./components/DryRunDrawer";
-import { GraderQueue, GraderReview, GraderSetup, GraderWrap } from "./components/Grader";
+import { GraderAudit, GraderQueue, GraderReview, GraderSetup, GraderWrap } from "./components/Grader";
 import { HistoryView } from "./components/HistoryView";
 import { ProgressView, type ProgressLogItem } from "./components/ProgressView";
 import { Rail } from "./components/Rail";
@@ -27,6 +27,7 @@ import type {
   GradingQueueItem,
   GradingSubmission,
   LocalExportHistoryItem,
+  PrivacyAudit,
   RubricMode,
   TeacherLoopMode,
 } from "./types";
@@ -72,6 +73,7 @@ export function App() {
   const [gradingQueue, setGradingQueue] = useState<GradingQueueItem[]>([]);
   const [selectedGradingItem, setSelectedGradingItem] = useState<GradingQueueItem | null>(null);
   const [gradingJob, setGradingJob] = useState<GradingJob | null>(null);
+  const [privacyAudit, setPrivacyAudit] = useState<PrivacyAudit | null>(null);
   const [activeGradingSubmissionId, setActiveGradingSubmissionId] = useState<string | null>(null);
   const [graderBusy, setGraderBusy] = useState(false);
 
@@ -352,6 +354,17 @@ export function App() {
       const nextJob = await api.gradingJob(jobId);
       setGradingJob(nextJob);
       setActiveGradingSubmissionId(nextJob.submissions[0]?.id ?? null);
+      if (nextJob.status === "ready") {
+        let audit: PrivacyAudit;
+        try {
+          audit = await api.privacyAudit(nextJob.id);
+        } catch {
+          audit = await api.runPrivacyAudit(nextJob.id);
+        }
+        setPrivacyAudit(audit);
+        setView("graderAudit");
+        return;
+      }
       setView(nextJob.status === "completed" ? "graderWrap" : "graderReview");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Failed to open grading job.");
@@ -360,7 +373,7 @@ export function App() {
     }
   }
 
-  async function startGradingDraft(payload: {
+  async function runGradingPrivacyAudit(payload: {
     rubricMode: RubricMode;
     teacherLoop: TeacherLoopMode;
     rubricText: string;
@@ -376,7 +389,37 @@ export function App() {
         teacher_loop: payload.teacherLoop,
         rubric_text: payload.rubricText,
       });
-      const drafted = await api.draftGradingJob(created.id);
+      setGradingJob(created);
+      const audit = await api.runPrivacyAudit(created.id);
+      setPrivacyAudit(audit);
+      setView("graderAudit");
+      void loadGradingQueue();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Failed to run privacy audit.");
+    } finally {
+      setGraderBusy(false);
+    }
+  }
+
+  async function rerunGradingPrivacyAudit() {
+    if (!gradingJob) return;
+    setGraderBusy(true);
+    setError(null);
+    try {
+      setPrivacyAudit(await api.runPrivacyAudit(gradingJob.id));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Failed to run privacy audit.");
+    } finally {
+      setGraderBusy(false);
+    }
+  }
+
+  async function continueToGradingDraft() {
+    if (!gradingJob) return;
+    setGraderBusy(true);
+    setError(null);
+    try {
+      const drafted = await api.draftGradingJob(gradingJob.id);
       setGradingJob(drafted);
       setActiveGradingSubmissionId(drafted.submissions[0]?.id ?? null);
       setView("graderReview");
@@ -558,7 +601,20 @@ export function App() {
               item={selectedGradingItem}
               busy={graderBusy}
               onBack={() => setView("graderQueue")}
-              onStart={(payload) => void startGradingDraft(payload)}
+              onStart={(payload) => void runGradingPrivacyAudit(payload)}
+            />
+            {error ? <InlineError message={error} /> : null}
+          </>
+        ) : null}
+
+        {view === "graderAudit" && privacyAudit ? (
+          <>
+            <GraderAudit
+              audit={privacyAudit}
+              busy={graderBusy}
+              onBack={() => setView("graderSetup")}
+              onRerun={() => void rerunGradingPrivacyAudit()}
+              onContinue={() => void continueToGradingDraft()}
             />
             {error ? <InlineError message={error} /> : null}
           </>

@@ -40,6 +40,12 @@ from .models import (
     GradingSubmission,
 )
 from .naming import build_output_path
+from .privacy_audit import (
+    latest_privacy_audit,
+    privacy_audit_csv,
+    privacy_audit_snapshot,
+    run_privacy_audit,
+)
 from .schemas import (
     ActivityRead,
     AuthStart,
@@ -53,6 +59,7 @@ from .schemas import (
     GradingJobRead,
     GradingQueueItem,
     GradingReviewUpdate,
+    PrivacyAuditRead,
 )
 from .settings import get_settings
 
@@ -77,6 +84,22 @@ app.add_middleware(
 
 def provider_dependency() -> GoogleProvider:
     return get_google_provider()
+
+
+def ensure_privacy_audit_allows_draft(
+    job: GradingJob,
+    session: Session,
+    provider: GoogleProvider,
+):
+    audit = latest_privacy_audit(session, job.id)
+    if audit is None or audit.status not in {"completed", "completed_with_blocks"}:
+        audit = run_privacy_audit(session, job, provider)
+    if audit.high_risk_files > 0:
+        raise HTTPException(
+            status_code=409,
+            detail="Privacy audit found high-risk rows. Review the audit before drafting.",
+        )
+    return audit
 
 
 @app.get("/api/health")
@@ -449,6 +472,68 @@ def read_grading_job(
     return grading_job_snapshot(session, job)
 
 
+@app.post("/api/grading/jobs/{job_id}/privacy-audit", response_model=PrivacyAuditRead)
+def run_grading_privacy_audit(
+    job_id: str,
+    session: Session = Depends(get_session),
+    provider: GoogleProvider = Depends(provider_dependency),
+) -> PrivacyAuditRead:
+    job = session.get(GradingJob, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Grading job not found.")
+    audit = run_privacy_audit(session, job, provider)
+    return privacy_audit_snapshot(session, audit)
+
+
+@app.get("/api/grading/jobs/{job_id}/privacy-audit", response_model=PrivacyAuditRead)
+def read_grading_privacy_audit(
+    job_id: str,
+    session: Session = Depends(get_session),
+) -> PrivacyAuditRead:
+    job = session.get(GradingJob, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Grading job not found.")
+    audit = latest_privacy_audit(session, job.id)
+    if audit is None:
+        raise HTTPException(status_code=404, detail="Privacy audit not found.")
+    return privacy_audit_snapshot(session, audit)
+
+
+@app.get("/api/grading/jobs/{job_id}/privacy-audit/export.csv")
+def export_privacy_audit_csv(
+    job_id: str,
+    session: Session = Depends(get_session),
+) -> Response:
+    job = session.get(GradingJob, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Grading job not found.")
+    audit = latest_privacy_audit(session, job.id)
+    if audit is None:
+        raise HTTPException(status_code=404, detail="Privacy audit not found.")
+    safe_name = "".join(char if char.isalnum() else "-" for char in job.activity_title)
+    return Response(
+        content=privacy_audit_csv(session, audit),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f'attachment; filename="{safe_name}-privacy-audit.csv"'
+        },
+    )
+
+
+@app.get("/api/grading/jobs/{job_id}/privacy-audit/export.json", response_model=PrivacyAuditRead)
+def export_privacy_audit_json(
+    job_id: str,
+    session: Session = Depends(get_session),
+) -> PrivacyAuditRead:
+    job = session.get(GradingJob, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Grading job not found.")
+    audit = latest_privacy_audit(session, job.id)
+    if audit is None:
+        raise HTTPException(status_code=404, detail="Privacy audit not found.")
+    return privacy_audit_snapshot(session, audit)
+
+
 @app.post("/api/grading/jobs/{job_id}/draft", response_model=GradingJobRead)
 def draft_job(
     job_id: str,
@@ -458,6 +543,7 @@ def draft_job(
     job = session.get(GradingJob, job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Grading job not found.")
+    ensure_privacy_audit_allows_draft(job, session, provider)
     job = draft_grading_job(session, job, provider)
     return grading_job_snapshot(session, job)
 

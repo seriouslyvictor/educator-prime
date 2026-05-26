@@ -125,6 +125,36 @@ export interface GradingJob {
   cache_files: GradingFileCache[];
 }
 
+export interface PrivacyAuditRow {
+  id: string;
+  submission_id: string;
+  student_label: string;
+  redacted_source_name: string;
+  mime_type: string;
+  byte_size: number;
+  extraction_status: string;
+  extraction_error: string | null;
+  privacy_status: string;
+  privacy_flags: string[];
+  remaining_direct_identifier_hits: string[];
+  audit_pass: boolean;
+  blocked_reason: string | null;
+}
+
+export interface PrivacyAudit {
+  id: string;
+  job_id: string;
+  status: string;
+  total_files: number;
+  passed_files: number;
+  redacted_files: number;
+  blocked_files: number;
+  high_risk_files: number;
+  created_at: string;
+  updated_at: string;
+  rows: PrivacyAuditRow[];
+}
+
 export type RubricMode = "infer" | "brief" | "structured" | "saved" | "calibrate";
 
 export type TeacherLoopMode = "auto" | "approve" | "cowrite" | "off";
@@ -137,6 +167,7 @@ export type AppView =
   | "history"
   | "graderQueue"
   | "graderSetup"
+  | "graderAudit"
   | "graderReview"
   | "graderWrap";
 

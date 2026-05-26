@@ -4,6 +4,7 @@ import type {
   GradingJob,
   GradingQueueItem,
   GradingSubmission,
+  PrivacyAudit,
   RubricMode,
   TeacherLoopMode,
 } from "../types";
@@ -251,7 +252,7 @@ export function GraderSetup({
                   disabled={busy}
                 >
                   <AppIcon name={busy ? "loader" : "sparkle"} className={busy ? "ico spin" : "ico"} />
-                  Draft grades for {item.submission_count}
+                  Run privacy audit for {item.submission_count}
                 </button>
               </div>
             </CardFooter>
@@ -511,6 +512,95 @@ function statusTone(submission: GradingSubmission) {
     return "warn";
   }
   return "ok";
+}
+
+export function GraderAudit({
+  audit,
+  busy,
+  onBack,
+  onRerun,
+  onContinue,
+}: {
+  audit: PrivacyAudit;
+  busy: boolean;
+  onBack: () => void;
+  onRerun: () => void;
+  onContinue: () => void;
+}) {
+  const highRisk = audit.high_risk_files > 0;
+  return (
+    <div className="grader-page">
+      <GraderTopbar
+        title="Privacy audit"
+        subtitle="Safe metadata only. No AI call has been made."
+        action={
+          <>
+            <button className="btn btn-secondary" onClick={onBack}>
+              Back
+            </button>
+            <button className="btn btn-secondary" onClick={onRerun} disabled={busy}>
+              <AppIcon name={busy ? "loader" : "refresh"} className={busy ? "ico spin" : "ico"} />
+              Re-run
+            </button>
+            <button className="btn btn-primary" onClick={onContinue} disabled={busy || highRisk}>
+              <AppIcon name="shield" />
+              Continue to draft
+            </button>
+          </>
+        }
+      />
+      <div className="audit-layout">
+        <section className="audit-summary">
+          <AuditStat label="Passed" value={audit.passed_files} tone="ok" />
+          <AuditStat label="Redacted" value={audit.redacted_files} tone="warn" />
+          <AuditStat label="Blocked" value={audit.blocked_files} tone="danger" />
+          <AuditStat label="High risk" value={audit.high_risk_files} tone="danger" />
+        </section>
+        {highRisk ? (
+          <div className="flag-note">
+            Privacy audit found high-risk rows. Drafting is blocked until these submissions are handled.
+          </div>
+        ) : null}
+        <div className="audit-actions">
+          <a className="btn btn-secondary" href={api.privacyAuditCsvUrl(audit.job_id)}>
+            <AppIcon name="fileDown" /> Export CSV
+          </a>
+          <a className="btn btn-secondary" href={api.privacyAuditJsonUrl(audit.job_id)}>
+            <AppIcon name="fileText" /> Export JSON
+          </a>
+        </div>
+        <section className="audit-table" aria-label="Privacy audit rows">
+          <div className="audit-row audit-row-head">
+            <span>Student</span>
+            <span>File</span>
+            <span>Input</span>
+            <span>Privacy</span>
+            <span>Flags</span>
+          </div>
+          {audit.rows.map((row) => (
+            <div className="audit-row" key={row.id}>
+              <span>{row.student_label}</span>
+              <span>{row.redacted_source_name}</span>
+              <span>{row.extraction_status}</span>
+              <span className={`student-state ${row.privacy_status === "clean" ? "ok" : row.audit_pass ? "warn" : "danger"}`}>
+                {row.blocked_reason ?? row.privacy_status}
+              </span>
+              <span>{row.privacy_flags.length ? row.privacy_flags.join(", ") : "None"}</span>
+            </div>
+          ))}
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function AuditStat({ label, value, tone }: { label: string; value: number; tone: string }) {
+  return (
+    <div className={`audit-stat ${tone}`}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
 }
 
 export function GraderWrap({

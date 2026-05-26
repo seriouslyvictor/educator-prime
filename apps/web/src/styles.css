@@ -1954,6 +1954,91 @@ button:disabled {
   background: color-mix(in srgb, var(--danger) 8%, var(--surface));
 }
 
+.audit-layout {
+  display: grid;
+  gap: 14px;
+  padding: 18px 22px;
+}
+
+.audit-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.audit-stat {
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.audit-stat span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.audit-stat strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--ink);
+  font-size: 28px;
+}
+
+.audit-stat.ok {
+  border-color: color-mix(in srgb, var(--success) 32%, var(--border));
+}
+
+.audit-stat.warn {
+  border-color: color-mix(in srgb, var(--warning) 32%, var(--border));
+}
+
+.audit-stat.danger {
+  border-color: color-mix(in srgb, var(--danger) 32%, var(--border));
+}
+
+.audit-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.audit-table {
+  display: grid;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.audit-row {
+  display: grid;
+  grid-template-columns: 120px minmax(180px, 1.5fr) 110px 150px minmax(120px, 1fr);
+  gap: 10px;
+  align-items: center;
+  min-width: 760px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+}
+
+.audit-row:first-child {
+  border-top: 0;
+}
+
+.audit-row-head {
+  background: var(--paper);
+  color: var(--muted-2);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.audit-row span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .flag-note {
   padding: 8px 10px;
   border-radius: 8px;

@@ -155,3 +155,35 @@ class GradingAiAttempt(SQLModel, table=True):
     cost_cents: float | None = None
     retry_count: int = 0
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class PrivacyAudit(SQLModel, table=True):
+    id: str = Field(primary_key=True)
+    job_id: str = Field(index=True)
+    status: str = "running"
+    total_files: int = 0
+    passed_files: int = 0
+    redacted_files: int = 0
+    blocked_files: int = 0
+    high_risk_files: int = 0
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class PrivacyAuditRow(SQLModel, table=True):
+    id: str = Field(primary_key=True)
+    audit_id: str = Field(index=True)
+    job_id: str = Field(index=True)
+    submission_id: str = Field(index=True)
+    student_label: str
+    redacted_source_name: str
+    mime_type: str
+    byte_size: int
+    extraction_status: str
+    extraction_error: str | None = None
+    privacy_status: str
+    privacy_flags_json: str = "[]"
+    remaining_direct_identifier_hits_json: str = "[]"
+    audit_pass: bool = False
+    blocked_reason: str | None = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

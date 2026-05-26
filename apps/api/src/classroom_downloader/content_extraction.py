@@ -17,6 +17,17 @@ DEGRADED_MIME_TYPES = {
     "application/pdf",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 }
+SAFE_SOURCE_EXTENSIONS = {
+    ".csv",
+    ".docx",
+    ".gdoc",
+    ".json",
+    ".md",
+    ".pdf",
+    ".png",
+    ".py",
+    ".txt",
+}
 
 
 @dataclass(frozen=True)
@@ -89,7 +100,9 @@ def _decode_text(content: bytes) -> str | None:
 
 
 def _safe_source_label(cache_file: GradingFileCache) -> str:
+    if cache_file.source_name == cache_file.source_file_id:
+        return "submission"
     suffix = Path(cache_file.source_name).suffix.lower()
-    if suffix and len(suffix) <= 12:
+    if suffix in SAFE_SOURCE_EXTENSIONS:
         return f"submission{suffix}"
     return "submission"
