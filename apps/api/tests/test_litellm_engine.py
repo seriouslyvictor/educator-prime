@@ -125,6 +125,16 @@ def test_engine_calls_litellm_with_scrubbed_payload(monkeypatch) -> None:
     request_event = dict(events)["grading_engine.litellm.request"]
     assert request_event["content_chars"] == len("This is scrubbed work by [student].")
 
+    catalog_event = dict(events)["litellm.grade.catalog_model"]
+    assert catalog_event["model_id"] == "openai/gpt-5"
+    assert catalog_event["provider"] == "openai"
+    assert catalog_event["input_cost_per_token"] == 0.000001
+    assert catalog_event["output_cost_per_token"] == 0.000004
+    assert catalog_event["max_input_tokens"] == 128000
+    assert catalog_event["max_output_tokens"] == 8192
+    assert catalog_event["rpm_limit"] is None
+    assert catalog_event["tpm_limit"] is None
+
     response_event = dict(events)["grading_engine.litellm.response"]
     assert response_event["score"] == 91
     assert response_event["confidence"] == 0.9

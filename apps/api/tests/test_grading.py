@@ -410,6 +410,74 @@ def test_litellm_engine_attempt_metadata_is_persisted(monkeypatch, tmp_path) -> 
     assert submission["ai_cost_cents"] == 0.03
 
 
+def test_litellm_malformed_response_marks_attempt_failed(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    settings = get_settings()
+    original_settings = {
+        "grading_cache_path": settings.grading_cache_path,
+        "grading_engine": settings.grading_engine,
+        "litellm_model": settings.litellm_model,
+        "llm_model_catalog_mode": settings.llm_model_catalog_mode,
+        "llm_model_catalog_cache_path": settings.llm_model_catalog_cache_path,
+        "llm_model_overlay_path": settings.llm_model_overlay_path,
+    }
+    cache_path = tmp_path / "model-prices.json"
+    overlay_path = tmp_path / "overlay.json"
+    cache_path.write_text(
+        '{"openai/gpt-5":{"litellm_provider":"openai","mode":"chat","input_cost_per_token":0.000001,"output_cost_per_token":0.000004}}',
+        encoding="utf-8",
+    )
+    overlay_path.write_text(
+        '{"schema_version":1,"default_model":"openai/gpt-5","models":{"openai/gpt-5":{"enabled":true,"use_cases":["grading_draft"]}}}',
+        encoding="utf-8",
+    )
+
+    def fake_completion(**kwargs):
+        class Choice:
+            message = {"content": "not-json"}
+
+        class Response:
+            choices = [Choice()]
+            usage = {"prompt_tokens": 12, "completion_tokens": 3, "total_tokens": 15}
+
+        return Response()
+
+    monkeypatch.setattr(
+        "classroom_downloader.litellm_engine.litellm.completion",
+        fake_completion,
+    )
+
+    try:
+        settings.grading_cache_path = str(tmp_path / "grading")
+        settings.grading_engine = "litellm"
+        settings.litellm_model = "openai/gpt-5"
+        settings.llm_model_catalog_mode = "local_only"
+        settings.llm_model_catalog_cache_path = str(cache_path)
+        settings.llm_model_overlay_path = str(overlay_path)
+
+        with TestClient(app) as client:
+            job = client.post(
+                "/api/grading/jobs",
+                json={
+                    "course_id": "course-2",
+                    "activity_id": "activity-3",
+                    "rubric_mode": "brief",
+                    "teacher_loop": "approve",
+                },
+            ).json()
+            body = client.post(f"/api/grading/jobs/{job['id']}/draft").json()
+    finally:
+        for key, value in original_settings.items():
+            setattr(settings, key, value)
+
+    submission = body["submissions"][0]
+    assert submission["ai_attempt_status"] == "failed"
+    assert submission["ai_safe_error"] == "grading_engine_failed"
+    assert submission["error"] == "grading_engine_failed"
+
+
 def test_pseudonym_mapping_is_local_and_stable_across_retry(tmp_path) -> None:
     get_settings().grading_cache_path = str(tmp_path / "grading")
     with TestClient(app) as client:

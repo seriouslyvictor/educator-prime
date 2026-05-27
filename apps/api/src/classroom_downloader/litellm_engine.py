@@ -52,6 +52,18 @@ class LiteLlmGradingEngine:
             mime_type=request.mime_type,
             content_chars=len(request.content),
         )
+        log_event(
+            logger,
+            "litellm.grade.catalog_model",
+            model_id=self.catalog_model.id,
+            provider=self.catalog_model.provider,
+            input_cost_per_token=self.catalog_model.input_cost_per_token,
+            output_cost_per_token=self.catalog_model.output_cost_per_token,
+            max_input_tokens=self.catalog_model.max_input_tokens,
+            max_output_tokens=self.catalog_model.max_output_tokens,
+            rpm_limit=self.catalog_model.rpm_limit,
+            tpm_limit=self.catalog_model.tpm_limit,
+        )
 
         started = time.monotonic()
         response = litellm.completion(
