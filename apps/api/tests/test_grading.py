@@ -342,18 +342,22 @@ def test_grading_engine_only_receives_pseudonymized_payload(
 
 
 def test_litellm_engine_attempt_metadata_is_persisted(monkeypatch, tmp_path) -> None:
-    get_settings().grading_cache_path = str(tmp_path / "grading")
     settings = get_settings()
-    settings.grading_engine = "litellm"
-    settings.litellm_model = "openai/gpt-5"
-    settings.llm_model_catalog_mode = "local_only"
-    settings.llm_model_catalog_cache_path = str(tmp_path / "model-prices.json")
-    settings.llm_model_overlay_path = str(tmp_path / "overlay.json")
-    Path(settings.llm_model_catalog_cache_path).write_text(
+    original_settings = {
+        "grading_cache_path": settings.grading_cache_path,
+        "grading_engine": settings.grading_engine,
+        "litellm_model": settings.litellm_model,
+        "llm_model_catalog_mode": settings.llm_model_catalog_mode,
+        "llm_model_catalog_cache_path": settings.llm_model_catalog_cache_path,
+        "llm_model_overlay_path": settings.llm_model_overlay_path,
+    }
+    cache_path = tmp_path / "model-prices.json"
+    overlay_path = tmp_path / "overlay.json"
+    cache_path.write_text(
         '{"openai/gpt-5":{"litellm_provider":"openai","mode":"chat","input_cost_per_token":0.000001,"output_cost_per_token":0.000004}}',
         encoding="utf-8",
     )
-    Path(settings.llm_model_overlay_path).write_text(
+    overlay_path.write_text(
         '{"schema_version":1,"default_model":"openai/gpt-5","models":{"openai/gpt-5":{"enabled":true,"use_cases":["grading_draft"]}}}',
         encoding="utf-8",
     )
@@ -375,6 +379,13 @@ def test_litellm_engine_attempt_metadata_is_persisted(monkeypatch, tmp_path) -> 
     )
 
     try:
+        settings.grading_cache_path = str(tmp_path / "grading")
+        settings.grading_engine = "litellm"
+        settings.litellm_model = "openai/gpt-5"
+        settings.llm_model_catalog_mode = "local_only"
+        settings.llm_model_catalog_cache_path = str(cache_path)
+        settings.llm_model_overlay_path = str(overlay_path)
+
         with TestClient(app) as client:
             job = client.post(
                 "/api/grading/jobs",
@@ -387,7 +398,8 @@ def test_litellm_engine_attempt_metadata_is_persisted(monkeypatch, tmp_path) -> 
             ).json()
             body = client.post(f"/api/grading/jobs/{job['id']}/draft").json()
     finally:
-        settings.grading_engine = "mock"
+        for key, value in original_settings.items():
+            setattr(settings, key, value)
 
     submission = body["submissions"][0]
     assert submission["ai_engine"] == "litellm"
