@@ -8,10 +8,11 @@ import litellm
 
 from .grading_engine import GradingEngineRequest, GradingEngineResult
 from .llm_catalog import LlmModelEntry
-from .observability import get_logger, log_event, text_preview
+from .observability import get_logger, log_event
 
 
 logger = get_logger(__name__)
+DEFAULT_MAX_OUTPUT_TOKENS = 1200
 
 
 class LiteLlmGradingEngine:
@@ -27,6 +28,10 @@ class LiteLlmGradingEngine:
         self.model = model.litellm_model
         self.timeout_seconds = timeout_seconds
         self.max_retries = max_retries
+        self.max_output_tokens = min(
+            model.max_output_tokens or DEFAULT_MAX_OUTPUT_TOKENS,
+            DEFAULT_MAX_OUTPUT_TOKENS,
+        )
         self.last_usage: dict[str, int] = {}
         self.last_latency_ms: int | None = None
 
@@ -46,7 +51,6 @@ class LiteLlmGradingEngine:
             source_label=request.source_label,
             mime_type=request.mime_type,
             content_chars=len(request.content),
-            content_preview=text_preview(request.content),
         )
 
         started = time.monotonic()
@@ -55,6 +59,7 @@ class LiteLlmGradingEngine:
             messages=messages,
             timeout=self.timeout_seconds,
             num_retries=self.max_retries,
+            max_tokens=self.max_output_tokens,
             response_format={"type": "json_object"},
         )
         self.last_latency_ms = int((time.monotonic() - started) * 1000)
@@ -72,7 +77,6 @@ class LiteLlmGradingEngine:
             flags=result.flags,
             usage=self.last_usage,
             latency_ms=self.last_latency_ms,
-            feedback_preview=text_preview(result.feedback),
         )
         return result
 

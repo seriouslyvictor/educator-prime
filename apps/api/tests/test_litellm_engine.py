@@ -7,7 +7,11 @@ os.environ["CD_GOOGLE_PROVIDER"] = "mock"
 import pytest
 
 from classroom_downloader.grading_engine import GradingEngineRequest
-from classroom_downloader.litellm_engine import LiteLlmGradingEngine, parse_litellm_result
+from classroom_downloader.litellm_engine import (
+    DEFAULT_MAX_OUTPUT_TOKENS,
+    LiteLlmGradingEngine,
+    parse_litellm_result,
+)
 from classroom_downloader.llm_catalog import LlmModelEntry
 
 
@@ -58,6 +62,7 @@ def test_parse_litellm_result_rejects_malformed_json() -> None:
 
 def test_engine_calls_litellm_with_scrubbed_payload(monkeypatch) -> None:
     captured = {}
+    events = []
 
     def fake_completion(**kwargs):
         captured.update(kwargs)
@@ -81,7 +86,11 @@ def test_engine_calls_litellm_with_scrubbed_payload(monkeypatch) -> None:
 
         return Response()
 
+    def fake_log_event(logger, event_name, **kwargs):
+        events.append((event_name, kwargs))
+
     monkeypatch.setattr("classroom_downloader.litellm_engine.litellm.completion", fake_completion)
+    monkeypatch.setattr("classroom_downloader.litellm_engine.log_event", fake_log_event)
     engine = LiteLlmGradingEngine(model=model_entry(), timeout_seconds=30, max_retries=1)
 
     result = engine.grade(
@@ -102,7 +111,25 @@ def test_engine_calls_litellm_with_scrubbed_payload(monkeypatch) -> None:
     assert result.confidence == 0.9
     assert result.feedback == "Strong work."
     assert captured["model"] == "openai/gpt-5"
+    assert captured["max_tokens"] == DEFAULT_MAX_OUTPUT_TOKENS
     rendered = json.dumps(captured["messages"])
     assert "student_001" in rendered
     assert "This is scrubbed work" in rendered
     assert "Ana Silva" not in rendered
+    assert events
+    for _, event_kwargs in events:
+        assert "content_preview" not in event_kwargs
+        assert "raw_content" not in event_kwargs
+        assert "feedback_preview" not in event_kwargs
+
+    request_event = dict(events)["grading_engine.litellm.request"]
+    assert request_event["content_chars"] == len("This is scrubbed work by [student].")
+
+    response_event = dict(events)["grading_engine.litellm.response"]
+    assert response_event["score"] == 91
+    assert response_event["confidence"] == 0.9
+    assert response_event["usage"] == {
+        "prompt_tokens": 100,
+        "completion_tokens": 40,
+        "total_tokens": 140,
+    }
