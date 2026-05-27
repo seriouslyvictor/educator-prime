@@ -93,3 +93,25 @@ class MockGradingEngine:
 
 
 DEFAULT_GRADING_ENGINE: GradingEngine = MockGradingEngine()
+
+
+def get_grading_engine() -> GradingEngine:
+    from .settings import get_settings
+
+    settings = get_settings()
+    if settings.grading_engine == "mock":
+        return DEFAULT_GRADING_ENGINE
+    if settings.grading_engine == "litellm":
+        from .litellm_engine import LiteLlmGradingEngine
+        from .llm_catalog import load_llm_catalog
+
+        catalog = load_llm_catalog(settings)
+        model = catalog.models.get(settings.litellm_model)
+        if model is None or not model.enabled:
+            raise ValueError("grading_model_not_enabled")
+        return LiteLlmGradingEngine(
+            model=model,
+            timeout_seconds=settings.litellm_timeout_seconds,
+            max_retries=settings.litellm_max_retries,
+        )
+    raise ValueError("unknown_grading_engine")

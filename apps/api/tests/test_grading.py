@@ -285,7 +285,10 @@ def test_draft_job_records_privacy_attempt_metadata(tmp_path) -> None:
     assert all(attempt.extraction_status for attempt in attempts)
 
 
-def test_grading_engine_only_receives_pseudonymized_payload(tmp_path) -> None:
+def test_grading_engine_only_receives_pseudonymized_payload(
+    monkeypatch,
+    tmp_path,
+) -> None:
     get_settings().grading_cache_path = str(tmp_path / "grading")
     captured: list[GradingEngineRequest] = []
 
@@ -313,12 +316,12 @@ def test_grading_engine_only_receives_pseudonymized_payload(tmp_path) -> None:
         ).json()
         from classroom_downloader import grading
 
-        original = grading.DEFAULT_GRADING_ENGINE
-        grading.DEFAULT_GRADING_ENGINE = CapturingEngine()
-        try:
-            client.post(f"/api/grading/jobs/{job['id']}/draft")
-        finally:
-            grading.DEFAULT_GRADING_ENGINE = original
+        monkeypatch.setattr(
+            grading,
+            "get_grading_engine",
+            lambda: CapturingEngine(),
+        )
+        client.post(f"/api/grading/jobs/{job['id']}/draft")
 
     assert captured
     payload = "\n".join(
@@ -336,6 +339,63 @@ def test_grading_engine_only_receives_pseudonymized_payload(tmp_path) -> None:
     assert "diego.lima@example.edu" not in payload
     assert "essay draft.docx" not in payload
     assert all(request.student_label.startswith("student_") for request in captured)
+
+
+def test_litellm_engine_attempt_metadata_is_persisted(monkeypatch, tmp_path) -> None:
+    get_settings().grading_cache_path = str(tmp_path / "grading")
+    settings = get_settings()
+    settings.grading_engine = "litellm"
+    settings.litellm_model = "openai/gpt-5"
+    settings.llm_model_catalog_mode = "local_only"
+    settings.llm_model_catalog_cache_path = str(tmp_path / "model-prices.json")
+    settings.llm_model_overlay_path = str(tmp_path / "overlay.json")
+    Path(settings.llm_model_catalog_cache_path).write_text(
+        '{"openai/gpt-5":{"litellm_provider":"openai","mode":"chat","input_cost_per_token":0.000001,"output_cost_per_token":0.000004}}',
+        encoding="utf-8",
+    )
+    Path(settings.llm_model_overlay_path).write_text(
+        '{"schema_version":1,"default_model":"openai/gpt-5","models":{"openai/gpt-5":{"enabled":true,"use_cases":["grading_draft"]}}}',
+        encoding="utf-8",
+    )
+
+    def fake_completion(**kwargs):
+        class Choice:
+            message = {
+                "content": '{"score": 84, "confidence": 0.8, "feedback": "Solid draft.", "criterion_notes": [], "flags": []}'
+            }
+
+        class Response:
+            choices = [Choice()]
+            usage = {"prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150}
+
+        return Response()
+
+    monkeypatch.setattr(
+        "classroom_downloader.litellm_engine.litellm.completion", fake_completion
+    )
+
+    try:
+        with TestClient(app) as client:
+            job = client.post(
+                "/api/grading/jobs",
+                json={
+                    "course_id": "course-2",
+                    "activity_id": "activity-3",
+                    "rubric_mode": "brief",
+                    "teacher_loop": "approve",
+                },
+            ).json()
+            body = client.post(f"/api/grading/jobs/{job['id']}/draft").json()
+    finally:
+        settings.grading_engine = "mock"
+
+    submission = body["submissions"][0]
+    assert submission["ai_engine"] == "litellm"
+    assert submission["ai_model"] == "openai/gpt-5"
+    assert submission["ai_prompt_tokens"] == 100
+    assert submission["ai_completion_tokens"] == 50
+    assert submission["ai_token_count"] == 150
+    assert submission["ai_cost_cents"] == 0.03
 
 
 def test_pseudonym_mapping_is_local_and_stable_across_retry(tmp_path) -> None:

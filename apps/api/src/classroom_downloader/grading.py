@@ -10,7 +10,11 @@ import json
 from sqlmodel import Session, select
 
 from .content_extraction import extract_submission_content
-from .grading_engine import DEFAULT_GRADING_ENGINE, GradingEngine, GradingEngineRequest
+from .grading_engine import (
+    GradingEngine,
+    GradingEngineRequest,
+    get_grading_engine,
+)
 from .google_provider import GoogleProvider, SubmissionFile
 from .models import (
     GradingAiAttempt,
@@ -143,7 +147,7 @@ def draft_grading_job(
     provider: GoogleProvider,
     grading_engine: GradingEngine | None = None,
 ) -> GradingJob:
-    grading_engine = grading_engine or DEFAULT_GRADING_ENGINE
+    grading_engine = grading_engine or get_grading_engine()
     log_event(
         logger,
         "grading.draft.start",
@@ -194,7 +198,7 @@ def retry_submission(
     provider: GoogleProvider,
     grading_engine: GradingEngine | None = None,
 ) -> GradingJob:
-    grading_engine = grading_engine or DEFAULT_GRADING_ENGINE
+    grading_engine = grading_engine or get_grading_engine()
     log_event(
         logger,
         "grading.retry.start",
@@ -492,6 +496,7 @@ def _draft_submission(
         return
 
     flags = sorted(set([*scrubbed.report.flags, *result.flags]))
+    attempt_metadata = _attempt_metadata(grading_engine)
     log_event(
         logger,
         "grading.submission.engine_call.complete",
@@ -515,6 +520,11 @@ def _draft_submission(
         privacy_status=scrubbed.report.status,
         flags=flags,
         retry_count=retry_count,
+        prompt_tokens=attempt_metadata["prompt_tokens"],
+        completion_tokens=attempt_metadata["completion_tokens"],
+        token_count=attempt_metadata["token_count"],
+        cost_cents=attempt_metadata["cost_cents"],
+        latency_ms=attempt_metadata["latency_ms"],
     )
     submission.ai_score = result.score
     submission.confidence = result.confidence
@@ -551,6 +561,11 @@ def _record_attempt(
     flags: list[str],
     retry_count: int,
     safe_error: str | None = None,
+    prompt_tokens: int | None = None,
+    completion_tokens: int | None = None,
+    token_count: int | None = None,
+    cost_cents: float | None = None,
+    latency_ms: int | None = None,
 ) -> GradingAiAttempt:
     attempt = GradingAiAttempt(
         id=str(uuid4()),
@@ -563,6 +578,11 @@ def _record_attempt(
         privacy_status=privacy_status,
         safe_error=safe_error,
         flags_json=json.dumps(flags),
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+        token_count=token_count,
+        cost_cents=cost_cents,
+        latency_ms=latency_ms,
         retry_count=retry_count,
     )
     session.add(attempt)
@@ -581,9 +601,49 @@ def _record_attempt(
         privacy_status=attempt.privacy_status,
         safe_error=attempt.safe_error,
         flags=flags,
+        prompt_tokens=attempt.prompt_tokens,
+        completion_tokens=attempt.completion_tokens,
+        token_count=attempt.token_count,
+        cost_cents=attempt.cost_cents,
+        latency_ms=attempt.latency_ms,
         retry_count=attempt.retry_count,
     )
     return attempt
+
+
+def _attempt_metadata(grading_engine: GradingEngine) -> dict[str, int | float | None]:
+    usage = getattr(grading_engine, "last_usage", {}) or {}
+    prompt_tokens = _int_or_none(usage.get("prompt_tokens"))
+    completion_tokens = _int_or_none(usage.get("completion_tokens"))
+    token_count = _int_or_none(usage.get("total_tokens"))
+    latency_ms = _int_or_none(getattr(grading_engine, "last_latency_ms", None))
+    cost_cents: float | None = None
+
+    if (
+        grading_engine.name == "litellm"
+        and prompt_tokens is not None
+        and completion_tokens is not None
+    ):
+        from .llm_catalog import estimate_cost_cents, load_llm_catalog
+
+        catalog_model = getattr(grading_engine, "catalog_model", None)
+        if catalog_model is None:
+            model_id = getattr(grading_engine, "model", None)
+            catalog_model = load_llm_catalog().models.get(model_id)
+        if catalog_model is not None:
+            cost_cents = estimate_cost_cents(
+                catalog_model,
+                prompt_tokens,
+                completion_tokens,
+            )
+
+    return {
+        "prompt_tokens": prompt_tokens,
+        "completion_tokens": completion_tokens,
+        "token_count": token_count,
+        "cost_cents": cost_cents,
+        "latency_ms": latency_ms,
+    }
 
 
 def _submission_read(
@@ -611,7 +671,21 @@ def _submission_read(
         ai_model=attempt.model if attempt else None,
         ai_safe_error=attempt.safe_error if attempt else None,
         ai_flags=json.loads(attempt.flags_json) if attempt else [],
+        ai_prompt_tokens=attempt.prompt_tokens if attempt else None,
+        ai_completion_tokens=attempt.completion_tokens if attempt else None,
+        ai_token_count=attempt.token_count if attempt else None,
+        ai_cost_cents=attempt.cost_cents if attempt else None,
+        ai_latency_ms=attempt.latency_ms if attempt else None,
     )
+
+
+def _int_or_none(value: object) -> int | None:
+    if isinstance(value, bool) or value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _submission_for_file(
