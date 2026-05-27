@@ -22,15 +22,15 @@ export function ClassroomList({
   return (
     <section className="pane pane-left">
       <div className="pane-head">
-        <span>Classrooms · {courses.length}</span>
+        <span>Turmas · {courses.length}</span>
       </div>
       <div className="pane-search">
-        <SearchBox value={query} onChange={onQuery} placeholder="Filter classes..." />
+        <SearchBox value={query} onChange={onQuery} placeholder="Filtrar turmas..." />
       </div>
       <div className="pane-body">
         {loading ? <SkeletonRows count={5} /> : null}
         {!loading && filtered.length === 0 ? (
-          <EmptyState icon="search" title="No matches" copy="Try a different class filter." />
+          <EmptyState icon="search" title="Nenhum resultado" copy="Tente outro filtro de turma." />
         ) : null}
         {!loading
           ? filtered.map((course, index) => (
@@ -42,7 +42,7 @@ export function ClassroomList({
                 <span className="class-dot" style={{ color: palette[index % palette.length] }} />
                 <span className="class-main">
                   <span className="ttl">{course.name}</span>
-                  <span className="sub">{course.section ?? "No section"}</span>
+                  <span className="sub">{course.section ?? "Sem seção"}</span>
                 </span>
                 <span className="meta">{course.course_state}</span>
               </button>
@@ -86,16 +86,16 @@ export function ActivityList({
     <section className="pane pane-right">
       <div className="assign-toolbar">
         <div className="toolbar-left">
-          <div className="toolbar-title">{course?.name ?? "Select a classroom"}</div>
+          <div className="toolbar-title">{course?.name ?? "Selecione uma turma"}</div>
           <div className="toolbar-sub">
-            {activities.length} activities · {selectedIds.length} selected
+            {activities.length} atividades · {selectedIds.length} selecionadas
           </div>
         </div>
         <div className="head-tools">
-          <SearchBox value={query} onChange={onQuery} placeholder="Filter activities..." />
+          <SearchBox value={query} onChange={onQuery} placeholder="Filtrar atividades..." />
           <button className="btn btn-secondary" onClick={() => onToggleAll(filtered, !allSelected)}>
             <AppIcon name="check" />
-            {allSelected ? "Deselect" : "Select all"}
+            {allSelected ? "Desmarcar" : "Selecionar tudo"}
             <span className="kbd">Ctrl+A</span>
           </button>
         </div>
@@ -104,7 +104,7 @@ export function ActivityList({
       <div className="assign-list">
         {loading ? <SkeletonRows count={7} /> : null}
         {!loading && filtered.length === 0 ? (
-          <EmptyState icon="file" title="No activities" copy="This class has no matching coursework." />
+          <EmptyState icon="file" title="Nenhuma atividade" copy="Esta turma não tem atividades correspondentes." />
         ) : null}
         {!loading
           ? filtered.map((activity, index) => {
@@ -128,12 +128,12 @@ export function ActivityList({
                         {activity.work_type}
                       </span>
                       <span className="sep" />
-                      <span>{activity.due_label ?? "No due date"}</span>
+                      <span>{activity.due_label ?? "Sem prazo"}</span>
                     </div>
                   </div>
                   <div className="a-right">
                     <span className={`badge ${activity.state === "PUBLISHED" ? "badge-pub" : "badge-draft"}`}>
-                      {activity.state === "PUBLISHED" ? "Live" : activity.state}
+                      {activity.state === "PUBLISHED" ? "Publicado" : activity.state}
                     </span>
                   </div>
                 </div>

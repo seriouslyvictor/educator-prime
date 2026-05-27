@@ -34,30 +34,30 @@ export function ProgressView({
       <section className="progress-main">
         <div>
           <div className="progress-eyebrow">
-            {deliveryMode === "zip" ? "Packaging placeholder" : "Downloading"} · {courseName}
+            {deliveryMode === "zip" ? "Empacotamento placeholder" : "Baixando"} · {courseName}
           </div>
           <h1 className="progress-title">
-            {error ? "Export needs attention" : deliveryMode === "zip" ? ".zip delivery is not active yet" : "Streaming submissions"}
+            {error ? "A exportação precisa de atenção" : deliveryMode === "zip" ? "A entrega .zip ainda não está ativa" : "Transmitindo entregas"}
           </h1>
           <p className="progress-sub">
             {deliveryMode === "zip"
-              ? "Zip packaging is shown as a future delivery mode. Use Chrome or Edge for real folder export today."
-              : "Files are streamed from Drive through FastAPI and written into the folder you picked."}
+              ? "O empacotamento zip aparece como modo futuro. Use Chrome ou Edge para exportar para uma pasta hoje."
+              : "Os arquivos são transmitidos do Drive pelo FastAPI e gravados na pasta que você escolheu."}
           </p>
         </div>
 
         <div className="big-stats">
-          <Stat label="Completed" value={completed} sub={`/ ${total}`} />
-          <Stat label="Remaining" value={remaining} />
-          <Stat label="Errors" value={failed} />
-          <Stat label="Progress" value={`${pct}%`} />
+          <Stat label="Concluídos" value={completed} sub={`/ ${total}`} />
+          <Stat label="Restantes" value={remaining} />
+          <Stat label="Erros" value={failed} />
+          <Stat label="Progresso" value={`${pct}%`} />
         </div>
 
         <div className="bigbar-wrap">
           <div className="bigbar-head">
             <div className="now-playing">
               <AppIcon name={error ? "triangleAlert" : "zap"} />
-              <div className="now-playing-path">{error ?? currentPath ?? "Preparing..."}</div>
+              <div className="now-playing-path">{error ?? currentPath ?? "Preparando..."}</div>
             </div>
             <div className="percent">{pct}%</div>
           </div>
@@ -68,7 +68,7 @@ export function ProgressView({
 
         <div className="progress-actions">
           <button className="btn btn-secondary" onClick={onCancel}>
-            Back to workspace
+            Voltar à área de trabalho
             <span className="kbd kbd-light">Esc</span>
           </button>
         </div>
@@ -76,8 +76,8 @@ export function ProgressView({
 
       <aside className="log-panel">
         <div className="log-head">
-          <span>Export log</span>
-          <span>{log.length} events</span>
+          <span>Log da exportação</span>
+          <span>{log.length} eventos</span>
         </div>
         <div className="log-list">
           {log.map((item) => (
@@ -87,7 +87,7 @@ export function ProgressView({
             </div>
           ))}
           {log.length === 0 ? (
-            <div className="log-empty">Waiting for the first file...</div>
+            <div className="log-empty">Aguardando o primeiro arquivo...</div>
           ) : null}
         </div>
       </aside>

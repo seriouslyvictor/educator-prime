@@ -23,7 +23,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!response.ok) {
     const detail = await response.json().catch(() => undefined);
-    throw new Error(detail?.detail ?? `Request failed with ${response.status}`);
+    throw new Error(detail?.detail ?? `Requisição falhou com ${response.status}`);
   }
 
   return response.json() as Promise<T>;

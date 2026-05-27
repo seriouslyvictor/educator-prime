@@ -19,7 +19,7 @@ export function Rail({
   onThemeChange: (mode: ThemeMode) => void;
 }) {
   const connected = Boolean(auth?.signed_in && auth.classroom_scopes && auth.drive_scopes);
-  const accountName = auth?.name ?? auth?.email ?? (connected ? "Google account connected" : "Not signed in");
+  const accountName = auth?.name ?? auth?.email ?? (connected ? "Conta Google conectada" : "Não conectado");
   const fallbackInitials = getInitials(auth?.name, auth?.email);
   return (
     <aside className="rail">
@@ -27,11 +27,11 @@ export function Rail({
         <div className="brand-mark">CD</div>
         <div>
           <div className="brand-name">Classroom Downloader</div>
-          <div className="brand-sub">Exports beta</div>
+          <div className="brand-sub">Exportações beta</div>
         </div>
       </div>
 
-      <div className="rail-nav-label">Workspace</div>
+      <div className="rail-nav-label">Área de trabalho</div>
       <nav className="rail-nav">
         <button
           className={`nav-item ${view.startsWith("grader") ? "active" : ""}`}
@@ -39,14 +39,14 @@ export function Rail({
           disabled={!connected}
         >
           <AppIcon name="sparkle" />
-          Grade with AI
+          Corrigir com IA
         </button>
         <button
           className={`nav-item ${view === "workspace" || view === "connect" ? "active" : ""}`}
           onClick={() => onNavigate(connected ? "workspace" : "connect")}
         >
           <AppIcon name="classroom" />
-          Classrooms
+          Turmas
         </button>
         <button
           className={`nav-item ${view === "history" ? "active" : ""}`}
@@ -54,12 +54,12 @@ export function Rail({
           disabled={!connected}
         >
           <AppIcon name="history" />
-          History
+          Histórico
           <span className="nav-count">{history.length}</span>
         </button>
       </nav>
 
-      <div className="rail-nav-label">Connected</div>
+      <div className="rail-nav-label">Conectado</div>
       <nav className="rail-nav">
         <ConnectionItem label="Google Classroom" ready={Boolean(auth?.classroom_scopes)} />
         <ConnectionItem label="Google Drive" ready={Boolean(auth?.drive_scopes)} />
@@ -76,7 +76,7 @@ export function Rail({
         <div className="account-copy">
           <div className="acct-name">{accountName}</div>
           <div className={`acct-status ${connected ? "ready" : ""}`}>
-            {connected ? "Ready to export" : "Connect to begin"}
+            {connected ? "Pronto para exportar" : "Conecte para começar"}
           </div>
         </div>
       </div>
@@ -96,7 +96,7 @@ function ConnectionItem({ label, ready }: { label: string; ready: boolean }) {
     <button className="nav-item passive" tabIndex={-1}>
       <AppIcon name={label.includes("Drive") ? "folderOpen" : "classroom"} />
       {label}
-      <span className={`nav-count ${ready ? "ok" : "needed"}`}>{ready ? "ok" : "needed"}</span>
+      <span className={`nav-count ${ready ? "ok" : "needed"}`}>{ready ? "ok" : "necessário"}</span>
     </button>
   );
 }

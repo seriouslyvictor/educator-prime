@@ -29,11 +29,11 @@ const rubricModes: Array<{
   copy: string;
   icon: "sparkle" | "fileText" | "settings" | "archive" | "shield";
 }> = [
-  { id: "infer", title: "Infer from work", copy: "Let the draft use the assignment and files.", icon: "sparkle" },
-  { id: "brief", title: "Plain brief", copy: "Paste a short grading note for the draft.", icon: "fileText" },
-  { id: "structured", title: "Structured rubric", copy: "Use weighted criteria before drafting.", icon: "settings" },
-  { id: "saved", title: "Saved", copy: "Reuse a rubric shape from recent work.", icon: "archive" },
-  { id: "calibrate", title: "Calibrate first", copy: "Seed the draft with examples to match your taste.", icon: "shield" },
+  { id: "infer", title: "Inferir pelo trabalho", copy: "Deixe o rascunho usar a atividade e os arquivos.", icon: "sparkle" },
+  { id: "brief", title: "Orientação simples", copy: "Cole uma nota curta de correção para o rascunho.", icon: "fileText" },
+  { id: "structured", title: "Rubrica estruturada", copy: "Use critérios com pesos antes do rascunho.", icon: "settings" },
+  { id: "saved", title: "Salva", copy: "Reutilize uma rubrica de trabalhos recentes.", icon: "archive" },
+  { id: "calibrate", title: "Calibrar primeiro", copy: "Use exemplos para ajustar o rascunho ao seu estilo.", icon: "shield" },
 ];
 
 const loopModes: Array<{
@@ -41,10 +41,10 @@ const loopModes: Array<{
   title: string;
   copy: string;
 }> = [
-  { id: "auto", title: "Auto-grade", copy: "AI drafts all; you review only flagged rows" },
-  { id: "approve", title: "Approve each", copy: "AI proposes a grade per student; you commit it" },
-  { id: "cowrite", title: "Co-write", copy: "AI shows reasoning; you write the grade" },
-  { id: "off", title: "AI off", copy: "You grade manually; AI just provides the table" },
+  { id: "auto", title: "Correção automática", copy: "A IA rascunha tudo; você revisa apenas linhas sinalizadas" },
+  { id: "approve", title: "Aprovar cada uma", copy: "A IA propõe uma nota por aluno; você confirma" },
+  { id: "cowrite", title: "Coescrever", copy: "A IA mostra o raciocínio; você escreve a nota" },
+  { id: "off", title: "IA desligada", copy: "Você corrige manualmente; a IA só prepara a tabela" },
 ];
 
 export function GraderQueue({
@@ -73,16 +73,16 @@ export function GraderQueue({
   return (
     <div className="grader-page">
       <GraderTopbar
-        title="Grade with AI"
-        subtitle="Draft-only grading beside the download workflow."
+        title="Corrigir com IA"
+        subtitle="Correção em rascunho, ao lado do fluxo de download."
         action={
           <>
             <button className="btn btn-secondary" onClick={onDownloadInstead}>
-              <AppIcon name="download" /> Download instead
+              <AppIcon name="download" /> Baixar em vez disso
             </button>
             <button className="btn btn-primary" onClick={onRefresh} disabled={loading}>
               <AppIcon name={loading ? "loader" : "refresh"} className={loading ? "ico spin" : "ico"} />
-              Refresh
+              Atualizar
             </button>
           </>
         }
@@ -94,22 +94,22 @@ export function GraderQueue({
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search classes or assignments"
+            placeholder="Buscar turmas ou atividades"
           />
         </label>
       </div>
 
       <div className="grader-queue">
         <QueueSection
-          title="Continue where you left off"
-          empty="No grading drafts in progress."
+          title="Continue de onde parou"
+          empty="Nenhum rascunho de correção em andamento."
           items={reviewing}
           onPick={(item) => item.latest_job_id && onOpenJob(item.latest_job_id)}
         />
-        <QueueSection title="Ready for AI to draft" empty="No assignments ready." items={ready} onPick={onSetup} />
+        <QueueSection title="Prontas para rascunho com IA" empty="Nenhuma atividade pronta." items={ready} onPick={onSetup} />
         <QueueSection
-          title="Saved draft sets"
-          empty="Completed draft sets will appear here."
+          title="Conjuntos de rascunhos salvos"
+          empty="Conjuntos concluídos aparecerão aqui."
           items={completed}
           onPick={(item) => item.latest_job_id && onOpenJob(item.latest_job_id)}
         />
@@ -148,12 +148,12 @@ function QueueSection({
               <div className="grader-card-main">
                 <div className="grader-card-title">{item.activity_title}</div>
                 <div className="grader-card-sub">
-                  {item.course_name} · {item.submission_count} submissions
-                  {item.due_label ? ` · Due ${item.due_label}` : ""}
+                  {item.course_name} · {item.submission_count} entregas
+                  {item.due_label ? ` · Prazo ${item.due_label}` : ""}
                 </div>
               </div>
               <div className="grader-card-status">
-                {item.latest_job_id ? `${item.reviewed_submissions}/${item.total_submissions} reviewed` : "Set up"}
+                {item.latest_job_id ? `${item.reviewed_submissions}/${item.total_submissions} revisadas` : "Configurar"}
               </div>
               <AppIcon name="chevronRight" />
             </button>
@@ -183,11 +183,11 @@ export function GraderSetup({
   return (
     <div className="grader-page">
       <GraderTopbar
-        title="Setup rubric"
+        title="Configurar rubrica"
         subtitle={`${item.course_name} · ${item.activity_title}`}
         action={
           <button className="btn btn-secondary" onClick={onBack}>
-            Back
+            Voltar
           </button>
         }
       />
@@ -214,9 +214,9 @@ export function GraderSetup({
               {rubricMode === "saved" ? (
                 <div className="saved-rubric-list">
                   {[
-                    ["AP Bio · Lab Report (4-part)", "12 times · last May 14", "4 criteria"],
-                    ["World Lit · Essay (5-criterion)", "8 times", "4 criteria"],
-                    ["Algebra · Problem Set", "23 times", "4 criteria"],
+                    ["AP Bio · Relatório de laboratório (4 partes)", "12 vezes · última em 14 de maio", "4 critérios"],
+                    ["Literatura · Redação (5 critérios)", "8 vezes", "4 critérios"],
+                    ["Álgebra · Lista de problemas", "23 vezes", "4 critérios"],
                   ].map((row, index) => (
                     <button key={row[0]} className={`saved-rubric-row ${index === 0 ? "active" : ""}`}>
                       <span className="saved-rubric-dot" />
@@ -231,20 +231,20 @@ export function GraderSetup({
                 </div>
               ) : (
                 <label className="rubric-input">
-                  <span>{rubricMode === "infer" ? "Optional notes" : "Rubric notes"}</span>
+                  <span>{rubricMode === "infer" ? "Notas opcionais" : "Notas da rubrica"}</span>
                   <textarea
                     value={rubricText}
                     onChange={(event) => setRubricText(event.target.value)}
-                    placeholder="Tone, priorities, required evidence, or criteria you want the draft to respect."
+                    placeholder="Tom, prioridades, evidências exigidas ou critérios que o rascunho deve respeitar."
                   />
                 </label>
               )}
             </CardContent>
             <CardFooter>
-              <span>Selected: {rubricMode === "saved" ? "AP Bio · Lab Report (4-part)" : selectedRubric.title}</span>
+              <span>Selecionado: {rubricMode === "saved" ? "AP Bio · Relatório de laboratório (4 partes)" : selectedRubric.title}</span>
               <div className="setup-footer-actions">
                 <button className="btn btn-ghost" onClick={onBack}>
-                  Cancel
+                  Cancelar
                 </button>
                 <button
                   className="btn btn-primary"
@@ -252,7 +252,7 @@ export function GraderSetup({
                   disabled={busy}
                 >
                   <AppIcon name={busy ? "loader" : "sparkle"} className={busy ? "ico spin" : "ico"} />
-                  Run privacy audit for {item.submission_count}
+                  Auditar privacidade de {item.submission_count}
                 </button>
               </div>
             </CardFooter>
@@ -262,14 +262,14 @@ export function GraderSetup({
         <aside className="setup-side setup-side-contract">
           <Card className="context-card">
             <CardHeader>
-              <CardTitle>Context AI has</CardTitle>
+              <CardTitle>Contexto que a IA tem</CardTitle>
             </CardHeader>
             <CardContent>
               {[
-                ["Assignment title + description", ""],
-                ["Student submissions", `${item.submission_count} files`],
-                ["Attached materials", "2 PDFs"],
-                ["Previous graded assignments", "4 examples"],
+                ["Título + descrição da atividade", ""],
+                ["Entregas dos alunos", `${item.submission_count} arquivos`],
+                ["Materiais anexados", "2 PDFs"],
+                ["Atividades corrigidas antes", "4 exemplos"],
               ].map((row) => (
                 <div className="context-row" key={row[0]}>
                   <AppIcon name="checkCircle" />
@@ -279,8 +279,8 @@ export function GraderSetup({
               ))}
               <div className="context-row muted">
                 <AppIcon name="x" />
-                <span>Class roster (names hidden)</span>
-                <em>privacy</em>
+                <span>Lista da turma (nomes ocultos)</span>
+                <em>privacidade</em>
               </div>
             </CardContent>
           </Card>
@@ -289,18 +289,18 @@ export function GraderSetup({
             <CardContent>
               <div className="tip-title">
                 <AppIcon name="sparkle" />
-                Tip
+                Dica
               </div>
               <p>
-                Try Infer for new assignment formats. The AI is good at spotting structure and proposing criteria that
-                match.
+                Use Inferir para novos formatos de atividade. A IA costuma identificar a estrutura e sugerir critérios
+                compatíveis.
               </p>
             </CardContent>
           </Card>
 
           <Card className="teacher-loop-card">
             <CardHeader>
-              <CardTitle>Teacher-in-loop</CardTitle>
+              <CardTitle>Professor no processo</CardTitle>
             </CardHeader>
             <CardContent>
               <RadioGroup>
@@ -360,32 +360,32 @@ export function GraderReview({
     <div className="grader-review">
       <GraderTopbar
         title={job.activity_title}
-        subtitle={`${job.reviewed_submissions}/${job.total_submissions} reviewed · cache ${
-          job.cache_expires_at ? "available" : "deleted"
+        subtitle={`${job.reviewed_submissions}/${job.total_submissions} revisadas · cache ${
+          job.cache_expires_at ? "disponível" : "apagado"
         }`}
         action={
           <>
             <button className="btn btn-secondary" onClick={onBack}>
-              Queue
+              Fila
             </button>
             <button className="btn btn-primary" onClick={onWrap}>
-              Wrap drafts
+              Fechar rascunhos
             </button>
           </>
         }
       />
       <div className="review-grid">
         <aside className="student-list">
-          <div className="student-list-head">Students</div>
+          <div className="student-list-head">Alunos</div>
           {job.submissions.map((submission) => (
             <button
               key={submission.id}
               className={`student-row ${submission.id === active?.id ? "active" : ""}`}
               onClick={() => onActiveSubmission(submission.id)}
             >
-              <span>{submission.student_name ?? submission.student_email ?? "Unknown student"}</span>
+              <span>{submission.student_name ?? submission.student_email ?? "Aluno desconhecido"}</span>
               <small className={`student-state ${statusTone(submission)}`}>
-                {submission.reviewed ? "Reviewed" : submission.error ? "Blocked" : submission.flag ? "Check" : "Draft"}
+                {submission.reviewed ? "Revisado" : submission.error ? "Bloqueado" : submission.flag ? "Verificar" : "Rascunho"}
               </small>
             </button>
           ))}
@@ -396,7 +396,7 @@ export function GraderReview({
             <div className="preview-file">
               <AppIcon name={active?.mime_type.includes("image") ? "eye" : "fileText"} />
               <div>
-                <div>{active?.source_name ?? "No submission selected"}</div>
+                <div>{active?.source_name ?? "Nenhuma entrega selecionada"}</div>
                 <span>{active?.mime_type}</span>
               </div>
             </div>
@@ -408,23 +408,23 @@ export function GraderReview({
               <span />
             </div>
             <p>
-              Structured preview placeholder for V1. Privacy status:{" "}
-              {privacyLabel(active?.privacy_status)}. Extraction: {extractionLabel(active?.extraction_status)}.
+              Prévia estruturada placeholder da V1. Privacidade:{" "}
+              {privacyLabel(active?.privacy_status)}. Extração: {extractionLabel(active?.extraction_status)}.
             </p>
           </div>
         </section>
 
         <aside className="suggestion-panel">
           <div className="suggestion-head">
-            <span>AI draft</span>
-            <strong>{active?.confidence ? `${Math.round(active.confidence * 100)}%` : "new"}</strong>
+            <span>Rascunho da IA</span>
+            <strong>{active?.confidence ? `${Math.round(active.confidence * 100)}%` : "novo"}</strong>
           </div>
           <div className="privacy-status-grid">
-            <StatusPill label="Privacy" value={privacyLabel(active?.privacy_status)} tone={privacyTone(active)} />
-            <StatusPill label="Input" value={extractionLabel(active?.extraction_status)} tone={extractionTone(active)} />
-            <StatusPill label="Engine" value={attemptLabel(active?.ai_attempt_status)} tone={attemptTone(active)} />
+            <StatusPill label="Privacidade" value={privacyLabel(active?.privacy_status)} tone={privacyTone(active)} />
+            <StatusPill label="Entrada" value={extractionLabel(active?.extraction_status)} tone={extractionTone(active)} />
+            <StatusPill label="Motor" value={attemptLabel(active?.ai_attempt_status)} tone={attemptTone(active)} />
           </div>
-          {active?.flag ? <div className="flag-note">{active.flag.replace("_", " ")}</div> : null}
+          {active?.flag ? <div className="flag-note">{safeStatusLabel(active.flag)}</div> : null}
           <div className="criteria-list">
             {job.criteria.map((criterion) => (
               <div key={criterion.id} className="criterion-row">
@@ -434,17 +434,17 @@ export function GraderReview({
             ))}
           </div>
           <label className="score-input">
-            <span>Final score</span>
+            <span>Nota final</span>
             <input value={scoreText} onChange={(event) => setScoreText(event.target.value)} inputMode="decimal" />
           </label>
           <label className="feedback-input">
-            <span>Feedback draft</span>
+            <span>Rascunho de feedback</span>
             <textarea value={feedback} onChange={(event) => setFeedback(event.target.value)} />
           </label>
           <div className="suggestion-actions">
             <button className="btn btn-secondary" onClick={() => active && onRetry(active)} disabled={!active || busy}>
               <AppIcon name={busy ? "loader" : "refresh"} className={busy ? "ico spin" : "ico"} />
-              Re-grade
+              Repetir correção
             </button>
             <button
               className="btn btn-primary"
@@ -452,7 +452,7 @@ export function GraderReview({
               disabled={!active || busy}
             >
               <AppIcon name="check" />
-              Accept & next
+              Aceitar e avançar
             </button>
           </div>
         </aside>
@@ -471,18 +471,49 @@ function StatusPill({ label, value, tone }: { label: string; value: string; tone
 }
 
 function privacyLabel(status?: string | null) {
-  if (!status) return "Not checked";
-  return status.replaceAll("_", " ");
+  if (!status) return "Não verificado";
+  const labels: Record<string, string> = {
+    clean: "limpo",
+    redacted: "redigido",
+    partial_redaction: "redação parcial",
+    high_reidentification_risk: "alto risco de reidentificação",
+    failed: "falhou",
+  };
+  return labels[status] ?? status.replaceAll("_", " ");
 }
 
 function extractionLabel(status?: string | null) {
-  if (!status) return "Pending";
-  return status.replaceAll("_", " ");
+  if (!status) return "Pendente";
+  const labels: Record<string, string> = {
+    supported: "suportado",
+    degraded: "degradado",
+    unsupported: "não suportado",
+    failed: "falhou",
+  };
+  return labels[status] ?? status.replaceAll("_", " ");
 }
 
 function attemptLabel(status?: string | null) {
-  if (!status) return "Pending";
-  return status.replaceAll("_", " ");
+  if (!status) return "Pendente";
+  const labels: Record<string, string> = {
+    pending: "pendente",
+    completed: "concluído",
+    blocked: "bloqueado",
+    failed: "falhou",
+  };
+  return labels[status] ?? status.replaceAll("_", " ");
+}
+
+function safeStatusLabel(value?: string | null) {
+  if (!value) return "";
+  const labels: Record<string, string> = {
+    privacy_blocked: "bloqueado por privacidade",
+    unsupported_file_type: "tipo de arquivo não suportado",
+    high_reidentification_risk: "alto risco de reidentificação",
+    partial_redaction: "redação parcial",
+    low_confidence: "baixa confiança",
+  };
+  return labels[value] ?? value.replaceAll("_", " ");
 }
 
 function privacyTone(submission?: GradingSubmission) {
@@ -531,61 +562,61 @@ export function GraderAudit({
   return (
     <div className="grader-page">
       <GraderTopbar
-        title="Privacy audit"
-        subtitle="Safe metadata only. No AI call has been made."
+        title="Auditoria de privacidade"
+        subtitle="Apenas metadados seguros. Nenhuma chamada de IA foi feita."
         action={
           <>
             <button className="btn btn-secondary" onClick={onBack}>
-              Back
+              Voltar
             </button>
             <button className="btn btn-secondary" onClick={onRerun} disabled={busy}>
               <AppIcon name={busy ? "loader" : "refresh"} className={busy ? "ico spin" : "ico"} />
-              Re-run
+              Reexecutar
             </button>
             <button className="btn btn-primary" onClick={onContinue} disabled={busy || highRisk}>
               <AppIcon name="shield" />
-              Continue to draft
+              Continuar para rascunho
             </button>
           </>
         }
       />
       <div className="audit-layout">
         <section className="audit-summary">
-          <AuditStat label="Passed" value={audit.passed_files} tone="ok" />
-          <AuditStat label="Redacted" value={audit.redacted_files} tone="warn" />
-          <AuditStat label="Blocked" value={audit.blocked_files} tone="danger" />
-          <AuditStat label="High risk" value={audit.high_risk_files} tone="danger" />
+          <AuditStat label="Aprovados" value={audit.passed_files} tone="ok" />
+          <AuditStat label="Redigidos" value={audit.redacted_files} tone="warn" />
+          <AuditStat label="Bloqueados" value={audit.blocked_files} tone="danger" />
+          <AuditStat label="Alto risco" value={audit.high_risk_files} tone="danger" />
         </section>
         {highRisk ? (
           <div className="flag-note">
-            Privacy audit found high-risk rows. Drafting is blocked until these submissions are handled.
+            A auditoria encontrou linhas de alto risco. O rascunho fica bloqueado até essas entregas serem tratadas.
           </div>
         ) : null}
         <div className="audit-actions">
           <a className="btn btn-secondary" href={api.privacyAuditCsvUrl(audit.job_id)}>
-            <AppIcon name="fileDown" /> Export CSV
+            <AppIcon name="fileDown" /> Exportar CSV
           </a>
           <a className="btn btn-secondary" href={api.privacyAuditJsonUrl(audit.job_id)}>
-            <AppIcon name="fileText" /> Export JSON
+            <AppIcon name="fileText" /> Exportar JSON
           </a>
         </div>
-        <section className="audit-table" aria-label="Privacy audit rows">
+        <section className="audit-table" aria-label="Linhas da auditoria de privacidade">
           <div className="audit-row audit-row-head">
-            <span>Student</span>
-            <span>File</span>
-            <span>Input</span>
-            <span>Privacy</span>
-            <span>Flags</span>
+            <span>Aluno</span>
+            <span>Arquivo</span>
+            <span>Entrada</span>
+            <span>Privacidade</span>
+            <span>Sinais</span>
           </div>
           {audit.rows.map((row) => (
             <div className="audit-row" key={row.id}>
               <span>{row.student_label}</span>
               <span>{row.redacted_source_name}</span>
-              <span>{row.extraction_status}</span>
+              <span>{extractionLabel(row.extraction_status)}</span>
               <span className={`student-state ${row.privacy_status === "clean" ? "ok" : row.audit_pass ? "warn" : "danger"}`}>
-                {row.blocked_reason ?? row.privacy_status}
+                {safeStatusLabel(row.blocked_reason) || privacyLabel(row.privacy_status)}
               </span>
-              <span>{row.privacy_flags.length ? row.privacy_flags.join(", ") : "None"}</span>
+              <span>{row.privacy_flags.length ? row.privacy_flags.map(safeStatusLabel).join(", ") : "Nenhum"}</span>
             </div>
           ))}
         </section>
@@ -623,15 +654,15 @@ export function GraderWrap({
   return (
     <div className="grader-page">
       <GraderTopbar
-        title="Draft wrap"
+        title="Fechamento dos rascunhos"
         subtitle={`${job.activity_title} · ${job.course_name}`}
         action={
           <>
             <button className="btn btn-secondary" onClick={onBack}>
-              Review drafts
+              Revisar rascunhos
             </button>
             <button className="btn btn-primary" onClick={onQueue}>
-              Save draft set
+              Salvar conjunto
             </button>
           </>
         }
@@ -640,24 +671,24 @@ export function GraderWrap({
         <section className="wrap-main">
           <div className="wrap-stats">
             <div className="wrap-stat">
-              <span>Reviewed</span>
+              <span>Revisados</span>
               <strong>
                 {job.reviewed_submissions}/{job.total_submissions}
               </strong>
             </div>
             <div className="wrap-stat">
-              <span>Average</span>
+              <span>Média</span>
               <strong>{average}</strong>
             </div>
             <div className="wrap-stat">
-              <span>Needs check</span>
+              <span>Precisa revisar</span>
               <strong>{outliers.length}</strong>
             </div>
           </div>
           <div className="distribution">
             {job.submissions.map((submission) => (
               <div key={submission.id} className="dist-row">
-                <span>{submission.student_name ?? "Unknown"}</span>
+                <span>{submission.student_name ?? "Desconhecido"}</span>
                 <div>
                   <i style={{ width: `${Math.min(100, submission.final_score ?? 0)}%` }} />
                 </div>
@@ -667,36 +698,36 @@ export function GraderWrap({
           </div>
           <section className="grader-section outliers">
             <div className="grader-section-head">
-              <span>Outliers and flags</span>
+              <span>Desvios e sinais</span>
               <span>{outliers.length}</span>
             </div>
             {outliers.length ? (
               outliers.map((submission) => (
                 <div key={submission.id} className="outlier-row">
-                  <span>{submission.student_name ?? submission.student_email ?? "Unknown student"}</span>
-                  <small>{submission.flag ?? "Low score"}</small>
+                  <span>{submission.student_name ?? submission.student_email ?? "Aluno desconhecido"}</span>
+                  <small>{submission.flag ?? "Nota baixa"}</small>
                 </div>
               ))
             ) : (
-              <div className="grader-empty">No flagged drafts in this set.</div>
+              <div className="grader-empty">Nenhum rascunho sinalizado neste conjunto.</div>
             )}
           </section>
         </section>
         <aside className="wrap-side">
           <div className="mini-note">
-            These are saved grading drafts only. Export CSV or keep reviewing; nothing is posted to Classroom in V1.
+            Estes são apenas rascunhos de correção salvos. Exporte o CSV ou continue revisando; nada é publicado no Classroom na V1.
           </div>
           <a className="btn btn-primary export-link" href={api.gradingCsvUrl(job.id)}>
-            <AppIcon name="fileDown" /> Export CSV
+            <AppIcon name="fileDown" /> Exportar CSV
           </a>
           <button className="btn btn-secondary" onClick={onDeleteCache} disabled={busy || !job.cache_expires_at}>
             <AppIcon name={busy ? "loader" : "archive"} className={busy ? "ico spin" : "ico"} />
-            Delete cached files now
+            Apagar arquivos em cache agora
           </button>
           <div className="cache-note">
             {job.cache_expires_at
-              ? `Cached files expire ${new Date(job.cache_expires_at).toLocaleString()}`
-              : "Cached files deleted; grade drafts remain saved."}
+              ? `Arquivos em cache expiram em ${new Date(job.cache_expires_at).toLocaleString("pt-BR")}`
+              : "Arquivos em cache apagados; rascunhos de notas continuam salvos."}
           </div>
         </aside>
       </div>

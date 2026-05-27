@@ -15,26 +15,26 @@ export function ConnectView({
     <div className="connect">
       <section className="connect-card">
         <div className="connect-logo">CD</div>
-        <h1>Welcome to Classroom Downloader</h1>
+        <h1>Bem-vindo ao Classroom Downloader</h1>
         <p className="lead">
-          Pull student submissions into a tidy local folder with Classroom rosters, Drive files,
-          and email-first filenames already handled.
+          Traga as entregas dos alunos para uma pasta local organizada, com turmas do Classroom,
+          arquivos do Drive e nomes seguros já tratados.
         </p>
 
         <div className="scope-list">
-          <ScopeItem title="Read active classrooms and rosters" copy="Only the classes you teach." />
-          <ScopeItem title="Read coursework and submissions" copy="Titles, states, due labels, and turned-in files." />
-          <ScopeItem title="Read attached Drive files" copy="Read-only access so files can be copied locally." />
+          <ScopeItem title="Ler turmas ativas e listas" copy="Somente as turmas que você leciona." />
+          <ScopeItem title="Ler atividades e entregas" copy="Títulos, estados, prazos e arquivos entregues." />
+          <ScopeItem title="Ler arquivos anexados do Drive" copy="Acesso somente leitura para copiar os arquivos localmente." />
         </div>
 
         <Notice
           icon={deliveryMode === "folder" ? "folderOpen" : "archive"}
           tone={deliveryMode === "folder" ? "info" : "warning"}
-          title={deliveryMode === "folder" ? "Direct-to-folder ready" : ".zip delivery placeholder"}
+          title={deliveryMode === "folder" ? "Pronto para salvar direto na pasta" : "Entrega .zip em preparação"}
           copy={
             deliveryMode === "folder"
-              ? "Chrome and Edge can write files straight into a folder you pick."
-              : "This browser cannot write to a folder. Zip delivery is planned, but not active in this build."
+              ? "Chrome e Edge podem gravar os arquivos direto na pasta que você escolher."
+              : "Este navegador não consegue gravar em uma pasta. O modo zip está planejado, mas ainda não está ativo nesta versão."
           }
         />
 
@@ -43,11 +43,11 @@ export function ConnectView({
         <div className="connect-actions">
           <button className="btn btn-primary" onClick={onConnect} disabled={connecting}>
             <AppIcon name={connecting ? "loader" : "shield"} className={connecting ? "ico spin" : "ico"} />
-            {connecting ? "Connecting..." : "Connect school Google account"}
+            {connecting ? "Conectando..." : "Conectar conta Google escolar"}
           </button>
         </div>
         <p className="tiny">
-          We never modify or delete anything in Google Classroom or Drive. The MVP only reads and exports.
+          Nunca modificamos nem apagamos nada no Google Classroom ou Drive. O app apenas lê e exporta.
         </p>
       </section>
     </div>

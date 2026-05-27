@@ -21,12 +21,12 @@ export function DryRunDrawer({
       <aside className="drawer">
         <div className="drawer-head">
           <div>
-            <div className="drawer-title">Dry-run preview</div>
+            <div className="drawer-title">Prévia da exportação</div>
             <div className="drawer-sub">
-              {fileCount ? `${fileCount} files are ready in the current manifest.` : "The exact files resolve after the export job starts."}
+              {fileCount ? `${fileCount} arquivos estão prontos no manifesto atual.` : "Os arquivos exatos são resolvidos quando a exportação começa."}
             </div>
           </div>
-          <button className="icon-btn" onClick={onClose} aria-label="Close">
+          <button className="icon-btn" onClick={onClose} aria-label="Fechar">
             <AppIcon name="x" />
           </button>
         </div>
@@ -35,12 +35,12 @@ export function DryRunDrawer({
         </div>
         <div className="drawer-foot">
           <button className="btn btn-ghost" onClick={onClose}>
-            Back to selection
+            Voltar para seleção
             <span className="kbd kbd-light">Esc</span>
           </button>
           <button className="btn btn-primary" onClick={onProceed} disabled={deliveryMode === "zip"}>
             <AppIcon name="download" />
-            {deliveryMode === "zip" ? ".zip placeholder only" : "Looks good, download"}
+            {deliveryMode === "zip" ? ".zip ainda é placeholder" : "Tudo certo, baixar"}
           </button>
         </div>
       </aside>
@@ -72,7 +72,7 @@ function TreeNode({ node, depth = 0 }: { node: PreviewTreeNode; depth?: number }
           <AppIcon name={open ? "chevronDown" : "chevronRight"} />
           <AppIcon name={open ? "folderOpen" : "folder"} />
           <span>{node.name}</span>
-          <span className="tree-count">{node.children?.length ?? 0} items</span>
+          <span className="tree-count">{node.children?.length ?? 0} itens</span>
         </button>
         {open ? node.children?.map((child, index) => <TreeNode node={child} depth={depth + 1} key={`${child.name}-${index}`} />) : null}
       </>

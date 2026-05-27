@@ -94,7 +94,7 @@ export function Badge({
 
 export function Progress({ value }: { value: number }) {
   return (
-    <div className="progress" aria-label="Progress">
+    <div className="progress" aria-label="Progresso">
       <div className="progress-bar" style={{ width: `${Math.min(100, Math.max(0, value))}%` }} />
     </div>
   );

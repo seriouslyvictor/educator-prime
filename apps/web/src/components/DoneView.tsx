@@ -16,27 +16,27 @@ export function DoneView({
         <div className="done-check">
           <AppIcon name="checkCircle" />
         </div>
-        <h1 className="done-title">Export complete</h1>
+        <h1 className="done-title">Exportação concluída</h1>
         <p className="done-sub">
-          {result.fileCount} files from {result.activityCount} activities were written to your selected folder.
+          {result.fileCount} arquivos de {result.activityCount} atividades foram gravados na pasta escolhida.
         </p>
         <div className="done-path">
           <AppIcon name="folderOpen" />
           <span>{result.outputLabel}</span>
         </div>
         <div className="done-stats">
-          <DoneStat label="Course" value={result.courseName} />
-          <DoneStat label="Activities" value={result.activityCount.toString()} />
-          <DoneStat label="Files" value={result.fileCount.toString()} />
+          <DoneStat label="Turma" value={result.courseName} />
+          <DoneStat label="Atividades" value={result.activityCount.toString()} />
+          <DoneStat label="Arquivos" value={result.fileCount.toString()} />
         </div>
         <div className="done-actions">
           <button className="btn btn-primary" onClick={onDownloadAnother}>
             <AppIcon name="download" />
-            Download another
+            Baixar outra
           </button>
           <button className="btn btn-secondary" onClick={onViewHistory}>
             <AppIcon name="history" />
-            View history
+            Ver histórico
             <span className="kbd kbd-light">Enter</span>
           </button>
         </div>

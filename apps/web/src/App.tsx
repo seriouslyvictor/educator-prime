@@ -195,7 +195,7 @@ export function App() {
       try {
         await loadCourses();
       } catch (caught) {
-        setError(caught instanceof Error ? caught.message : "Failed to load app state.");
+        setError(caught instanceof Error ? caught.message : "Falha ao carregar o estado do app.");
         setView("connect");
         return;
       }
@@ -228,7 +228,7 @@ export function App() {
       setSelectedActivityIds(activityList.map((activity) => activity.id));
     } catch (caught) {
       setActivities([]);
-      setError(caught instanceof Error ? caught.message : "Failed to load activities.");
+      setError(caught instanceof Error ? caught.message : "Falha ao carregar atividades.");
     } finally {
       setActivitiesLoading(false);
     }
@@ -240,7 +240,7 @@ export function App() {
     try {
       setGradingQueue(await api.gradingQueue());
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Failed to load grading queue.");
+      setError(caught instanceof Error ? caught.message : "Falha ao carregar a fila de correção.");
     } finally {
       setGraderBusy(false);
     }
@@ -257,7 +257,7 @@ export function App() {
       }
       await bootstrap();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Failed to connect Google.");
+      setError(caught instanceof Error ? caught.message : "Falha ao conectar o Google.");
     } finally {
       setBusy(false);
     }
@@ -266,7 +266,7 @@ export function App() {
   async function startExport() {
     if (!selectedCourse || selectedActivityIds.length === 0 || busy) return;
     if (deliveryMode === "zip") {
-      setError("Zip delivery is only a placeholder in this build. Use Chrome or Edge for folder export.");
+      setError("A entrega por zip ainda é placeholder nesta versão. Use Chrome ou Edge para exportar para uma pasta.");
       return;
     }
 
@@ -280,7 +280,7 @@ export function App() {
       const root = await pickExportFolder();
       const exportJob = await api.createExport(selectedCourse.id, selectedActivityIds);
       setJob(exportJob);
-      setProgress({ completed: 0, total: exportJob.files.length, currentPath: "Preparing files..." });
+      setProgress({ completed: 0, total: exportJob.files.length, currentPath: "Preparando arquivos..." });
       setView("progress");
 
       await exportJobToFolder(exportJob, root, (completed, total, currentPath) => {
@@ -305,7 +305,7 @@ export function App() {
       });
       setView("done");
     } catch (caught) {
-      const message = caught instanceof Error ? caught.message : "Export failed.";
+      const message = caught instanceof Error ? caught.message : "Falha na exportação.";
       setError(message);
       setProgressLog((current) => [
         ...current,
@@ -367,7 +367,7 @@ export function App() {
       }
       setView(nextJob.status === "completed" ? "graderWrap" : "graderReview");
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Failed to open grading job.");
+      setError(caught instanceof Error ? caught.message : "Falha ao abrir a correção.");
     } finally {
       setGraderBusy(false);
     }
@@ -395,7 +395,7 @@ export function App() {
       setView("graderAudit");
       void loadGradingQueue();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Failed to run privacy audit.");
+      setError(caught instanceof Error ? caught.message : "Falha ao executar a auditoria de privacidade.");
     } finally {
       setGraderBusy(false);
     }
@@ -408,7 +408,7 @@ export function App() {
     try {
       setPrivacyAudit(await api.runPrivacyAudit(gradingJob.id));
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Failed to run privacy audit.");
+      setError(caught instanceof Error ? caught.message : "Falha ao executar a auditoria de privacidade.");
     } finally {
       setGraderBusy(false);
     }
@@ -425,7 +425,7 @@ export function App() {
       setView("graderReview");
       void loadGradingQueue();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Failed to draft grades.");
+      setError(caught instanceof Error ? caught.message : "Falha ao gerar rascunhos de notas.");
     } finally {
       setGraderBusy(false);
     }
@@ -453,7 +453,7 @@ export function App() {
         setView("graderWrap");
       }
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Failed to save review.");
+      setError(caught instanceof Error ? caught.message : "Falha ao salvar a revisão.");
     } finally {
       setGraderBusy(false);
     }
@@ -468,7 +468,7 @@ export function App() {
       setGradingJob(updated);
       setActiveGradingSubmissionId(submission.id);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Failed to re-grade submission.");
+      setError(caught instanceof Error ? caught.message : "Falha ao corrigir a entrega novamente.");
     } finally {
       setGraderBusy(false);
     }
@@ -481,7 +481,7 @@ export function App() {
     try {
       setGradingJob(await api.deleteGradingCache(gradingJob.id));
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Failed to delete cached files.");
+      setError(caught instanceof Error ? caught.message : "Falha ao apagar arquivos em cache.");
     } finally {
       setGraderBusy(false);
     }
