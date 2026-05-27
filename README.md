@@ -49,6 +49,9 @@ Copy `apps/api/.env.example` to `apps/api/.env` for local overrides.
 | Setting | Values | Purpose |
 | --- | --- | --- |
 | `CD_GOOGLE_PROVIDER` | `mock`, `google` | Use fake local data or real Google OAuth/Classroom/Drive. |
+| `CD_GRADING_ENGINE` | `mock`, `litellm` | Selects deterministic local grading or the configured LiteLLM grading engine when enabled. |
+| `CD_LITELLM_MODEL` | model id | Model id from the merged LLM catalog. |
+| `CD_LLM_MODEL_CATALOG_MODE` | `remote_cached`, `local_only`, `remote_required` | Controls dynamic LiteLLM price-map fetching. |
 | `CD_LOG_LEVEL` | `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` | Controls backend console verbosity. |
 | `CD_LOG_RICH` | `true`, `false` | Enables Rich-formatted console logs. |
 | `CD_LOG_PAYLOAD_PREVIEWS` | `true`, `false` | Shows text previews for extraction, privacy scrub, and grading payloads. |
