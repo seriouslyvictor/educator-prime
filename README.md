@@ -57,3 +57,12 @@ Copy `apps/api/.env.example` to `apps/api/.env` for local overrides.
 | `CD_LOG_PAYLOAD_PREVIEWS` | `true`, `false` | Shows text previews for extraction, privacy scrub, and grading payloads. |
 | `CD_LOG_PREVIEW_CHARS` | integer | Max characters shown for text previews. |
 | `CD_GRADING_CACHE_TTL_HOURS` | integer | Hours before cached grading source files expire. |
+
+LiteLLM smoke test:
+
+```powershell
+cd apps/api
+$env:CD_GRADING_ENGINE="litellm"
+$env:CD_LITELLM_MODEL="openai/gpt-5"
+uv run python scripts/smoke_litellm_grading.py
+```
