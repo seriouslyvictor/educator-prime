@@ -41,3 +41,16 @@ Keep the backend running while using the frontend. Vite proxies `/api/*` request
 request failure from the proxy.
 
 The backend runs in mock Google mode by default, so the product workflow can be tested before Google OAuth credentials are configured.
+
+## Backend Settings
+
+Copy `apps/api/.env.example` to `apps/api/.env` for local overrides.
+
+| Setting | Values | Purpose |
+| --- | --- | --- |
+| `CD_GOOGLE_PROVIDER` | `mock`, `google` | Use fake local data or real Google OAuth/Classroom/Drive. |
+| `CD_LOG_LEVEL` | `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` | Controls backend console verbosity. |
+| `CD_LOG_RICH` | `true`, `false` | Enables Rich-formatted console logs. |
+| `CD_LOG_PAYLOAD_PREVIEWS` | `true`, `false` | Shows text previews for extraction, privacy scrub, and grading payloads. |
+| `CD_LOG_PREVIEW_CHARS` | integer | Max characters shown for text previews. |
+| `CD_GRADING_CACHE_TTL_HOURS` | integer | Hours before cached grading source files expire. |

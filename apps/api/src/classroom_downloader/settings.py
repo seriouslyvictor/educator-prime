@@ -16,6 +16,10 @@ class Settings(BaseSettings):
     google_oauth_state_path: str = ".tokens/google-oauth-state.txt"
     grading_cache_path: str = ".cache/grading"
     grading_cache_ttl_hours: int = 24
+    log_level: str = "INFO"
+    log_rich: bool = True
+    log_payload_previews: bool = True
+    log_preview_chars: int = 1000
 
 
 @lru_cache

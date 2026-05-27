@@ -10,6 +10,7 @@ from .content_extraction import extract_submission_content
 from .google_provider import GoogleProvider, SubmissionFile
 from .grading import cache_submission_file
 from .models import GradingJob, GradingSubmission, PrivacyAudit, PrivacyAuditRow
+from .observability import get_logger, log_event
 from .privacy import (
     EMAIL_PATTERN,
     ID_PATTERN,
@@ -19,6 +20,8 @@ from .privacy import (
     scrub_submission,
 )
 from .schemas import PrivacyAuditRead, PrivacyAuditRowRead
+
+logger = get_logger(__name__)
 
 
 DIRECT_PATTERNS = {
@@ -34,6 +37,15 @@ def run_privacy_audit(
     job: GradingJob,
     provider: GoogleProvider,
 ) -> PrivacyAudit:
+    log_event(
+        logger,
+        "privacy_audit.start",
+        job_id=job.id,
+        course_id=job.course_id,
+        course_name=job.course_name,
+        activity_id=job.activity_id,
+        activity_title=job.activity_title,
+    )
     audit = PrivacyAudit(
         id=str(uuid4()),
         job_id=job.id,
@@ -44,7 +56,16 @@ def run_privacy_audit(
     session.refresh(audit)
 
     files = provider.list_submission_files(job.course_id, [job.activity_id])
+    log_event(
+        logger,
+        "privacy_audit.files_loaded",
+        audit_id=audit.id,
+        job_id=job.id,
+        count=len(files),
+        files=[file.__dict__ for file in files],
+    )
     for file in files:
+        log_event(logger, "privacy_audit.row.start", audit_id=audit.id, file=file.__dict__)
         submission = _submission_for_audit(session, job, file)
         cache_file = cache_submission_file(session, job, submission, file, provider)
         extracted = extract_submission_content(cache_file)
@@ -78,9 +99,42 @@ def run_privacy_audit(
             blocked_reason=blocked_reason,
         )
         session.add(row)
+        log_event(
+            logger,
+            "privacy_audit.row.complete",
+            audit_id=audit.id,
+            job_id=job.id,
+            submission_id=submission.id,
+            student_email=submission.student_email,
+            student_name=submission.student_name,
+            student_label=scrubbed.student_label,
+            source_name=file.source_name,
+            redacted_source_name=extracted.safe_source_label,
+            mime_type=cache_file.mime_type,
+            byte_size=cache_file.byte_size,
+            extraction_status=extracted.status,
+            extraction_error=extracted.error,
+            privacy_status=scrubbed.report.status,
+            privacy_flags=scrubbed.report.flags,
+            remaining_direct_identifier_hits=remaining_hits,
+            audit_pass=audit_pass,
+            blocked_reason=blocked_reason,
+        )
 
     session.commit()
     _refresh_audit_counts(session, audit)
+    log_event(
+        logger,
+        "privacy_audit.complete",
+        audit_id=audit.id,
+        job_id=job.id,
+        status=audit.status,
+        total_files=audit.total_files,
+        passed=audit.passed_files,
+        redacted=audit.redacted_files,
+        blocked=audit.blocked_files,
+        high_risk=audit.high_risk_files,
+    )
     return audit
 
 
@@ -184,6 +238,15 @@ def _submission_for_audit(
         .where(GradingSubmission.source_file_id == file.source_file_id)
     ).first()
     if existing:
+        log_event(
+            logger,
+            "privacy_audit.submission.hit",
+            job_id=job.id,
+            submission_id=existing.id,
+            source_file_id=file.source_file_id,
+            student_email=existing.student_email,
+            student_name=existing.student_name,
+        )
         return existing
     row = GradingSubmission(
         id=str(uuid4()),
@@ -198,6 +261,17 @@ def _submission_for_audit(
     session.commit()
     session.refresh(row)
     pseudonym_for_submission(session, job, row)
+    log_event(
+        logger,
+        "privacy_audit.submission.create",
+        job_id=job.id,
+        submission_id=row.id,
+        source_file_id=file.source_file_id,
+        source_name=file.source_name,
+        student_email=file.student_email,
+        student_name=file.student_name,
+        mime_type=file.mime_type,
+    )
     return row
 
 

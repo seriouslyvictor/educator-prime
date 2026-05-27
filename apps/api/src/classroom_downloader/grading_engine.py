@@ -2,6 +2,11 @@ from dataclasses import dataclass
 from hashlib import sha256
 from typing import Protocol
 
+from .observability import get_logger, log_event, text_preview
+
+
+logger = get_logger(__name__)
+
 
 @dataclass(frozen=True)
 class GradingEngineRequest:
@@ -37,6 +42,20 @@ class MockGradingEngine:
     model = None
 
     def grade(self, request: GradingEngineRequest) -> GradingEngineResult:
+        log_event(
+            logger,
+            "grading_engine.mock.request",
+            job_id=request.job_id,
+            submission_id=request.submission_id,
+            activity_title=request.activity_title,
+            rubric_mode=request.rubric_mode,
+            teacher_loop=request.teacher_loop,
+            student_label=request.student_label,
+            source_label=request.source_label,
+            mime_type=request.mime_type,
+            content_chars=len(request.content),
+            content_preview=text_preview(request.content),
+        )
         seed = sha256(
             f"{request.job_id}|{request.submission_id}|{request.student_label}|{request.source_label}".encode(
                 "utf-8"
@@ -54,12 +73,23 @@ class MockGradingEngine:
             "The teacher should confirm evidence quality before finalizing."
         )
         feedback += f" Confidence: {int(confidence * 100)}%."
-        return GradingEngineResult(
+        result = GradingEngineResult(
             score=score,
             confidence=confidence,
             feedback=feedback,
             flags=flags,
         )
+        log_event(
+            logger,
+            "grading_engine.mock.response",
+            job_id=request.job_id,
+            submission_id=request.submission_id,
+            score=result.score,
+            confidence=result.confidence,
+            flags=result.flags,
+            feedback=result.feedback,
+        )
+        return result
 
 
 DEFAULT_GRADING_ENGINE: GradingEngine = MockGradingEngine()
