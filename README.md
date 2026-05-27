@@ -1,6 +1,15 @@
 # Classroom Downloader
 
-Hosted SaaS-style MVP for exporting Google Classroom student submissions into a regular local folder tree.
+Classroom Downloader helps teachers move Google Classroom submissions into safer, inspectable workflows for local export and draft-only AI-assisted grading.
+
+It currently achieves:
+
+- Local export of Classroom and Drive submissions into an organized folder structure.
+- Draft grading workflows where the teacher stays in control.
+- A privacy audit before AI drafting, using pseudonyms and safe metadata instead of raw student identifiers.
+- Blocking or flagging unsupported and high-risk submissions before they can enter the grading path.
+
+Privacy is a product requirement. Audit reports do not store extracted submission text, scrubbed text, prompts, raw student names, or student emails. AI grading remains draft-only and does not post grades or comments back to Classroom.
 
 ## Stack
 
@@ -21,11 +30,11 @@ Frontend:
 
 ```powershell
 cd apps/web
-npm install
-npm run dev
+pnpm install
+pnpm run dev
 ```
 
-Open `http://localhost:5173`.
+Open `http://127.0.0.1:5173`.
 
 Keep the backend running while using the frontend. Vite proxies `/api/*` requests to
 `http://127.0.0.1:8000`; if the API is not listening, the browser will show a generic
