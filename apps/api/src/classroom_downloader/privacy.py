@@ -127,6 +127,7 @@ def pseudonym_for_submission(
     session: Session,
     job: GradingJob,
     submission: GradingSubmission,
+    commit: bool = True,
 ) -> GradingPseudonym:
     existing = session.exec(
         select(GradingPseudonym)
@@ -155,7 +156,10 @@ def pseudonym_for_submission(
         source_label=f"submission_{count + 1:03d}",
     )
     session.add(row)
-    session.commit()
+    if commit:
+        session.commit()
+    else:
+        session.flush()
     session.refresh(row)
     log_event(
         logger,

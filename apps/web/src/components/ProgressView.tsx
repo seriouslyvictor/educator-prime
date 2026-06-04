@@ -1,4 +1,6 @@
 import { AppIcon } from "./icons";
+import progressStyles from "./ProgressView.module.css";
+void progressStyles;
 
 export type ProgressLogItem = {
   id: string;
@@ -30,7 +32,7 @@ export function ProgressView({
   const pct = total ? Math.round((completed / total) * 100) : 0;
   const remaining = Math.max(0, total - completed - failed);
   return (
-    <div className="progress-view">
+    <div className={progressStyles["progress-view"]}>
       <section className="progress-main">
         <div>
           <div className="progress-eyebrow">

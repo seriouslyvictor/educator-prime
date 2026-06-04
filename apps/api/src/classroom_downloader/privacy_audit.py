@@ -51,8 +51,12 @@ def run_privacy_audit(
     for file in files:
         log_event(logger, "privacy_audit.row.start", audit_id=audit.id, file=file.__dict__)
         submission = _submission_for_audit(session, job, file)
-        cache_file = cache_submission_file(session, job, submission, file, provider)
-        cached_scrub = scrub_submission_cached(session, job, submission, cache_file)
+        cache_file = cache_submission_file(
+            session, job, submission, file, provider, commit=False
+        )
+        cached_scrub = scrub_submission_cached(
+            session, job, submission, cache_file, commit=False
+        )
         extracted = cached_scrub.extracted
         scrubbed = cached_scrub.scrubbed
         remaining_hits: list[str] = []
@@ -244,9 +248,9 @@ def _submission_for_audit(
         mime_type=file.mime_type,
     )
     session.add(row)
-    session.commit()
+    session.flush()
     session.refresh(row)
-    pseudonym_for_submission(session, job, row)
+    pseudonym_for_submission(session, job, row, commit=False)
     log_event(
         logger,
         "privacy_audit.submission.create",

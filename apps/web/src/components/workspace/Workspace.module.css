@@ -1,0 +1,276 @@
+.workspace {
+  display: grid;
+  height: 100vh;
+  grid-template-columns: 280px minmax(0, 1fr);
+}
+
+.pane {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.pane-left {
+  border-right: 1px solid var(--border);
+  background: var(--paper);
+}
+
+.pane-right {
+  background: var(--bg);
+}
+
+.pane-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 46px;
+  padding: 0 14px;
+  color: var(--muted-2);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.pane-search {
+  padding: 0 14px 8px;
+}
+
+.pane-body,
+.assign-list {
+  height: calc(100% - 54px);
+  overflow: auto;
+  padding: 0 10px 20px;
+}
+
+.search {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--muted);
+  padding: 0 10px;
+}
+
+.search input {
+  min-width: 0;
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ink);
+}
+
+.class-row,
+.assign-row {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  border: 0;
+  text-align: left;
+}
+
+.class-row {
+  gap: 10px;
+  min-height: var(--row-h);
+  padding: 8px;
+  border-radius: 8px;
+  background: transparent;
+  transition: background var(--t-fast), box-shadow var(--t-fast);
+}
+
+.class-row:hover,
+.class-row.active {
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.class-dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.class-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.class-main .ttl,
+.class-main .sub {
+  display: block;
+}
+
+.ttl {
+  overflow: hidden;
+  color: var(--ink);
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sub,
+.meta {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meta {
+  max-width: 70px;
+  text-transform: lowercase;
+}
+
+.assign-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 64px;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.toolbar-title {
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.toolbar-sub {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.head-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.assign-list {
+  height: calc(100% - 64px);
+  padding: 12px 18px 26px;
+}
+
+.assign-row {
+  gap: 12px;
+  min-height: 72px;
+  margin-bottom: 8px;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface);
+  transition: border-color var(--t-fast), background var(--t-fast), transform var(--t-fast);
+}
+
+.assign-row:hover {
+  border-color: var(--border-strong);
+}
+
+.assign-row.selected {
+  border-color: var(--primary);
+  background: var(--paper);
+  box-shadow: 0 0 0 2px var(--primary-soft);
+}
+
+.assign-row.cursor {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+.checkbox {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  flex: none;
+  place-items: center;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--paper);
+  color: white;
+}
+
+.assign-row.selected .checkbox {
+  border-color: var(--primary);
+  background: var(--primary);
+}
+
+.a-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.meta-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.work-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.work-pill .ico {
+  width: 13px;
+  height: 13px;
+}
+
+.sep {
+  width: 3px;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--muted-2);
+}
+
+.a-right {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+}
+
+.assign-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.assign-actions .btn,
+.assign-actions .icon-text-btn {
+  min-height: 32px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.badge-pub {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.badge-draft,
+.badge-neutral {
+  background: var(--warning-soft);
+  color: var(--warning);
+}

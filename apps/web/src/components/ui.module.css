@@ -1,0 +1,99 @@
+.empty-state {
+  display: grid;
+  min-height: 180px;
+  place-items: center;
+  align-content: center;
+  padding: 22px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.empty-state .ico {
+  width: 30px;
+  height: 30px;
+  margin-bottom: 8px;
+}
+
+.empty-state h3 {
+  margin: 0;
+  color: var(--ink);
+}
+
+.empty-state p {
+  margin: 4px 0 0;
+}
+
+.skeleton-row {
+  height: var(--row-h);
+  margin-bottom: 8px;
+  border-radius: 9px;
+  background: linear-gradient(90deg, var(--surface), var(--surface-2), var(--surface));
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+
+@keyframes shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-thumb {
+  border: 2px solid var(--bg);
+  border-radius: 999px;
+  background: var(--border);
+}
+
+@media (max-width: 1100px) {
+  .workspace {
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+
+  .action-bar {
+    left: 250px;
+  }
+
+  .head-tools {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+}
+
+@media (max-width: 920px) {
+  .shell {
+    grid-template-columns: 1fr;
+  }
+
+  .rail {
+    display: none;
+  }
+
+  .workspace,
+  .progress-view {
+    grid-template-columns: 1fr;
+  }
+
+  .pane-left {
+    display: none;
+  }
+
+  .action-bar {
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    flex-wrap: wrap;
+  }
+
+  .log-panel {
+    display: none;
+  }
+
+  .big-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

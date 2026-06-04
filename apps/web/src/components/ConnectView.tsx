@@ -1,4 +1,6 @@
 import { AppIcon } from "./icons";
+import connectStyles from "./ConnectView.module.css";
+void connectStyles;
 
 export function ConnectView({
   connecting,
@@ -12,7 +14,7 @@ export function ConnectView({
   onConnect: () => void;
 }) {
   return (
-    <div className="connect">
+    <div className={connectStyles.connect}>
       <section className="connect-card">
         <div className="connect-logo">CD</div>
         <h1>Bem-vindo ao Classroom Downloader</h1>

@@ -1,21 +1,14 @@
-import type { ButtonHTMLAttributes, HTMLAttributes, ReactNode } from "react";
+import type { ButtonHTMLAttributes, HTMLAttributes } from "react";
+import { AppIcon } from "./icons";
+import uiStyles from "./ui.module.css";
+void uiStyles;
 
-function cn(...classes: Array<string | false | null | undefined>): string {
+export function cn(...classes: Array<string | false | null | undefined>): string {
   return classes.filter(Boolean).join(" ");
 }
 
-export function Button({
-  className,
-  variant = "default",
-  ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: "default" | "outline" | "ghost" | "danger";
-}) {
-  return <button className={cn("button", `button-${variant}`, className)} {...props} />;
-}
-
 export function Card({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return <section className={cn("card", className)} {...props} />;
+  return <section className={cn(uiStyles.card, className)} {...props} />;
 }
 
 export function CardHeader({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
@@ -84,40 +77,47 @@ export function RadioItem({
   );
 }
 
-export function Badge({
-  className,
-  variant = "secondary",
-  ...props
-}: HTMLAttributes<HTMLSpanElement> & { variant?: "secondary" | "success" | "warning" }) {
-  return <span className={cn("badge", `badge-${variant}`, className)} {...props} />;
-}
-
-export function Progress({ value }: { value: number }) {
-  return (
-    <div className="progress" aria-label="Progresso">
-      <div className="progress-bar" style={{ width: `${Math.min(100, Math.max(0, value))}%` }} />
-    </div>
-  );
-}
-
-export function Empty({
-  icon,
-  title,
-  description,
+export function SearchBox({
+  value,
+  onChange,
+  placeholder,
 }: {
-  icon?: ReactNode;
-  title: string;
-  description: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
 }) {
   return (
-    <div className="empty">
-      {icon ? <div className="empty-icon">{icon}</div> : null}
-      <h3>{title}</h3>
-      <p>{description}</p>
+    <div className={uiStyles.search}>
+      <AppIcon name="search" />
+      <input value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} />
     </div>
   );
 }
 
-export function Skeleton({ className }: { className?: string }) {
-  return <div className={cn("skeleton", className)} />;
+export function EmptyState({
+  icon,
+  title,
+  copy,
+}: {
+  icon: "search" | "file" | "folderOpen" | "history";
+  title: string;
+  copy: string;
+}) {
+  return (
+    <div className={uiStyles["empty-state"]}>
+      <AppIcon name={icon} />
+      <h3>{title}</h3>
+      <p>{copy}</p>
+    </div>
+  );
+}
+
+export function SkeletonRows({ count }: { count: number }) {
+  return (
+    <>
+      {Array.from({ length: count }).map((_, index) => (
+        <div className={uiStyles["skeleton-row"]} key={index} />
+      ))}
+    </>
+  );
 }
