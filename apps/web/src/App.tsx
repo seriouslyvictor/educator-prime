@@ -3,7 +3,7 @@ import { ActionBar } from "./components/ActionBar";
 import { ConnectView, InlineError } from "./components/ConnectView";
 import { DoneView } from "./components/DoneView";
 import { DryRunDrawer } from "./components/DryRunDrawer";
-import { GraderQueue, GraderReview, GraderSetup, GraderWrap } from "./components/Grader";
+import { GraderAudit, GraderQueue, GraderReview, GraderSetup, GraderWrap } from "./components/Grader";
 import { HistoryView } from "./components/HistoryView";
 import { ProgressView, type ProgressLogItem } from "./components/ProgressView";
 import { Rail } from "./components/Rail";
@@ -27,6 +27,7 @@ import type {
   GradingQueueItem,
   GradingSubmission,
   LocalExportHistoryItem,
+  PrivacyAudit,
   RubricMode,
   TeacherLoopMode,
 } from "./types";
@@ -72,6 +73,7 @@ export function App() {
   const [gradingQueue, setGradingQueue] = useState<GradingQueueItem[]>([]);
   const [selectedGradingItem, setSelectedGradingItem] = useState<GradingQueueItem | null>(null);
   const [gradingJob, setGradingJob] = useState<GradingJob | null>(null);
+  const [privacyAudit, setPrivacyAudit] = useState<PrivacyAudit | null>(null);
   const [activeGradingSubmissionId, setActiveGradingSubmissionId] = useState<string | null>(null);
   const [graderBusy, setGraderBusy] = useState(false);
 
@@ -193,7 +195,7 @@ export function App() {
       try {
         await loadCourses();
       } catch (caught) {
-        setError(caught instanceof Error ? caught.message : "Failed to load app state.");
+        setError(caught instanceof Error ? caught.message : "Falha ao carregar o estado do app.");
         setView("connect");
         return;
       }
@@ -226,7 +228,7 @@ export function App() {
       setSelectedActivityIds(activityList.map((activity) => activity.id));
     } catch (caught) {
       setActivities([]);
-      setError(caught instanceof Error ? caught.message : "Failed to load activities.");
+      setError(caught instanceof Error ? caught.message : "Falha ao carregar atividades.");
     } finally {
       setActivitiesLoading(false);
     }
@@ -238,7 +240,7 @@ export function App() {
     try {
       setGradingQueue(await api.gradingQueue());
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Failed to load grading queue.");
+      setError(caught instanceof Error ? caught.message : "Falha ao carregar a fila de correção.");
     } finally {
       setGraderBusy(false);
     }
@@ -255,7 +257,7 @@ export function App() {
       }
       await bootstrap();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Failed to connect Google.");
+      setError(caught instanceof Error ? caught.message : "Falha ao conectar o Google.");
     } finally {
       setBusy(false);
     }
@@ -264,7 +266,7 @@ export function App() {
   async function startExport() {
     if (!selectedCourse || selectedActivityIds.length === 0 || busy) return;
     if (deliveryMode === "zip") {
-      setError("Zip delivery is only a placeholder in this build. Use Chrome or Edge for folder export.");
+      setError("A entrega por zip ainda é placeholder nesta versão. Use Chrome ou Edge para exportar para uma pasta.");
       return;
     }
 
@@ -278,7 +280,7 @@ export function App() {
       const root = await pickExportFolder();
       const exportJob = await api.createExport(selectedCourse.id, selectedActivityIds);
       setJob(exportJob);
-      setProgress({ completed: 0, total: exportJob.files.length, currentPath: "Preparing files..." });
+      setProgress({ completed: 0, total: exportJob.files.length, currentPath: "Preparando arquivos..." });
       setView("progress");
 
       await exportJobToFolder(exportJob, root, (completed, total, currentPath) => {
@@ -303,7 +305,7 @@ export function App() {
       });
       setView("done");
     } catch (caught) {
-      const message = caught instanceof Error ? caught.message : "Export failed.";
+      const message = caught instanceof Error ? caught.message : "Falha na exportação.";
       setError(message);
       setProgressLog((current) => [
         ...current,
@@ -352,15 +354,26 @@ export function App() {
       const nextJob = await api.gradingJob(jobId);
       setGradingJob(nextJob);
       setActiveGradingSubmissionId(nextJob.submissions[0]?.id ?? null);
+      if (nextJob.status === "ready") {
+        let audit: PrivacyAudit;
+        try {
+          audit = await api.privacyAudit(nextJob.id);
+        } catch {
+          audit = await api.runPrivacyAudit(nextJob.id);
+        }
+        setPrivacyAudit(audit);
+        setView("graderAudit");
+        return;
+      }
       setView(nextJob.status === "completed" ? "graderWrap" : "graderReview");
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Failed to open grading job.");
+      setError(caught instanceof Error ? caught.message : "Falha ao abrir a correção.");
     } finally {
       setGraderBusy(false);
     }
   }
 
-  async function startGradingDraft(payload: {
+  async function runGradingPrivacyAudit(payload: {
     rubricMode: RubricMode;
     teacherLoop: TeacherLoopMode;
     rubricText: string;
@@ -376,13 +389,43 @@ export function App() {
         teacher_loop: payload.teacherLoop,
         rubric_text: payload.rubricText,
       });
-      const drafted = await api.draftGradingJob(created.id);
+      setGradingJob(created);
+      const audit = await api.runPrivacyAudit(created.id);
+      setPrivacyAudit(audit);
+      setView("graderAudit");
+      void loadGradingQueue();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Falha ao executar a auditoria de privacidade.");
+    } finally {
+      setGraderBusy(false);
+    }
+  }
+
+  async function rerunGradingPrivacyAudit() {
+    if (!gradingJob) return;
+    setGraderBusy(true);
+    setError(null);
+    try {
+      setPrivacyAudit(await api.runPrivacyAudit(gradingJob.id));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Falha ao executar a auditoria de privacidade.");
+    } finally {
+      setGraderBusy(false);
+    }
+  }
+
+  async function continueToGradingDraft() {
+    if (!gradingJob) return;
+    setGraderBusy(true);
+    setError(null);
+    try {
+      const drafted = await api.draftGradingJob(gradingJob.id);
       setGradingJob(drafted);
       setActiveGradingSubmissionId(drafted.submissions[0]?.id ?? null);
       setView("graderReview");
       void loadGradingQueue();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Failed to draft grades.");
+      setError(caught instanceof Error ? caught.message : "Falha ao gerar rascunhos de notas.");
     } finally {
       setGraderBusy(false);
     }
@@ -410,7 +453,7 @@ export function App() {
         setView("graderWrap");
       }
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Failed to save review.");
+      setError(caught instanceof Error ? caught.message : "Falha ao salvar a revisão.");
     } finally {
       setGraderBusy(false);
     }
@@ -425,7 +468,7 @@ export function App() {
       setGradingJob(updated);
       setActiveGradingSubmissionId(submission.id);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Failed to re-grade submission.");
+      setError(caught instanceof Error ? caught.message : "Falha ao corrigir a entrega novamente.");
     } finally {
       setGraderBusy(false);
     }
@@ -438,7 +481,7 @@ export function App() {
     try {
       setGradingJob(await api.deleteGradingCache(gradingJob.id));
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Failed to delete cached files.");
+      setError(caught instanceof Error ? caught.message : "Falha ao apagar arquivos em cache.");
     } finally {
       setGraderBusy(false);
     }
@@ -558,7 +601,20 @@ export function App() {
               item={selectedGradingItem}
               busy={graderBusy}
               onBack={() => setView("graderQueue")}
-              onStart={(payload) => void startGradingDraft(payload)}
+              onStart={(payload) => void runGradingPrivacyAudit(payload)}
+            />
+            {error ? <InlineError message={error} /> : null}
+          </>
+        ) : null}
+
+        {view === "graderAudit" && privacyAudit ? (
+          <>
+            <GraderAudit
+              audit={privacyAudit}
+              busy={graderBusy}
+              onBack={() => setView("graderSetup")}
+              onRerun={() => void rerunGradingPrivacyAudit()}
+              onContinue={() => void continueToGradingDraft()}
             />
             {error ? <InlineError message={error} /> : null}
           </>

@@ -5,6 +5,7 @@ import type {
   ExportJob,
   GradingJob,
   GradingQueueItem,
+  PrivacyAudit,
   RubricMode,
   TeacherLoopMode,
 } from "../types";
@@ -22,7 +23,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!response.ok) {
     const detail = await response.json().catch(() => undefined);
-    throw new Error(detail?.detail ?? `Request failed with ${response.status}`);
+    throw new Error(detail?.detail ?? `Requisição falhou com ${response.status}`);
   }
 
   return response.json() as Promise<T>;
@@ -62,6 +63,16 @@ export const api = {
       body: JSON.stringify(payload),
     }),
   gradingJob: (jobId: string) => request<GradingJob>(`/api/grading/jobs/${jobId}`),
+  runPrivacyAudit: (jobId: string) =>
+    request<PrivacyAudit>(`/api/grading/jobs/${jobId}/privacy-audit`, {
+      method: "POST",
+    }),
+  privacyAudit: (jobId: string) =>
+    request<PrivacyAudit>(`/api/grading/jobs/${jobId}/privacy-audit`),
+  privacyAuditCsvUrl: (jobId: string) =>
+    `${API_BASE}/api/grading/jobs/${jobId}/privacy-audit/export.csv`,
+  privacyAuditJsonUrl: (jobId: string) =>
+    `${API_BASE}/api/grading/jobs/${jobId}/privacy-audit/export.json`,
   draftGradingJob: (jobId: string) =>
     request<GradingJob>(`/api/grading/jobs/${jobId}/draft`, {
       method: "POST",

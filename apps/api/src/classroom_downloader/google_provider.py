@@ -3,6 +3,11 @@ from io import BytesIO
 from pathlib import Path
 from urllib.parse import urlencode
 
+from .observability import byte_preview, get_logger, log_error, log_event, log_warning
+
+
+logger = get_logger(__name__)
+
 
 GOOGLE_NATIVE_EXPORTS = {
     "application/vnd.google-apps.document": ("application/pdf", ".pdf"),
@@ -76,6 +81,15 @@ def build_oauth_authorization_url(
     state: str,
 ) -> str:
     del client_secret
+    log_event(
+        logger,
+        "google.oauth.url.build",
+        client_id=client_id,
+        redirect_uri=redirect_uri,
+        scope_count=len(scopes),
+        scopes=scopes,
+        state=state,
+    )
     query = urlencode(
         {
             "response_type": "code",
@@ -124,6 +138,18 @@ def drive_files_from_submission(
                 mime_type=drive_file.get("mimeType") or "application/octet-stream",
             )
         )
+    log_event(
+        logger,
+        "google.classroom.submission.attachments",
+        course_id=course_id,
+        activity_id=activity_id,
+        submission_id=submission_id,
+        user_id=submission.get("userId"),
+        student_email=student_email,
+        student_name=student_name,
+        file_count=len(files),
+        files=[file.__dict__ for file in files],
+    )
     return files
 
 
@@ -132,17 +158,27 @@ class TokenStore:
         self.token_path = Path(token_path)
 
     def exists(self) -> bool:
-        return self.token_path.exists()
+        exists = self.token_path.exists()
+        log_event(logger, "google.token.exists", path=str(self.token_path), exists=exists)
+        return exists
 
     def save(self, credentials_json: str) -> None:
         self.token_path.parent.mkdir(parents=True, exist_ok=True)
         self.token_path.write_text(credentials_json, encoding="utf-8")
+        log_event(
+            logger,
+            "google.token.save",
+            path=str(self.token_path),
+            byte_size=len(credentials_json.encode("utf-8")),
+        )
 
     def load_credentials(self):
         if not self.token_path.exists():
+            log_warning(logger, "google.token.missing", path=str(self.token_path))
             raise FileNotFoundError(self.token_path)
         from google.oauth2.credentials import Credentials
 
+        log_event(logger, "google.token.load", path=str(self.token_path))
         return Credentials.from_authorized_user_file(str(self.token_path))
 
 
@@ -150,6 +186,7 @@ class GoogleApiProvider(GoogleProvider):
     def __init__(self, credentials):
         from googleapiclient.discovery import build
 
+        log_event(logger, "google.provider.init", provider="google")
         self.classroom = build(
             "classroom", "v1", credentials=credentials, cache_discovery=False
         )
@@ -158,20 +195,33 @@ class GoogleApiProvider(GoogleProvider):
         self._roster_cache: dict[str, dict[str, tuple[str | None, str | None]]] = {}
 
     def account_profile(self) -> AccountProfile:
+        log_event(logger, "google.account_profile.start")
         try:
             profile = self.classroom.userProfiles().get(userId="me").execute()
         except Exception:
+            log_error(logger, "google.account_profile.failed")
             return AccountProfile(name=None, email=None, picture=None)
-        return AccountProfile(
+        account = AccountProfile(
             name=profile.get("name", {}).get("fullName"),
             email=profile.get("emailAddress"),
             picture=profile.get("photoUrl"),
         )
+        log_event(
+            logger,
+            "google.account_profile.complete",
+            name=account.name,
+            email=account.email,
+            picture=account.picture,
+        )
+        return account
 
     def list_courses(self) -> list[ClassroomCourse]:
+        log_event(logger, "google.courses.start")
         courses: list[ClassroomCourse] = []
         page_token = None
+        page = 0
         while True:
+            page += 1
             response = (
                 self.classroom.courses()
                 .list(courseStates=["ACTIVE"], pageSize=100, pageToken=page_token)
@@ -186,14 +236,30 @@ class GoogleApiProvider(GoogleProvider):
                         course_state=course.get("courseState", "ACTIVE"),
                     )
                 )
+            log_event(
+                logger,
+                "google.courses.page",
+                page=page,
+                page_count=len(response.get("courses", [])),
+                next_page=bool(response.get("nextPageToken")),
+            )
             page_token = response.get("nextPageToken")
             if not page_token:
+                log_event(
+                    logger,
+                    "google.courses.complete",
+                    count=len(courses),
+                    courses=[course.__dict__ for course in courses],
+                )
                 return courses
 
     def list_activities(self, course_id: str) -> list[ClassroomActivity]:
+        log_event(logger, "google.activities.start", course_id=course_id)
         activities: list[ClassroomActivity] = []
         page_token = None
+        page = 0
         while True:
+            page += 1
             response = (
                 self.classroom.courses()
                 .courseWork()
@@ -216,18 +282,36 @@ class GoogleApiProvider(GoogleProvider):
                         due_label=_due_label(activity),
                     )
                 )
+            log_event(
+                logger,
+                "google.activities.page",
+                course_id=course_id,
+                page=page,
+                page_count=len(response.get("courseWork", [])),
+                next_page=bool(response.get("nextPageToken")),
+            )
             page_token = response.get("nextPageToken")
             if not page_token:
+                log_event(
+                    logger,
+                    "google.activities.complete",
+                    course_id=course_id,
+                    count=len(activities),
+                    activities=[activity.__dict__ for activity in activities],
+                )
                 return activities
 
     def list_submission_files(
         self, course_id: str, activity_ids: list[str] | None = None
     ) -> list[SubmissionFile]:
+        log_event(logger, "google.submission_files.start", course_id=course_id, activity_ids=activity_ids)
         files: list[SubmissionFile] = []
         activities = activity_ids or [activity.id for activity in self.list_activities(course_id)]
         for activity_id in activities:
             page_token = None
+            page = 0
             while True:
+                page += 1
                 response = (
                     self.classroom.courses()
                     .courseWork()
@@ -254,14 +338,33 @@ class GoogleApiProvider(GoogleProvider):
                     files.extend(
                         self._hydrate_drive_metadata(file) for file in submission_files
                     )
+                log_event(
+                    logger,
+                    "google.submission_files.page",
+                    course_id=course_id,
+                    activity_id=activity_id,
+                    page=page,
+                    submission_count=len(response.get("studentSubmissions", [])),
+                    accumulated_file_count=len(files),
+                    next_page=bool(response.get("nextPageToken")),
+                )
                 page_token = response.get("nextPageToken")
                 if not page_token:
                     break
+        log_event(
+            logger,
+            "google.submission_files.complete",
+            course_id=course_id,
+            activity_ids=activities,
+            file_count=len(files),
+            files=[file.__dict__ for file in files],
+        )
         return files
 
     def get_file_content(self, file_id: str) -> tuple[bytes, str]:
         from googleapiclient.http import MediaIoBaseDownload
 
+        log_event(logger, "google.drive.content.start", file_id=file_id)
         metadata = self._drive_metadata(file_id)
         export = GOOGLE_NATIVE_EXPORTS.get(metadata.get("mimeType", ""))
         if export:
@@ -276,19 +379,33 @@ class GoogleApiProvider(GoogleProvider):
         done = False
         while not done:
             _, done = downloader.next_chunk()
-        return buffer.getvalue(), media_type
+        content = buffer.getvalue()
+        log_event(
+            logger,
+            "google.drive.content.complete",
+            file_id=file_id,
+            metadata=metadata,
+            media_type=media_type,
+            byte_size=len(content),
+            byte_preview=byte_preview(content),
+        )
+        return content, media_type
 
     def _profile(self, user_id: str) -> tuple[str | None, str | None]:
         if user_id in self._profile_cache:
+            log_event(logger, "google.profile.cache_hit", user_id=user_id, profile=self._profile_cache[user_id])
             return self._profile_cache[user_id]
+        log_event(logger, "google.profile.fetch", user_id=user_id)
         try:
             profile = self.classroom.userProfiles().get(userId=user_id).execute()
         except Exception:
+            log_error(logger, "google.profile.failed", user_id=user_id)
             self._profile_cache[user_id] = (None, user_id)
             return self._profile_cache[user_id]
         name = profile.get("name", {}).get("fullName")
         email = profile.get("emailAddress")
         self._profile_cache[user_id] = (email, name)
+        log_event(logger, "google.profile.complete", user_id=user_id, email=email, name=name)
         return self._profile_cache[user_id]
 
     def _student_identity(
@@ -296,13 +413,17 @@ class GoogleApiProvider(GoogleProvider):
     ) -> tuple[str | None, str | None]:
         roster = self._course_roster(course_id)
         if user_id in roster:
+            log_event(logger, "google.student_identity.roster_hit", course_id=course_id, user_id=user_id, identity=roster[user_id])
             return roster[user_id]
+        log_event(logger, "google.student_identity.profile_fallback", course_id=course_id, user_id=user_id)
         return self._profile(user_id)
 
     def _course_roster(self, course_id: str) -> dict[str, tuple[str | None, str | None]]:
         if course_id in self._roster_cache:
+            log_event(logger, "google.roster.cache_hit", course_id=course_id, count=len(self._roster_cache[course_id]))
             return self._roster_cache[course_id]
 
+        log_event(logger, "google.roster.fetch.start", course_id=course_id)
         roster: dict[str, tuple[str | None, str | None]] = {}
         page_token = None
         try:
@@ -326,25 +447,31 @@ class GoogleApiProvider(GoogleProvider):
                 if not page_token:
                     break
         except Exception:
+            log_error(logger, "google.roster.fetch.failed", course_id=course_id)
             roster = {}
 
         self._roster_cache[course_id] = roster
+        log_event(logger, "google.roster.fetch.complete", course_id=course_id, count=len(roster), roster=roster)
         return roster
 
     def _drive_metadata(self, file_id: str) -> dict:
-        return (
+        log_event(logger, "google.drive.metadata.start", file_id=file_id)
+        metadata = (
             self.drive.files()
             .get(fileId=file_id, fields="id,name,mimeType")
             .execute()
         )
+        log_event(logger, "google.drive.metadata.complete", file_id=file_id, metadata=metadata)
+        return metadata
 
     def _hydrate_drive_metadata(self, file: SubmissionFile) -> SubmissionFile:
         try:
             metadata = self._drive_metadata(file.source_file_id)
         except Exception:
+            log_error(logger, "google.drive.metadata.failed", file=file.__dict__)
             return file
         last_modifier = metadata.get("lastModifyingUser", {})
-        return SubmissionFile(
+        hydrated = SubmissionFile(
             id=file.id,
             course_id=file.course_id,
             activity_id=file.activity_id,
@@ -354,6 +481,8 @@ class GoogleApiProvider(GoogleProvider):
             source_name=metadata.get("name") or file.source_name,
             mime_type=metadata.get("mimeType") or file.mime_type,
         )
+        log_event(logger, "google.drive.metadata.hydrated", before=file.__dict__, after=hydrated.__dict__)
+        return hydrated
 
 
 def _due_label(activity: dict) -> str | None:
@@ -429,36 +558,68 @@ class MockGoogleProvider(GoogleProvider):
     ]
 
     def account_profile(self) -> AccountProfile:
-        return AccountProfile(
+        profile = AccountProfile(
             name="Teacher Example",
             email="teacher@example.edu",
             picture=None,
         )
+        log_event(logger, "mock.account_profile", profile=profile.__dict__)
+        return profile
 
     def list_courses(self) -> list[ClassroomCourse]:
+        log_event(logger, "mock.courses", count=len(self.courses), courses=[course.__dict__ for course in self.courses])
         return self.courses
 
     def list_activities(self, course_id: str) -> list[ClassroomActivity]:
-        return [activity for activity in self.activities if activity.course_id == course_id]
+        rows = [activity for activity in self.activities if activity.course_id == course_id]
+        log_event(logger, "mock.activities", course_id=course_id, count=len(rows), activities=[row.__dict__ for row in rows])
+        return rows
 
     def list_submission_files(
         self, course_id: str, activity_ids: list[str] | None = None
     ) -> list[SubmissionFile]:
         activity_filter = set(activity_ids or [])
-        return [
+        rows = [
             file
             for file in self.files
             if file.course_id == course_id
             and (not activity_filter or file.activity_id in activity_filter)
         ]
+        log_event(
+            logger,
+            "mock.submission_files",
+            course_id=course_id,
+            activity_ids=activity_ids,
+            count=len(rows),
+            files=[row.__dict__ for row in rows],
+        )
+        return rows
 
     def get_file_content(self, file_id: str) -> tuple[bytes, str]:
+        log_event(logger, "mock.file_content.start", file_id=file_id)
         for file in self.files:
             if file.id == file_id or file.source_file_id == file_id:
                 export = GOOGLE_NATIVE_EXPORTS.get(file.mime_type)
                 if export:
+                    log_event(
+                        logger,
+                        "mock.file_content.complete",
+                        file=file.__dict__,
+                        media_type=export[0],
+                        byte_size=len(file.content),
+                        byte_preview=byte_preview(file.content),
+                    )
                     return file.content, export[0]
+                log_event(
+                    logger,
+                    "mock.file_content.complete",
+                    file=file.__dict__,
+                    media_type=file.mime_type,
+                    byte_size=len(file.content),
+                    byte_preview=byte_preview(file.content),
+                )
                 return file.content, file.mime_type
+        log_warning(logger, "mock.file_content.missing", file_id=file_id)
         raise KeyError(file_id)
 
 
@@ -466,6 +627,7 @@ def get_google_provider() -> GoogleProvider:
     from .settings import get_settings
 
     settings = get_settings()
+    log_event(logger, "google.provider.select", provider=settings.google_provider)
     if settings.google_provider == "google":
         return GoogleApiProvider(TokenStore(settings.google_token_path).load_credentials())
     return MockGoogleProvider()

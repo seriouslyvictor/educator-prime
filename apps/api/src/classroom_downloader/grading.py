@@ -10,7 +10,11 @@ import json
 from sqlmodel import Session, select
 
 from .content_extraction import extract_submission_content
-from .grading_engine import DEFAULT_GRADING_ENGINE, GradingEngine, GradingEngineRequest
+from .grading_engine import (
+    GradingEngine,
+    GradingEngineRequest,
+    get_grading_engine,
+)
 from .google_provider import GoogleProvider, SubmissionFile
 from .models import (
     GradingAiAttempt,
@@ -20,6 +24,7 @@ from .models import (
     GradingStatus,
     GradingSubmission,
 )
+from .observability import get_logger, log_error, log_event, text_preview
 from .privacy import scrub_submission
 from .schemas import (
     GradingCriterionInput,
@@ -29,6 +34,8 @@ from .schemas import (
     GradingSubmissionRead,
 )
 from .settings import get_settings
+
+logger = get_logger(__name__)
 
 
 DEFAULT_CRITERIA = [
@@ -140,7 +147,18 @@ def draft_grading_job(
     provider: GoogleProvider,
     grading_engine: GradingEngine | None = None,
 ) -> GradingJob:
-    grading_engine = grading_engine or DEFAULT_GRADING_ENGINE
+    grading_engine = grading_engine or get_grading_engine()
+    log_event(
+        logger,
+        "grading.draft.start",
+        job_id=job.id,
+        course_id=job.course_id,
+        course_name=job.course_name,
+        activity_id=job.activity_id,
+        activity_title=job.activity_title,
+        engine=grading_engine.name,
+        model=getattr(grading_engine, "model", None),
+    )
     now = datetime.now(UTC)
     job.status = GradingStatus.drafting
     job.updated_at = now
@@ -149,6 +167,7 @@ def draft_grading_job(
     session.commit()
 
     files = provider.list_submission_files(job.course_id, [job.activity_id])
+    log_event(logger, "grading.draft.files_loaded", job_id=job.id, count=len(files), files=[file.__dict__ for file in files])
     for file in files:
         submission = _submission_for_file(session, job, file)
         cache_file = cache_submission_file(session, job, submission, file, provider)
@@ -160,6 +179,15 @@ def draft_grading_job(
     session.add(job)
     session.commit()
     session.refresh(job)
+    log_event(
+        logger,
+        "grading.draft.complete",
+        job_id=job.id,
+        status=job.status,
+        total_submissions=job.total_submissions,
+        reviewed_submissions=job.reviewed_submissions,
+        flagged_submissions=job.flagged_submissions,
+    )
     return job
 
 
@@ -170,7 +198,17 @@ def retry_submission(
     provider: GoogleProvider,
     grading_engine: GradingEngine | None = None,
 ) -> GradingJob:
-    grading_engine = grading_engine or DEFAULT_GRADING_ENGINE
+    grading_engine = grading_engine or get_grading_engine()
+    log_event(
+        logger,
+        "grading.retry.start",
+        job_id=job.id,
+        submission_id=submission.id,
+        source_file_id=submission.source_file_id,
+        student_email=submission.student_email,
+        student_name=submission.student_name,
+        engine=grading_engine.name,
+    )
     file = SubmissionFile(
         id=submission.id,
         course_id=job.course_id,
@@ -189,6 +227,14 @@ def retry_submission(
     session.add(job)
     session.commit()
     session.refresh(job)
+    log_event(
+        logger,
+        "grading.retry.complete",
+        job_id=job.id,
+        submission_id=submission.id,
+        status=job.status,
+        flagged_submissions=job.flagged_submissions,
+    )
     return job
 
 
@@ -212,8 +258,30 @@ def cache_submission_file(
         and _aware(existing.expires_at) > now
         and Path(existing.cached_path).exists()
     ):
+        log_event(
+            logger,
+            "grading.cache.hit",
+            job_id=job.id,
+            submission_id=submission.id,
+            cache_id=existing.id,
+            source_file_id=existing.source_file_id,
+            source_name=existing.source_name,
+            cached_path=existing.cached_path,
+            byte_size=existing.byte_size,
+            content_hash=existing.content_hash,
+            expires_at=existing.expires_at,
+        )
         return existing
 
+    log_event(
+        logger,
+        "grading.cache.miss",
+        job_id=job.id,
+        submission_id=submission.id,
+        source_file_id=file.source_file_id,
+        source_name=file.source_name,
+        mime_type=file.mime_type,
+    )
     content, media_type = provider.get_file_content(file.source_file_id)
     cache_root = Path(get_settings().grading_cache_path)
     job_dir = cache_root / job.id
@@ -239,6 +307,20 @@ def cache_submission_file(
     session.add(job)
     session.commit()
     session.refresh(row)
+    log_event(
+        logger,
+        "grading.cache.write",
+        job_id=job.id,
+        submission_id=submission.id,
+        cache_id=row.id,
+        source_file_id=file.source_file_id,
+        source_name=file.source_name,
+        media_type=media_type,
+        cached_path=str(cached_path),
+        byte_size=len(content),
+        content_hash=digest,
+        expires_at=row.expires_at,
+    )
     return row
 
 
@@ -251,6 +333,7 @@ def delete_job_cache(session: Session, job: GradingJob) -> GradingJob:
         path = Path(row.cached_path)
         if path.exists() and path.is_file():
             path.unlink()
+            log_event(logger, "grading.cache.file_deleted", job_id=job.id, cache_id=row.id, cached_path=row.cached_path)
         row.deleted_at = row.deleted_at or now
         session.add(row)
     job.cache_expires_at = None
@@ -259,6 +342,7 @@ def delete_job_cache(session: Session, job: GradingJob) -> GradingJob:
     session.commit()
     shutil.rmtree(Path(get_settings().grading_cache_path) / job.id, ignore_errors=True)
     session.refresh(job)
+    log_event(logger, "grading.cache.delete.complete", job_id=job.id, cache_count=len(rows))
     return job
 
 
@@ -307,6 +391,19 @@ def _draft_submission(
     grading_engine: GradingEngine,
     reset_review: bool = False,
 ) -> None:
+    log_event(
+        logger,
+        "grading.submission.draft.start",
+        job_id=job.id,
+        submission_id=submission.id,
+        student_email=submission.student_email,
+        student_name=submission.student_name,
+        source_file_id=submission.source_file_id,
+        source_name=submission.source_name,
+        cache_file_id=cache_file.id,
+        engine=grading_engine.name,
+        reset_review=reset_review,
+    )
     extracted = extract_submission_content(cache_file)
     scrubbed = scrub_submission(session, job, submission, extracted)
     retry_count = len(
@@ -316,6 +413,17 @@ def _draft_submission(
     )
 
     if scrubbed.report.status in {"failed", "high_reidentification_risk"}:
+        log_event(
+            logger,
+            "grading.submission.blocked_before_engine",
+            job_id=job.id,
+            submission_id=submission.id,
+            extraction_status=extracted.status,
+            extraction_error=extracted.error,
+            privacy_status=scrubbed.report.status,
+            privacy_flags=scrubbed.report.flags,
+            scrubbed_preview=text_preview(scrubbed.content),
+        )
         attempt = _record_attempt(
             session=session,
             job=job,
@@ -335,6 +443,19 @@ def _draft_submission(
         return
 
     try:
+        log_event(
+            logger,
+            "grading.submission.engine_call.start",
+            job_id=job.id,
+            submission_id=submission.id,
+            engine=grading_engine.name,
+            model=getattr(grading_engine, "model", None),
+            student_label=scrubbed.student_label,
+            source_label=scrubbed.source_label,
+            mime_type=submission.mime_type,
+            content_chars=len(scrubbed.content),
+            content_preview=text_preview(scrubbed.content),
+        )
         result = grading_engine.grade(
             GradingEngineRequest(
                 job_id=job.id,
@@ -349,6 +470,13 @@ def _draft_submission(
             )
         )
     except Exception:
+        log_error(
+            logger,
+            "grading.submission.engine_call.failed",
+            job_id=job.id,
+            submission_id=submission.id,
+            engine=grading_engine.name,
+        )
         attempt = _record_attempt(
             session=session,
             job=job,
@@ -368,6 +496,20 @@ def _draft_submission(
         return
 
     flags = sorted(set([*scrubbed.report.flags, *result.flags]))
+    attempt_metadata = _attempt_metadata(grading_engine)
+    log_event(
+        logger,
+        "grading.submission.engine_call.complete",
+        job_id=job.id,
+        submission_id=submission.id,
+        engine=grading_engine.name,
+        model=getattr(grading_engine, "model", None),
+        score=result.score,
+        confidence=result.confidence,
+        feedback=result.feedback,
+        result_flags=result.flags,
+        combined_flags=flags,
+    )
     _record_attempt(
         session=session,
         job=job,
@@ -378,6 +520,11 @@ def _draft_submission(
         privacy_status=scrubbed.report.status,
         flags=flags,
         retry_count=retry_count,
+        prompt_tokens=attempt_metadata["prompt_tokens"],
+        completion_tokens=attempt_metadata["completion_tokens"],
+        token_count=attempt_metadata["token_count"],
+        cost_cents=attempt_metadata["cost_cents"],
+        latency_ms=attempt_metadata["latency_ms"],
     )
     submission.ai_score = result.score
     submission.confidence = result.confidence
@@ -388,6 +535,19 @@ def _draft_submission(
     submission.error = None
     submission.updated_at = datetime.now(UTC)
     session.add(submission)
+    log_event(
+        logger,
+        "grading.submission.draft.complete",
+        job_id=job.id,
+        submission_id=submission.id,
+        ai_score=submission.ai_score,
+        confidence=submission.confidence,
+        final_score=submission.final_score,
+        feedback=submission.feedback,
+        reviewed=submission.reviewed,
+        flag=submission.flag,
+        error=submission.error,
+    )
 
 
 def _record_attempt(
@@ -401,6 +561,11 @@ def _record_attempt(
     flags: list[str],
     retry_count: int,
     safe_error: str | None = None,
+    prompt_tokens: int | None = None,
+    completion_tokens: int | None = None,
+    token_count: int | None = None,
+    cost_cents: float | None = None,
+    latency_ms: int | None = None,
 ) -> GradingAiAttempt:
     attempt = GradingAiAttempt(
         id=str(uuid4()),
@@ -413,12 +578,72 @@ def _record_attempt(
         privacy_status=privacy_status,
         safe_error=safe_error,
         flags_json=json.dumps(flags),
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+        token_count=token_count,
+        cost_cents=cost_cents,
+        latency_ms=latency_ms,
         retry_count=retry_count,
     )
     session.add(attempt)
     session.commit()
     session.refresh(attempt)
+    log_event(
+        logger,
+        "grading.attempt.record",
+        attempt_id=attempt.id,
+        job_id=job.id,
+        submission_id=submission.id,
+        engine=attempt.engine,
+        model=attempt.model,
+        status=attempt.status,
+        extraction_status=attempt.extraction_status,
+        privacy_status=attempt.privacy_status,
+        safe_error=attempt.safe_error,
+        flags=flags,
+        prompt_tokens=attempt.prompt_tokens,
+        completion_tokens=attempt.completion_tokens,
+        token_count=attempt.token_count,
+        cost_cents=attempt.cost_cents,
+        latency_ms=attempt.latency_ms,
+        retry_count=attempt.retry_count,
+    )
     return attempt
+
+
+def _attempt_metadata(grading_engine: GradingEngine) -> dict[str, int | float | None]:
+    usage = getattr(grading_engine, "last_usage", {}) or {}
+    prompt_tokens = _int_or_none(usage.get("prompt_tokens"))
+    completion_tokens = _int_or_none(usage.get("completion_tokens"))
+    token_count = _int_or_none(usage.get("total_tokens"))
+    latency_ms = _int_or_none(getattr(grading_engine, "last_latency_ms", None))
+    cost_cents: float | None = None
+
+    if (
+        grading_engine.name == "litellm"
+        and prompt_tokens is not None
+        and completion_tokens is not None
+    ):
+        from .llm_catalog import estimate_cost_cents, load_llm_catalog
+
+        catalog_model = getattr(grading_engine, "catalog_model", None)
+        if catalog_model is None:
+            model_id = getattr(grading_engine, "model", None)
+            catalog_model = load_llm_catalog().models.get(model_id)
+        if catalog_model is not None:
+            cost_cents = estimate_cost_cents(
+                catalog_model,
+                prompt_tokens,
+                completion_tokens,
+            )
+
+    return {
+        "prompt_tokens": prompt_tokens,
+        "completion_tokens": completion_tokens,
+        "token_count": token_count,
+        "cost_cents": cost_cents,
+        "latency_ms": latency_ms,
+    }
 
 
 def _submission_read(
@@ -446,7 +671,21 @@ def _submission_read(
         ai_model=attempt.model if attempt else None,
         ai_safe_error=attempt.safe_error if attempt else None,
         ai_flags=json.loads(attempt.flags_json) if attempt else [],
+        ai_prompt_tokens=attempt.prompt_tokens if attempt else None,
+        ai_completion_tokens=attempt.completion_tokens if attempt else None,
+        ai_token_count=attempt.token_count if attempt else None,
+        ai_cost_cents=attempt.cost_cents if attempt else None,
+        ai_latency_ms=attempt.latency_ms if attempt else None,
     )
+
+
+def _int_or_none(value: object) -> int | None:
+    if isinstance(value, bool) or value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _submission_for_file(
@@ -460,6 +699,15 @@ def _submission_for_file(
         .where(GradingSubmission.source_file_id == file.source_file_id)
     ).first()
     if existing:
+        log_event(
+            logger,
+            "grading.submission.hit",
+            job_id=job.id,
+            submission_id=existing.id,
+            source_file_id=file.source_file_id,
+            student_email=existing.student_email,
+            student_name=existing.student_name,
+        )
         return existing
     row = GradingSubmission(
         id=str(uuid4()),
@@ -473,6 +721,17 @@ def _submission_for_file(
     session.add(row)
     session.commit()
     session.refresh(row)
+    log_event(
+        logger,
+        "grading.submission.create",
+        job_id=job.id,
+        submission_id=row.id,
+        source_file_id=file.source_file_id,
+        source_name=file.source_name,
+        student_email=file.student_email,
+        student_name=file.student_name,
+        mime_type=file.mime_type,
+    )
     return row
 
 

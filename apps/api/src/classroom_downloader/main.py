@@ -40,6 +40,13 @@ from .models import (
     GradingSubmission,
 )
 from .naming import build_output_path
+from .observability import configure_logging, get_logger, log_error, log_event, log_warning
+from .privacy_audit import (
+    latest_privacy_audit,
+    privacy_audit_csv,
+    privacy_audit_snapshot,
+    run_privacy_audit,
+)
 from .schemas import (
     ActivityRead,
     AuthStart,
@@ -53,19 +60,32 @@ from .schemas import (
     GradingJobRead,
     GradingQueueItem,
     GradingReviewUpdate,
+    PrivacyAuditRead,
 )
 from .settings import get_settings
 
+settings = get_settings()
+configure_logging()
+logger = get_logger(__name__)
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     init_db()
+    log_event(
+        logger,
+        "app.startup",
+        provider=settings.google_provider,
+        database_url=settings.database_url,
+        cache_path=settings.grading_cache_path,
+        frontend_origin=settings.frontend_origin,
+        log_level=settings.log_level,
+        payload_previews=settings.log_payload_previews,
+    )
     yield
 
 
 app = FastAPI(title="Classroom Downloader API", version="0.1.0", lifespan=lifespan)
 
-settings = get_settings()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[settings.frontend_origin],
@@ -79,6 +99,22 @@ def provider_dependency() -> GoogleProvider:
     return get_google_provider()
 
 
+def ensure_privacy_audit_allows_draft(
+    job: GradingJob,
+    session: Session,
+    provider: GoogleProvider,
+):
+    audit = latest_privacy_audit(session, job.id)
+    if audit is None or audit.status not in {"completed", "completed_with_blocks"}:
+        audit = run_privacy_audit(session, job, provider)
+    if audit.high_risk_files > 0:
+        raise HTTPException(
+            status_code=409,
+            detail="Privacy audit found high-risk rows. Review the audit before drafting.",
+        )
+    return audit
+
+
 @app.get("/api/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
@@ -86,6 +122,7 @@ def health() -> dict[str, str]:
 
 @app.get("/api/auth/me", response_model=AuthState)
 def auth_me() -> AuthState:
+    log_event(logger, "auth.me.start", provider=settings.google_provider)
     if settings.google_provider == "google":
         token_store = TokenStore(settings.google_token_path)
         scopes: set[str] = set()
@@ -101,10 +138,21 @@ def auth_me() -> AuthState:
                 email = profile.email
                 picture = profile.picture
             except Exception:
+                log_error(logger, "auth.me.profile_failed")
                 scopes = set()
                 name = None
                 email = None
                 picture = None
+        log_event(
+            logger,
+            "auth.me.google",
+            token_exists=token_store.exists(),
+            scope_count=len(scopes),
+            scopes=sorted(scopes),
+            name=name,
+            email=email,
+            picture=picture,
+        )
         has_google_identity = {"openid", "email", "profile"}.issubset(scopes)
         has_classroom_identity = any("classroom.profile.emails" in scope for scope in scopes)
         return AuthState(
@@ -119,6 +167,13 @@ def auth_me() -> AuthState:
             provider=settings.google_provider,
         )
     profile = get_google_provider().account_profile()
+    log_event(
+        logger,
+        "auth.me.mock",
+        name=profile.name,
+        email=profile.email,
+        picture=profile.picture,
+    )
     return AuthState(
         signed_in=True,
         identity_scopes=True,
@@ -133,9 +188,17 @@ def auth_me() -> AuthState:
 
 @app.post("/api/auth/google/start", response_model=AuthStart)
 def auth_start(scopes: list[str]) -> AuthStart:
+    log_event(
+        logger,
+        "auth.google.start",
+        provider=settings.google_provider,
+        scope_count=len(scopes),
+        scopes=scopes,
+    )
     if settings.google_provider == "mock":
         return AuthStart(mock_connected=True, scopes=scopes)
     if not settings.google_client_id or not settings.google_client_secret:
+        log_warning(logger, "auth.google.not_configured")
         raise HTTPException(status_code=503, detail="Google OAuth is not configured.")
     state = token_urlsafe(24)
     state_path = Path(settings.google_oauth_state_path)
@@ -158,7 +221,9 @@ def auth_start(scopes: list[str]) -> AuthStart:
 
 @app.get("/api/auth/google/callback")
 def auth_callback(request: Request, code: str, state: str) -> RedirectResponse:
+    log_event(logger, "auth.google.callback.start", state=state, has_code=bool(code))
     if not settings.google_client_id or not settings.google_client_secret:
+        log_warning(logger, "auth.google.callback.not_configured")
         raise HTTPException(status_code=503, detail="Google OAuth is not configured.")
     state_path = Path(settings.google_oauth_state_path)
     state_payload = (
@@ -166,6 +231,12 @@ def auth_callback(request: Request, code: str, state: str) -> RedirectResponse:
     )
     expected_state = state_payload.get("state")
     if not expected_state or state != expected_state:
+        log_warning(
+            logger,
+            "auth.google.callback.invalid_state",
+            expected_state=expected_state,
+            received_state=state,
+        )
         raise HTTPException(status_code=400, detail="Invalid OAuth state.")
 
     from google_auth_oauthlib.flow import Flow
@@ -188,6 +259,12 @@ def auth_callback(request: Request, code: str, state: str) -> RedirectResponse:
     flow.fetch_token(authorization_response=str(request.url), code=code)
     TokenStore(settings.google_token_path).save(flow.credentials.to_json())
     state_path.unlink(missing_ok=True)
+    log_event(
+        logger,
+        "auth.google.callback.complete",
+        token_path=settings.google_token_path,
+        scopes=state_payload.get("scopes", []),
+    )
     return RedirectResponse(f"{settings.frontend_origin}/?google=connected")
 
 
@@ -196,9 +273,16 @@ def list_courses(
     session: Session = Depends(get_session),
     provider: GoogleProvider = Depends(provider_dependency),
 ) -> list[Course]:
+    log_event(logger, "classroom.courses.start")
     active_courses = [
         course for course in provider.list_courses() if course.course_state != "ARCHIVED"
     ]
+    log_event(
+        logger,
+        "classroom.courses.provider_result",
+        active_count=len(active_courses),
+        courses=[course.__dict__ for course in active_courses],
+    )
     for course in active_courses:
         session.merge(
             Course(
@@ -209,7 +293,9 @@ def list_courses(
             )
         )
     session.commit()
-    return session.exec(select(Course).where(Course.course_state != "ARCHIVED")).all()
+    rows = session.exec(select(Course).where(Course.course_state != "ARCHIVED")).all()
+    log_event(logger, "classroom.courses.complete", stored_count=len(rows))
+    return rows
 
 
 @app.get("/api/courses/{course_id}/activities", response_model=list[ActivityRead])
@@ -218,7 +304,15 @@ def list_activities(
     session: Session = Depends(get_session),
     provider: GoogleProvider = Depends(provider_dependency),
 ) -> list[Activity]:
+    log_event(logger, "classroom.activities.start", course_id=course_id)
     activities = provider.list_activities(course_id)
+    log_event(
+        logger,
+        "classroom.activities.provider_result",
+        course_id=course_id,
+        count=len(activities),
+        activities=[activity.__dict__ for activity in activities],
+    )
     if not activities:
         raise HTTPException(status_code=404, detail="Course not found or has no activities.")
     for activity in activities:
@@ -233,7 +327,9 @@ def list_activities(
             )
         )
     session.commit()
-    return session.exec(select(Activity).where(Activity.course_id == course_id)).all()
+    rows = session.exec(select(Activity).where(Activity.course_id == course_id)).all()
+    log_event(logger, "classroom.activities.complete", course_id=course_id, stored_count=len(rows))
+    return rows
 
 
 @app.post("/api/exports", response_model=ExportJobRead)
@@ -242,6 +338,12 @@ def create_export(
     session: Session = Depends(get_session),
     provider: GoogleProvider = Depends(provider_dependency),
 ) -> ExportJobRead:
+    log_event(
+        logger,
+        "export.create.start",
+        course_id=payload.course_id,
+        activity_ids=payload.activity_ids,
+    )
     course = next(
         (course for course in provider.list_courses() if course.id == payload.course_id),
         None,
@@ -251,6 +353,14 @@ def create_export(
 
     activities = {activity.id: activity for activity in provider.list_activities(course.id)}
     files = provider.list_submission_files(course.id, payload.activity_ids)
+    log_event(
+        logger,
+        "export.create.submissions_loaded",
+        course_id=course.id,
+        activity_ids=payload.activity_ids,
+        file_count=len(files),
+        files=[file.__dict__ for file in files],
+    )
     used_paths: set[str] = set()
     job = ExportJob(
         id=str(uuid4()),
@@ -274,6 +384,12 @@ def create_export(
                 message="Activity metadata was not found for submission file.",
             )
             session.add(error)
+            log_warning(
+                logger,
+                "export.create.missing_activity",
+                job_id=job.id,
+                file=file.__dict__,
+            )
             continue
 
         source_name = submission_file.source_name
@@ -309,6 +425,17 @@ def create_export(
             )
         )
         completed += 1
+        log_event(
+            logger,
+            "export.create.file_registered",
+            job_id=job.id,
+            source_file_id=submission_file.source_file_id,
+            source_name=source_name,
+            output_path=output_path,
+            student_email=submission_file.student_email,
+            student_name=submission_file.student_name,
+            mime_type=submission_file.mime_type,
+        )
 
     job.status = ExportStatus.completed
     job.completed_files = completed
@@ -316,6 +443,13 @@ def create_export(
     session.add(job)
     session.commit()
     session.refresh(job)
+    log_event(
+        logger,
+        "export.create.complete",
+        job_id=job.id,
+        completed_files=job.completed_files,
+        total_files=job.total_files,
+    )
     return read_export(job.id, session)
 
 
@@ -347,13 +481,30 @@ def stream_export_file(
     session: Session = Depends(get_session),
     provider: GoogleProvider = Depends(provider_dependency),
 ) -> Response:
+    log_event(logger, "export.file.stream.start", job_id=job_id, file_id=file_id)
     file = session.get(ExportFile, file_id)
     if file is None or file.job_id != job_id:
         raise HTTPException(status_code=404, detail="Export file not found.")
     try:
         content, media_type = provider.get_file_content(file.source_file_id)
     except KeyError as error:
+        log_warning(
+            logger,
+            "export.file.stream.not_found",
+            job_id=job_id,
+            file_id=file_id,
+            source_file_id=file.source_file_id,
+        )
         raise HTTPException(status_code=404, detail="Drive file not found.") from error
+    log_event(
+        logger,
+        "export.file.stream.complete",
+        job_id=job_id,
+        file_id=file_id,
+        source_file_id=file.source_file_id,
+        media_type=media_type,
+        byte_size=len(content),
+    )
     return Response(content=content, media_type=media_type)
 
 
@@ -362,6 +513,7 @@ def grading_queue(
     session: Session = Depends(get_session),
     provider: GoogleProvider = Depends(provider_dependency),
 ) -> list[GradingQueueItem]:
+    log_event(logger, "grading.queue.start")
     items: list[GradingQueueItem] = []
     active_courses = [
         course for course in provider.list_courses() if course.course_state != "ARCHIVED"
@@ -369,6 +521,15 @@ def grading_queue(
     for course in active_courses:
         for activity in provider.list_activities(course.id):
             files = provider.list_submission_files(course.id, [activity.id])
+            log_event(
+                logger,
+                "grading.queue.activity",
+                course_id=course.id,
+                course_name=course.name,
+                activity_id=activity.id,
+                activity_title=activity.title,
+                submission_count=len(files),
+            )
             latest_job = session.exec(
                 select(GradingJob)
                 .where(GradingJob.course_id == course.id)
@@ -394,6 +555,7 @@ def grading_queue(
                     total_submissions=latest_job.total_submissions if latest_job else len(files),
                 )
             )
+    log_event(logger, "grading.queue.complete", item_count=len(items))
     return items
 
 
@@ -403,6 +565,15 @@ def create_grading_job(
     session: Session = Depends(get_session),
     provider: GoogleProvider = Depends(provider_dependency),
 ) -> GradingJobRead:
+    log_event(
+        logger,
+        "grading.job.create.start",
+        course_id=payload.course_id,
+        activity_id=payload.activity_id,
+        rubric_mode=payload.rubric_mode,
+        teacher_loop=payload.teacher_loop,
+        criteria_count=len(payload.criteria or []),
+    )
     course = next(
         (course for course in provider.list_courses() if course.id == payload.course_id),
         None,
@@ -435,6 +606,18 @@ def create_grading_job(
     ensure_default_criteria(session, job.id, payload.criteria)
     session.commit()
     session.refresh(job)
+    log_event(
+        logger,
+        "grading.job.create.complete",
+        job_id=job.id,
+        course_id=job.course_id,
+        course_name=job.course_name,
+        activity_id=job.activity_id,
+        activity_title=job.activity_title,
+        rubric_mode=job.rubric_mode,
+        teacher_loop=job.teacher_loop,
+        cache_expires_at=job.cache_expires_at,
+    )
     return grading_job_snapshot(session, job)
 
 
@@ -449,16 +632,102 @@ def read_grading_job(
     return grading_job_snapshot(session, job)
 
 
+@app.post("/api/grading/jobs/{job_id}/privacy-audit", response_model=PrivacyAuditRead)
+def run_grading_privacy_audit(
+    job_id: str,
+    session: Session = Depends(get_session),
+    provider: GoogleProvider = Depends(provider_dependency),
+) -> PrivacyAuditRead:
+    log_event(logger, "grading.privacy_audit.endpoint.start", job_id=job_id)
+    job = session.get(GradingJob, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Grading job not found.")
+    audit = run_privacy_audit(session, job, provider)
+    log_event(
+        logger,
+        "grading.privacy_audit.endpoint.complete",
+        job_id=job_id,
+        audit_id=audit.id,
+        status=audit.status,
+        total_files=audit.total_files,
+        passed=audit.passed_files,
+        redacted=audit.redacted_files,
+        blocked=audit.blocked_files,
+        high_risk=audit.high_risk_files,
+    )
+    return privacy_audit_snapshot(session, audit)
+
+
+@app.get("/api/grading/jobs/{job_id}/privacy-audit", response_model=PrivacyAuditRead)
+def read_grading_privacy_audit(
+    job_id: str,
+    session: Session = Depends(get_session),
+) -> PrivacyAuditRead:
+    job = session.get(GradingJob, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Grading job not found.")
+    audit = latest_privacy_audit(session, job.id)
+    if audit is None:
+        raise HTTPException(status_code=404, detail="Privacy audit not found.")
+    return privacy_audit_snapshot(session, audit)
+
+
+@app.get("/api/grading/jobs/{job_id}/privacy-audit/export.csv")
+def export_privacy_audit_csv(
+    job_id: str,
+    session: Session = Depends(get_session),
+) -> Response:
+    job = session.get(GradingJob, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Grading job not found.")
+    audit = latest_privacy_audit(session, job.id)
+    if audit is None:
+        raise HTTPException(status_code=404, detail="Privacy audit not found.")
+    safe_name = "".join(char if char.isalnum() else "-" for char in job.activity_title)
+    return Response(
+        content=privacy_audit_csv(session, audit),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f'attachment; filename="{safe_name}-privacy-audit.csv"'
+        },
+    )
+
+
+@app.get("/api/grading/jobs/{job_id}/privacy-audit/export.json", response_model=PrivacyAuditRead)
+def export_privacy_audit_json(
+    job_id: str,
+    session: Session = Depends(get_session),
+) -> PrivacyAuditRead:
+    job = session.get(GradingJob, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Grading job not found.")
+    audit = latest_privacy_audit(session, job.id)
+    if audit is None:
+        raise HTTPException(status_code=404, detail="Privacy audit not found.")
+    return privacy_audit_snapshot(session, audit)
+
+
 @app.post("/api/grading/jobs/{job_id}/draft", response_model=GradingJobRead)
 def draft_job(
     job_id: str,
     session: Session = Depends(get_session),
     provider: GoogleProvider = Depends(provider_dependency),
 ) -> GradingJobRead:
+    log_event(logger, "grading.draft.endpoint.start", job_id=job_id)
     job = session.get(GradingJob, job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Grading job not found.")
+    ensure_privacy_audit_allows_draft(job, session, provider)
     job = draft_grading_job(session, job, provider)
+    log_event(
+        logger,
+        "grading.draft.endpoint.complete",
+        job_id=job.id,
+        status=job.status,
+        total_submissions=job.total_submissions,
+        reviewed_submissions=job.reviewed_submissions,
+        flagged_submissions=job.flagged_submissions,
+    )
     return grading_job_snapshot(session, job)
 
 
@@ -472,6 +741,15 @@ def review_submission(
     payload: GradingReviewUpdate,
     session: Session = Depends(get_session),
 ) -> GradingJobRead:
+    log_event(
+        logger,
+        "grading.review.start",
+        job_id=job_id,
+        submission_id=submission_id,
+        final_score=payload.final_score,
+        reviewed=payload.reviewed,
+        feedback=payload.feedback,
+    )
     job = session.get(GradingJob, job_id)
     submission = session.get(GradingSubmission, submission_id)
     if job is None or submission is None or submission.job_id != job.id:
@@ -495,6 +773,15 @@ def review_submission(
     session.add(job)
     session.commit()
     session.refresh(job)
+    log_event(
+        logger,
+        "grading.review.complete",
+        job_id=job.id,
+        submission_id=submission_id,
+        status=job.status,
+        reviewed_submissions=job.reviewed_submissions,
+        total_submissions=job.total_submissions,
+    )
     return grading_job_snapshot(session, job)
 
 
@@ -508,11 +795,20 @@ def retry_grading_submission(
     session: Session = Depends(get_session),
     provider: GoogleProvider = Depends(provider_dependency),
 ) -> GradingJobRead:
+    log_event(logger, "grading.retry.endpoint.start", job_id=job_id, submission_id=submission_id)
     job = session.get(GradingJob, job_id)
     submission = session.get(GradingSubmission, submission_id)
     if job is None or submission is None or submission.job_id != job.id:
         raise HTTPException(status_code=404, detail="Grading submission not found.")
     job = retry_submission(session, job, submission, provider)
+    log_event(
+        logger,
+        "grading.retry.endpoint.complete",
+        job_id=job.id,
+        submission_id=submission_id,
+        status=job.status,
+        flagged_submissions=job.flagged_submissions,
+    )
     return grading_job_snapshot(session, job)
 
 
@@ -521,10 +817,12 @@ def delete_grading_cache(
     job_id: str,
     session: Session = Depends(get_session),
 ) -> GradingJobRead:
+    log_event(logger, "grading.cache.delete.endpoint.start", job_id=job_id)
     job = session.get(GradingJob, job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Grading job not found.")
     job = delete_job_cache(session, job)
+    log_event(logger, "grading.cache.delete.endpoint.complete", job_id=job_id)
     return grading_job_snapshot(session, job)
 
 

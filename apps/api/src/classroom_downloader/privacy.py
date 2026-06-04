@@ -6,6 +6,10 @@ from sqlmodel import Session, select
 
 from .content_extraction import ExtractedSubmissionContent
 from .models import GradingJob, GradingPseudonym, GradingSubmission
+from .observability import get_logger, log_event, text_preview
+
+
+logger = get_logger(__name__)
 
 
 EMAIL_PATTERN = re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.IGNORECASE)
@@ -35,7 +39,30 @@ def scrub_submission(
     extracted: ExtractedSubmissionContent,
 ) -> ScrubbedSubmission:
     pseudonym = pseudonym_for_submission(session, job, submission)
+    log_event(
+        logger,
+        "privacy.scrub.start",
+        job_id=job.id,
+        submission_id=submission.id,
+        student_email=submission.student_email,
+        student_name=submission.student_name,
+        source_file_id=submission.source_file_id,
+        source_name=submission.source_name,
+        extracted_status=extracted.status,
+        extracted_error=extracted.error,
+        extracted_preview=text_preview(extracted.text),
+        student_label=pseudonym.student_label,
+        source_label=pseudonym.source_label,
+    )
     if extracted.status in {"failed", "unsupported"}:
+        log_event(
+            logger,
+            "privacy.scrub.blocked_input",
+            job_id=job.id,
+            submission_id=submission.id,
+            status="failed",
+            flags=[extracted.error or extracted.status],
+        )
         return ScrubbedSubmission(
             student_label=pseudonym.student_label,
             source_label=pseudonym.source_label,
@@ -76,12 +103,24 @@ def scrub_submission(
     else:
         status = "clean"
 
-    return ScrubbedSubmission(
+    result = ScrubbedSubmission(
         student_label=pseudonym.student_label,
         source_label=pseudonym.source_label,
         content=content,
         report=PrivacyReport(status=status, flags=sorted(set(flags))),
     )
+    log_event(
+        logger,
+        "privacy.scrub.complete",
+        job_id=job.id,
+        submission_id=submission.id,
+        student_label=result.student_label,
+        source_label=result.source_label,
+        status=result.report.status,
+        flags=result.report.flags,
+        scrubbed_preview=text_preview(result.content),
+    )
+    return result
 
 
 def pseudonym_for_submission(
@@ -95,6 +134,14 @@ def pseudonym_for_submission(
         .where(GradingPseudonym.submission_id == submission.id)
     ).first()
     if existing:
+        log_event(
+            logger,
+            "privacy.pseudonym.hit",
+            job_id=job.id,
+            submission_id=submission.id,
+            student_label=existing.student_label,
+            source_label=existing.source_label,
+        )
         return existing
 
     count = len(
@@ -110,6 +157,16 @@ def pseudonym_for_submission(
     session.add(row)
     session.commit()
     session.refresh(row)
+    log_event(
+        logger,
+        "privacy.pseudonym.create",
+        job_id=job.id,
+        submission_id=submission.id,
+        student_email=submission.student_email,
+        student_name=submission.student_name,
+        student_label=row.student_label,
+        source_label=row.source_label,
+    )
     return row
 
 

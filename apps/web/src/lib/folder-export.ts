@@ -7,7 +7,7 @@ export function isFolderExportSupported(): boolean {
 
 export async function pickExportFolder(): Promise<FileSystemDirectoryHandle> {
   if (!window.showDirectoryPicker) {
-    throw new Error("Folder export requires Chrome or Edge.");
+    throw new Error("A exportação para pasta exige Chrome ou Edge.");
   }
 
   return window.showDirectoryPicker({
@@ -35,7 +35,7 @@ async function writeExportFile(
   const parts = file.output_path.split("/");
   const filename = parts.pop();
   if (!filename) {
-    throw new Error(`Invalid output path: ${file.output_path}`);
+    throw new Error(`Caminho de saída inválido: ${file.output_path}`);
   }
 
   const directory = await ensureDirectory(root, parts);
@@ -43,7 +43,7 @@ async function writeExportFile(
   const writable = await handle.createWritable();
   const response = await fetch(api.fileUrl(jobId, file.id));
   if (!response.ok || !response.body) {
-    throw new Error(`Failed to download ${file.output_path}`);
+    throw new Error(`Falha ao baixar ${file.output_path}`);
   }
   await writable.write(await response.blob());
   await writable.close();

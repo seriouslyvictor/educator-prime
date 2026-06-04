@@ -28,7 +28,7 @@ export function buildPreviewTree(
       }
     }
     if (job.files.length > 80) {
-      root.children?.push({ name: `and ${job.files.length - 80} more files`, type: "note" });
+      root.children?.push({ name: `e mais ${job.files.length - 80} arquivos`, type: "note" });
     }
     return root;
   }
@@ -39,7 +39,7 @@ export function buildPreviewTree(
     children: activities.map((activity) => ({
       name: activity.title,
       type: "dir",
-      children: [{ name: "Files resolved after export starts", type: "note" }],
+      children: [{ name: "Arquivos resolvidos após iniciar a exportação", type: "note" }],
     })),
   };
 }
