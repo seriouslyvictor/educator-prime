@@ -252,7 +252,9 @@ export function GraderSetup({
                   disabled={busy}
                 >
                   <AppIcon name={busy ? "loader" : "sparkle"} className={busy ? "ico spin" : "ico"} />
-                  Auditar privacidade de {item.submission_count}
+                  {item.submission_count > 0
+                    ? `Auditar privacidade de ${item.submission_count}`
+                    : "Auditar privacidade"}
                 </button>
               </div>
             </CardFooter>
@@ -267,7 +269,7 @@ export function GraderSetup({
             <CardContent>
               {[
                 ["Título + descrição da atividade", ""],
-                ["Entregas dos alunos", `${item.submission_count} arquivos`],
+                ["Entregas dos alunos", item.submission_count > 0 ? `${item.submission_count} arquivos` : "carregadas ao auditar"],
                 ["Materiais anexados", "2 PDFs"],
                 ["Atividades corrigidas antes", "4 exemplos"],
               ].map((row) => (
