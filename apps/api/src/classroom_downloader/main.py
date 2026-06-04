@@ -95,8 +95,57 @@ app.add_middleware(
 )
 
 
-def provider_dependency() -> GoogleProvider:
-    return get_google_provider()
+def purge_cached_classroom_state(session: Session) -> None:
+    for row in session.exec(select(Activity)).all():
+        session.delete(row)
+    for row in session.exec(select(Course)).all():
+        session.delete(row)
+    session.commit()
+
+
+def provider_dependency(session: Session = Depends(get_session)) -> GoogleProvider:
+    try:
+        return get_google_provider()
+    except Exception as error:
+        auth_error = google_auth_http_exception(error)
+        if auth_error:
+            TokenStore(settings.google_token_path).delete()
+            purge_cached_classroom_state(session)
+            raise auth_error from error
+        raise
+
+
+def disconnected_auth_state() -> AuthState:
+    return AuthState(
+        signed_in=False,
+        identity_scopes=False,
+        classroom_scopes=False,
+        drive_scopes=False,
+        provider=settings.google_provider,
+    )
+
+
+def google_auth_http_exception(error: Exception) -> HTTPException | None:
+    try:
+        from google.auth.exceptions import RefreshError
+        from googleapiclient.errors import HttpError
+    except Exception:
+        return None
+
+    if isinstance(error, RefreshError):
+        log_warning(logger, "google.auth.refresh_failed")
+        return HTTPException(
+            status_code=401,
+            detail="Google session expired. Logout and connect your Google account again.",
+        )
+    status_code = getattr(getattr(error, "resp", None), "status", None)
+    if isinstance(error, HttpError) and status_code in {401, 403}:
+        log_warning(logger, "google.auth.api_denied", status_code=status_code)
+        return HTTPException(
+            status_code=401,
+            detail="Google authorization failed. Logout and connect your Google account again.",
+        )
+    return None
 
 
 def ensure_privacy_audit_allows_draft(
@@ -121,7 +170,7 @@ def health() -> dict[str, str]:
 
 
 @app.get("/api/auth/me", response_model=AuthState)
-def auth_me() -> AuthState:
+def auth_me(session: Session = Depends(get_session)) -> AuthState:
     log_event(logger, "auth.me.start", provider=settings.google_provider)
     if settings.google_provider == "google":
         token_store = TokenStore(settings.google_token_path)
@@ -139,10 +188,9 @@ def auth_me() -> AuthState:
                 picture = profile.picture
             except Exception:
                 log_error(logger, "auth.me.profile_failed")
-                scopes = set()
-                name = None
-                email = None
-                picture = None
+                TokenStore(settings.google_token_path).delete()
+                purge_cached_classroom_state(session)
+                return disconnected_auth_state()
         log_event(
             logger,
             "auth.me.google",
@@ -156,7 +204,7 @@ def auth_me() -> AuthState:
         has_google_identity = {"openid", "email", "profile"}.issubset(scopes)
         has_classroom_identity = any("classroom.profile.emails" in scope for scope in scopes)
         return AuthState(
-            signed_in=token_store.exists(),
+            signed_in=bool(scopes),
             identity_scopes=has_google_identity or has_classroom_identity,
             classroom_scopes=any(scope.startswith("classroom.") for scope in scopes)
             or any("classroom" in scope for scope in scopes),
@@ -184,6 +232,15 @@ def auth_me() -> AuthState:
         picture=profile.picture,
         provider=settings.google_provider,
     )
+
+
+@app.post("/api/auth/google/logout", response_model=AuthState)
+def auth_logout(session: Session = Depends(get_session)) -> AuthState:
+    log_event(logger, "auth.google.logout", provider=settings.google_provider)
+    if settings.google_provider == "google":
+        TokenStore(settings.google_token_path).delete()
+        purge_cached_classroom_state(session)
+    return disconnected_auth_state()
 
 
 @app.post("/api/auth/google/start", response_model=AuthStart)
@@ -274,9 +331,17 @@ def list_courses(
     provider: GoogleProvider = Depends(provider_dependency),
 ) -> list[Course]:
     log_event(logger, "classroom.courses.start")
-    active_courses = [
-        course for course in provider.list_courses() if course.course_state != "ARCHIVED"
-    ]
+    try:
+        active_courses = [
+            course for course in provider.list_courses() if course.course_state != "ARCHIVED"
+        ]
+    except Exception as error:
+        auth_error = google_auth_http_exception(error)
+        if auth_error:
+            TokenStore(settings.google_token_path).delete()
+            purge_cached_classroom_state(session)
+            raise auth_error from error
+        raise
     log_event(
         logger,
         "classroom.courses.provider_result",
@@ -305,7 +370,15 @@ def list_activities(
     provider: GoogleProvider = Depends(provider_dependency),
 ) -> list[Activity]:
     log_event(logger, "classroom.activities.start", course_id=course_id)
-    activities = provider.list_activities(course_id)
+    try:
+        activities = provider.list_activities(course_id)
+    except Exception as error:
+        auth_error = google_auth_http_exception(error)
+        if auth_error:
+            TokenStore(settings.google_token_path).delete()
+            purge_cached_classroom_state(session)
+            raise auth_error from error
+        raise
     log_event(
         logger,
         "classroom.activities.provider_result",

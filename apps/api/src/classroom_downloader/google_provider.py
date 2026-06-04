@@ -172,6 +172,10 @@ class TokenStore:
             byte_size=len(credentials_json.encode("utf-8")),
         )
 
+    def delete(self) -> None:
+        self.token_path.unlink(missing_ok=True)
+        log_event(logger, "google.token.delete", path=str(self.token_path))
+
     def load_credentials(self):
         if not self.token_path.exists():
             log_warning(logger, "google.token.missing", path=str(self.token_path))
@@ -180,6 +184,29 @@ class TokenStore:
 
         log_event(logger, "google.token.load", path=str(self.token_path))
         return Credentials.from_authorized_user_file(str(self.token_path))
+
+    def load_valid_credentials(self):
+        credentials = self.load_credentials()
+        if credentials.valid:
+            return credentials
+        if credentials.expired and credentials.refresh_token:
+            from google.auth.transport.requests import Request
+
+            log_event(logger, "google.token.refresh", path=str(self.token_path))
+            credentials.refresh(Request())
+            self.save(credentials.to_json())
+            return credentials
+
+        from google.auth.exceptions import RefreshError
+
+        log_warning(
+            logger,
+            "google.token.not_refreshable",
+            path=str(self.token_path),
+            expired=credentials.expired,
+            has_refresh_token=bool(credentials.refresh_token),
+        )
+        raise RefreshError("Stored Google credentials cannot be refreshed.")
 
 
 class GoogleApiProvider(GoogleProvider):
@@ -629,5 +656,5 @@ def get_google_provider() -> GoogleProvider:
     settings = get_settings()
     log_event(logger, "google.provider.select", provider=settings.google_provider)
     if settings.google_provider == "google":
-        return GoogleApiProvider(TokenStore(settings.google_token_path).load_credentials())
+        return GoogleApiProvider(TokenStore(settings.google_token_path).load_valid_credentials())
     return MockGoogleProvider()
