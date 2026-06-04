@@ -2,12 +2,14 @@ import { useEffect, useMemo, useState } from "react";
 import { ConnectView, InlineError } from "./components/ConnectView";
 import { DoneView } from "./components/DoneView";
 import { DryRunDrawer } from "./components/DryRunDrawer";
-import { GraderAudit, GraderQueue, GraderReview, GraderSetup, GraderWrap } from "./components/Grader";
+import { GraderAudit, GraderQueue, GraderReview, GraderSetup, GraderWrap } from "./components/grader";
 import { HistoryView } from "./components/HistoryView";
 import { ProgressView, type ProgressLogItem } from "./components/ProgressView";
 import { Rail } from "./components/Rail";
-import { ActivityList, ClassroomList } from "./components/Workspace";
+import { ActivityList, ClassroomList } from "./components/workspace";
 import { api } from "./lib/api";
+import appStyles from "./components/App.module.css";
+void appStyles;
 import {
   exportJobToFolder,
   isFolderExportSupported,
@@ -447,7 +449,7 @@ export function App() {
   }
 
   return (
-    <div className="shell" data-screen-label={view}>
+    <div className={appStyles.shell} data-screen-label={view}>
       <Rail
         view={view}
         auth={auth}

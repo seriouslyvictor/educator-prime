@@ -1,6 +1,8 @@
 import type { LocalExportHistoryItem } from "../types";
 import { AppIcon } from "./icons";
-import { EmptyState } from "./Workspace";
+import { EmptyState } from "./ui";
+import historyStyles from "./HistoryView.module.css";
+void historyStyles;
 
 export function HistoryView({
   items,
@@ -10,7 +12,7 @@ export function HistoryView({
   onBack: () => void;
 }) {
   return (
-    <div className="history-view">
+    <div className={historyStyles["history-view"]}>
       <div className="history-head">
         <div>
           <div className="progress-eyebrow">Histórico local do navegador</div>

@@ -2,6 +2,7 @@ import type { AppView, AuthState, LocalExportHistoryItem } from "../types";
 import { AppIcon } from "./icons";
 import { ThemeToggle } from "./ThemeToggle";
 import type { ThemeMode } from "../types";
+import railStyles from "./Rail.module.css";
 
 export function Rail({
   view,
@@ -24,7 +25,7 @@ export function Rail({
   const accountName = auth?.name ?? auth?.email ?? (connected ? "Conta Google conectada" : "Não conectado");
   const fallbackInitials = getInitials(auth?.name, auth?.email);
   return (
-    <aside className="rail">
+    <aside className={railStyles.rail}>
       <div className="rail-brand">
         <div className="brand-mark">CD</div>
         <div>

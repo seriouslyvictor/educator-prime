@@ -1,5 +1,7 @@
 import type { LocalExportHistoryItem } from "../types";
 import { AppIcon } from "./icons";
+import doneStyles from "./DoneView.module.css";
+void doneStyles;
 
 export function DoneView({
   result,
@@ -11,7 +13,7 @@ export function DoneView({
   onViewHistory: () => void;
 }) {
   return (
-    <div className="done-view">
+    <div className={doneStyles["done-view"]}>
       <section className="done-card">
         <div className="done-check">
           <AppIcon name="checkCircle" />

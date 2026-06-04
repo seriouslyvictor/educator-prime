@@ -1,0 +1,64 @@
+:root {
+  color-scheme: light;
+  --bg: #f6f4ee;
+  --paper: #fffdf8;
+  --surface: #ffffff;
+  --surface-2: #f0ede4;
+  --ink: #14110e;
+  --ink-2: #2a2722;
+  --muted: #6d685f;
+  --muted-2: #94908a;
+  --border: #e4dfd2;
+  --border-strong: #d4cdba;
+  --primary: #059669;
+  --primary-soft: #d1fae5;
+  --primary-gradient: #10b981;
+  --primary-ink: #ffffff;
+  --success: #1f8a5b;
+  --success-soft: #e3f4ec;
+  --info: #047857;
+  --info-soft: #d1fae5;
+  --warning: #b8740b;
+  --warning-soft: #fbeed4;
+  --danger: #c7421e;
+  --danger-soft: #fbe6df;
+  --ai: #6b3fe0;
+  --ai-ink: #ffffff;
+  --ai-soft: #efeaff;
+  --ai-soft-2: #f7f3ff;
+  --ai-border: #c7b8f5;
+  --row-h: 56px;
+  --radius: 10px;
+  --radius-sm: 6px;
+  --shadow-sm: 0 1px 0 rgba(20, 17, 14, 0.04), 0 1px 2px rgba(20, 17, 14, 0.04);
+  --shadow-md: 0 2px 4px rgba(20, 17, 14, 0.04), 0 8px 24px rgba(20, 17, 14, 0.06);
+  --shadow-lg: 0 4px 12px rgba(20, 17, 14, 0.06), 0 24px 64px rgba(20, 17, 14, 0.12);
+  --t-fast: 120ms cubic-bezier(0.2, 0, 0, 1);
+  --t-med: 220ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #211e1a;
+  --paper: #2a2722;
+  --surface: #332f29;
+  --surface-2: #3d382f;
+  --ink: #f4f1ea;
+  --ink-2: #d8d3c8;
+  --muted: #b4aea3;
+  --muted-2: #958f84;
+  --border: #49433a;
+  --border-strong: #5b5448;
+  --primary: #059669;
+  --primary-soft: #064e3b;
+  --primary-gradient: #047857;
+  --info: #059669;
+  --info-soft: #064e3b;
+  --info-border: #065f46;
+  --success-soft: #1b3a2e;
+  --warning-soft: #3a2c14;
+  --danger-soft: #3a201a;
+  --ai-soft: #2a1f4d;
+  --ai-soft-2: #221a3a;
+  --ai-border: #4a3a7a;
+}

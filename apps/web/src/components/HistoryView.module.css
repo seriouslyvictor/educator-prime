@@ -1,0 +1,91 @@
+.history-view {
+  height: 100vh;
+  overflow: auto;
+  padding: 36px;
+}
+
+.history-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  max-width: 980px;
+  margin: 0 auto 24px;
+}
+
+.history-list {
+  display: grid;
+  max-width: 980px;
+  margin: 0 auto;
+  gap: 10px;
+}
+
+.history-row {
+  display: flex;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.history-icon {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  flex: none;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.history-ttl {
+  font-weight: 750;
+}
+
+.history-sub,
+.history-meta {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.grader-page,
+.grader-review {
+  height: 100vh;
+  overflow: auto;
+  background: var(--bg);
+}
+
+.grader-page {
+  padding: 22px;
+}
+
+.grader-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 64px;
+  padding: 0 0 18px;
+}
+
+.grader-title {
+  color: var(--ink);
+  font-size: 24px;
+  font-weight: 820;
+}
+
+.grader-subtitle {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.grader-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}

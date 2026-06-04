@@ -1,0 +1,156 @@
+.connect {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 40px;
+}
+
+.connect-card {
+  width: min(560px, 100%);
+  padding: 34px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--paper);
+  box-shadow: var(--shadow-lg);
+}
+
+.connect-logo {
+  position: relative;
+  display: grid;
+  width: 54px;
+  height: 54px;
+  place-items: center;
+  border-radius: 16px;
+  background: var(--ink);
+  color: var(--paper);
+  font-weight: 800;
+}
+
+.connect-logo::after {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  width: 17px;
+  height: 17px;
+  border: 3px solid var(--paper);
+  border-radius: 6px;
+  background: var(--primary);
+  content: "";
+}
+
+.connect h1 {
+  margin: 24px 0 0;
+  color: var(--ink);
+  font-size: 34px;
+  line-height: 1.05;
+}
+
+.connect .lead {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 16px;
+}
+
+.scope-list {
+  display: grid;
+  gap: 10px;
+  margin: 24px 0;
+}
+
+.scope-item {
+  display: flex;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.scope-item .ico {
+  color: var(--success);
+}
+
+.scope-item .lbl {
+  font-weight: 700;
+}
+
+.scope-item .desc {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 13px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  color: var(--ink-2);
+}
+
+.notice-info {
+  border-color: var(--info-border, color-mix(in oklab, var(--info) 24%, transparent));
+  background: var(--info-soft);
+}
+
+.notice-warning {
+  border-color: color-mix(in oklab, var(--warning) 26%, transparent);
+  background: var(--warning-soft);
+}
+
+.notice-icon {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  place-items: center;
+  border-radius: 6px;
+}
+
+.notice-info .notice-icon {
+  color: var(--info);
+}
+
+.notice-warning .notice-icon {
+  color: var(--warning);
+}
+
+.notice-title {
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.notice-desc {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.connect-actions {
+  margin-top: 22px;
+}
+
+.connect-actions .btn {
+  width: 100%;
+  min-height: 44px;
+}
+
+.tiny {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.inline-error {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 12px 18px;
+  padding: 12px;
+  border: 1px solid color-mix(in oklab, var(--danger) 30%, transparent);
+  border-radius: 9px;
+  background: var(--danger-soft);
+  color: var(--danger);
+}

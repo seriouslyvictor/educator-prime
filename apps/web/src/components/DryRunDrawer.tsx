@@ -1,6 +1,8 @@
 import type { PreviewTreeNode } from "../lib/preview-tree";
 import { AppIcon } from "./icons";
 import { useState } from "react";
+import drawerStyles from "./DryRunDrawer.module.css";
+void drawerStyles;
 
 export function DryRunDrawer({
   tree,
@@ -17,7 +19,7 @@ export function DryRunDrawer({
 }) {
   return (
     <>
-      <div className="drawer-scrim" onClick={onClose} />
+      <div className={drawerStyles["drawer-scrim"]} onClick={onClose} />
       <aside className="drawer">
         <div className="drawer-head">
           <div>
