@@ -10,28 +10,85 @@ from sqlmodel import Session, select
 
 from classroom_downloader.database import engine
 from classroom_downloader.content_extraction import extract_submission_content
-from classroom_downloader.main import app
+from classroom_downloader.google_provider import ClassroomActivity, ClassroomCourse
+from classroom_downloader.main import app, provider_dependency
 from classroom_downloader.grading_engine import GradingEngine, GradingEngineRequest, GradingEngineResult
 from classroom_downloader.models import (
     GradingAiAttempt,
     GradingFileCache,
     GradingPseudonym,
+    GradingScrubCache,
     PrivacyAudit,
     PrivacyAuditRow,
 )
 from classroom_downloader.settings import get_settings
 
 
-def test_grading_queue_lists_ready_assignments() -> None:
+def test_grading_queue_rejects_global_scans() -> None:
     with TestClient(app) as client:
         response = client.get("/api/grading/queue")
 
+    assert response.status_code == 400
+    assert "global scans are disabled" in response.json()["detail"]
+
+
+def test_grading_queue_is_scoped_to_one_assignment() -> None:
+    with TestClient(app) as client:
+        response = client.get(
+            "/api/grading/queue?course_id=course-1&activity_id=activity-1"
+        )
+
     assert response.status_code == 200
     items = response.json()
-    assert {item["activity_id"] for item in items} >= {"activity-1", "activity-2"}
-    cell_diagram = next(item for item in items if item["activity_id"] == "activity-1")
+    assert [item["activity_id"] for item in items] == ["activity-1"]
+    cell_diagram = items[0]
     assert cell_diagram["submission_count"] == 2
     assert cell_diagram["status"] in {"ready", "reviewing", "completed"}
+
+
+def test_grading_job_creation_uses_direct_assignment_lookup() -> None:
+    class DirectLookupProvider:
+        def get_course(self, course_id: str) -> ClassroomCourse:
+            assert course_id == "course-direct"
+            return ClassroomCourse(course_id, "Direct Course", None, "ACTIVE")
+
+        def get_activity(self, course_id: str, activity_id: str) -> ClassroomActivity:
+            assert course_id == "course-direct"
+            assert activity_id == "activity-direct"
+            return ClassroomActivity(
+                activity_id,
+                course_id,
+                "Direct Activity",
+                "ASSIGNMENT",
+                "PUBLISHED",
+                None,
+            )
+
+        def list_courses(self):
+            raise AssertionError("global course scan should not run")
+
+        def list_activities(self, _course_id: str):
+            raise AssertionError("course activity scan should not run")
+
+    app.dependency_overrides[provider_dependency] = lambda: DirectLookupProvider()
+    try:
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/grading/jobs",
+                json={
+                    "course_id": "course-direct",
+                    "activity_id": "activity-direct",
+                    "rubric_mode": "infer",
+                    "teacher_loop": "approve",
+                },
+            )
+    finally:
+        app.dependency_overrides.pop(provider_dependency, None)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["course_id"] == "course-direct"
+    assert body["activity_id"] == "activity-direct"
 
 
 def test_privacy_audit_endpoint_returns_safe_report_shape(tmp_path) -> None:
@@ -160,6 +217,38 @@ def test_draft_auto_runs_privacy_audit_when_missing(tmp_path) -> None:
     assert drafted["total_submissions"] == 2
     assert audit_response.status_code == 200
     assert audit_response.json()["total_files"] == 2
+
+
+def test_draft_reuses_privacy_audit_scrub_cache(tmp_path) -> None:
+    get_settings().grading_cache_path = str(tmp_path / "grading")
+    with TestClient(app) as client:
+        job = client.post(
+            "/api/grading/jobs",
+            json={
+                "course_id": "course-1",
+                "activity_id": "activity-1",
+                "rubric_mode": "infer",
+                "teacher_loop": "approve",
+            },
+        ).json()
+        audit = client.post(f"/api/grading/jobs/{job['id']}/privacy-audit").json()
+        assert audit["total_files"] == 2
+
+        with Session(engine) as session:
+            before = session.exec(
+                select(GradingScrubCache).where(GradingScrubCache.job_id == job["id"])
+            ).all()
+
+        drafted = client.post(f"/api/grading/jobs/{job['id']}/draft").json()
+
+    with Session(engine) as session:
+        after = session.exec(
+            select(GradingScrubCache).where(GradingScrubCache.job_id == job["id"])
+        ).all()
+
+    assert drafted["total_submissions"] == 2
+    assert len(before) == 2
+    assert len(after) == len(before)
 
 
 def test_draft_blocks_when_latest_audit_has_high_risk_rows(tmp_path) -> None:

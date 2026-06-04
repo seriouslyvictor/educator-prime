@@ -26,6 +26,7 @@ def ensure_sqlite_dev_migrations(target_engine: Engine) -> None:
     if target_engine.dialect.name != "sqlite":
         return
     _ensure_grading_ai_attempt_columns(target_engine)
+    _ensure_cache_columns(target_engine)
 
 
 def _ensure_grading_ai_attempt_columns(target_engine: Engine) -> None:
@@ -49,6 +50,42 @@ def _ensure_grading_ai_attempt_columns(target_engine: Engine) -> None:
                         f"ADD COLUMN {column_name} {column_type}"
                     )
                 )
+
+
+def _ensure_cache_columns(target_engine: Engine) -> None:
+    inspector = inspect(target_engine)
+    table_names = set(inspector.get_table_names())
+    table_columns = {
+        table_name: {column["name"] for column in inspector.get_columns(table_name)}
+        for table_name in table_names
+    }
+    required_columns = {
+        "course": {
+            "fetched_at": "DATETIME",
+        },
+        "activity": {
+            "fetched_at": "DATETIME",
+        },
+        "exportfile": {
+            "cached_path": "VARCHAR",
+            "content_hash": "VARCHAR",
+            "byte_size": "INTEGER",
+            "cache_expires_at": "DATETIME",
+        },
+    }
+    with target_engine.begin() as connection:
+        for table_name, columns in required_columns.items():
+            if table_name not in table_names:
+                continue
+            existing_columns = table_columns[table_name]
+            for column_name, column_type in columns.items():
+                if column_name not in existing_columns:
+                    connection.execute(
+                        text(
+                            f"ALTER TABLE {table_name} "
+                            f"ADD COLUMN {column_name} {column_type}"
+                        )
+                    )
 
 
 def get_session() -> Generator[Session, None, None]:

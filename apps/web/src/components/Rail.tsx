@@ -8,6 +8,7 @@ export function Rail({
   auth,
   history,
   onNavigate,
+  onLogout,
   themeMode,
   onThemeChange,
 }: {
@@ -15,6 +16,7 @@ export function Rail({
   auth: AuthState | null;
   history: LocalExportHistoryItem[];
   onNavigate: (view: AppView) => void;
+  onLogout: () => void;
   themeMode: ThemeMode;
   onThemeChange: (mode: ThemeMode) => void;
 }) {
@@ -79,6 +81,11 @@ export function Rail({
             {connected ? "Pronto para exportar" : "Conecte para começar"}
           </div>
         </div>
+        {auth?.signed_in ? (
+          <button className="logout-btn" type="button" onClick={onLogout} title="Sair da conta Google">
+            <AppIcon name="logout" />
+          </button>
+        ) : null}
       </div>
     </aside>
   );

@@ -1,5 +1,6 @@
 from datetime import UTC, datetime, timedelta
 import csv
+from dataclasses import dataclass
 from hashlib import sha256
 from io import StringIO
 from pathlib import Path
@@ -10,6 +11,7 @@ import json
 from sqlmodel import Session, select
 
 from .content_extraction import extract_submission_content
+from .content_extraction import ExtractedSubmissionContent
 from .grading_engine import (
     GradingEngine,
     GradingEngineRequest,
@@ -21,11 +23,12 @@ from .models import (
     GradingCriterion,
     GradingFileCache,
     GradingJob,
+    GradingScrubCache,
     GradingStatus,
     GradingSubmission,
 )
 from .observability import get_logger, log_error, log_event, text_preview
-from .privacy import scrub_submission
+from .privacy import PrivacyReport, ScrubbedSubmission, scrub_submission
 from .schemas import (
     GradingCriterionInput,
     GradingCriterionRead,
@@ -60,6 +63,13 @@ DEFAULT_CRITERIA = [
         description="Communicates in an organized, readable way.",
     ),
 ]
+
+
+@dataclass(frozen=True)
+class CachedScrubbedSubmission:
+    extracted: ExtractedSubmissionContent
+    scrubbed: ScrubbedSubmission
+    cache_hit: bool
 
 
 def default_cache_expiry() -> datetime:
@@ -324,6 +334,86 @@ def cache_submission_file(
     return row
 
 
+def scrub_submission_cached(
+    session: Session,
+    job: GradingJob,
+    submission: GradingSubmission,
+    cache_file: GradingFileCache,
+) -> CachedScrubbedSubmission:
+    now = datetime.now(UTC)
+    identity_hash = _identity_hash(submission)
+    existing = session.exec(
+        select(GradingScrubCache)
+        .where(GradingScrubCache.job_id == job.id)
+        .where(GradingScrubCache.submission_id == submission.id)
+        .where(GradingScrubCache.content_hash == cache_file.content_hash)
+        .where(GradingScrubCache.identity_hash == identity_hash)
+        .where(GradingScrubCache.deleted_at.is_(None))
+        .order_by(GradingScrubCache.created_at.desc())
+    ).first()
+    if existing and _aware(existing.expires_at) > now:
+        extracted = ExtractedSubmissionContent(
+            status=existing.extraction_status,
+            text="",
+            safe_source_label=existing.safe_source_label,
+            error=existing.extraction_error,
+        )
+        scrubbed = ScrubbedSubmission(
+            student_label=existing.student_label,
+            source_label=existing.source_label,
+            content=existing.scrubbed_content,
+            report=PrivacyReport(
+                status=existing.privacy_status,
+                flags=json.loads(existing.privacy_flags_json),
+            ),
+        )
+        log_event(
+            logger,
+            "grading.scrub_cache.hit",
+            job_id=job.id,
+            submission_id=submission.id,
+            cache_id=existing.id,
+            content_hash=cache_file.content_hash,
+            privacy_status=scrubbed.report.status,
+            extraction_status=extracted.status,
+        )
+        return CachedScrubbedSubmission(extracted, scrubbed, cache_hit=True)
+
+    extracted = extract_submission_content(cache_file)
+    scrubbed = scrub_submission(session, job, submission, extracted)
+    row = GradingScrubCache(
+        id=str(uuid4()),
+        job_id=job.id,
+        submission_id=submission.id,
+        content_hash=cache_file.content_hash,
+        identity_hash=identity_hash,
+        student_label=scrubbed.student_label,
+        source_label=scrubbed.source_label,
+        safe_source_label=extracted.safe_source_label,
+        scrubbed_content=scrubbed.content,
+        extraction_status=extracted.status,
+        extraction_error=extracted.error,
+        privacy_status=scrubbed.report.status,
+        privacy_flags_json=json.dumps(scrubbed.report.flags),
+        byte_size=cache_file.byte_size,
+        expires_at=min(_aware(cache_file.expires_at), default_cache_expiry()),
+    )
+    session.add(row)
+    session.commit()
+    session.refresh(row)
+    log_event(
+        logger,
+        "grading.scrub_cache.write",
+        job_id=job.id,
+        submission_id=submission.id,
+        cache_id=row.id,
+        content_hash=cache_file.content_hash,
+        privacy_status=scrubbed.report.status,
+        extraction_status=extracted.status,
+    )
+    return CachedScrubbedSubmission(extracted, scrubbed, cache_hit=False)
+
+
 def delete_job_cache(session: Session, job: GradingJob) -> GradingJob:
     now = datetime.now(UTC)
     rows = session.exec(
@@ -336,13 +426,25 @@ def delete_job_cache(session: Session, job: GradingJob) -> GradingJob:
             log_event(logger, "grading.cache.file_deleted", job_id=job.id, cache_id=row.id, cached_path=row.cached_path)
         row.deleted_at = row.deleted_at or now
         session.add(row)
+    scrub_rows = session.exec(
+        select(GradingScrubCache).where(GradingScrubCache.job_id == job.id)
+    ).all()
+    for row in scrub_rows:
+        row.deleted_at = row.deleted_at or now
+        session.add(row)
     job.cache_expires_at = None
     job.updated_at = now
     session.add(job)
     session.commit()
     shutil.rmtree(Path(get_settings().grading_cache_path) / job.id, ignore_errors=True)
     session.refresh(job)
-    log_event(logger, "grading.cache.delete.complete", job_id=job.id, cache_count=len(rows))
+    log_event(
+        logger,
+        "grading.cache.delete.complete",
+        job_id=job.id,
+        cache_count=len(rows),
+        scrub_cache_count=len(scrub_rows),
+    )
     return job
 
 
@@ -404,8 +506,9 @@ def _draft_submission(
         engine=grading_engine.name,
         reset_review=reset_review,
     )
-    extracted = extract_submission_content(cache_file)
-    scrubbed = scrub_submission(session, job, submission, extracted)
+    cached_scrub = scrub_submission_cached(session, job, submission, cache_file)
+    extracted = cached_scrub.extracted
+    scrubbed = cached_scrub.scrubbed
     retry_count = len(
         session.exec(
             select(GradingAiAttempt).where(GradingAiAttempt.submission_id == submission.id)
@@ -733,6 +836,16 @@ def _submission_for_file(
         mime_type=file.mime_type,
     )
     return row
+
+
+def _identity_hash(submission: GradingSubmission) -> str:
+    payload = "\0".join(
+        [
+            submission.student_name or "",
+            submission.student_email or "",
+        ]
+    )
+    return sha256(payload.encode("utf-8")).hexdigest()
 
 
 def _refresh_counts(session: Session, job: GradingJob) -> None:

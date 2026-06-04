@@ -56,18 +56,17 @@ def test_drive_files_from_submission_extracts_drive_attachments_only() -> None:
     assert files[0].student_email == "student@example.edu"
 
 
-def test_google_provider_uses_roster_identity_before_drive_modifier() -> None:
+def test_google_provider_uses_submission_profile_without_roster_scan() -> None:
     provider = GoogleApiProvider.__new__(GoogleApiProvider)
     provider._profile_cache = {}
-    provider._roster_cache = {}
     provider.classroom = FakeClassroomService()
     provider.drive = FakeDriveService()
 
     files = provider.list_submission_files("course-1", ["activity-1"])
 
     assert len(files) == 1
-    assert files[0].student_email == "roster.student@example.edu"
-    assert files[0].student_name == "Roster Student"
+    assert files[0].student_email == "profile.student@example.edu"
+    assert files[0].student_name == "Profile Student"
     assert files[0].source_name == "solution.py"
     assert files[0].mime_type == "text/x-python"
 
@@ -112,18 +111,17 @@ class FakeCourseWork:
 
 class FakeStudents:
     def list(self, **_kwargs):
+        raise AssertionError("full roster scan should not run")
+
+
+class FakeUserProfiles:
+    def get(self, **kwargs):
+        assert kwargs["userId"] == "student-user-id"
         return FakeExecute(
             {
-                "students": [
-                    {
-                        "userId": "student-user-id",
-                        "profile": {
-                            "id": "student-user-id",
-                            "emailAddress": "roster.student@example.edu",
-                            "name": {"fullName": "Roster Student"},
-                        },
-                    }
-                ]
+                "id": "student-user-id",
+                "emailAddress": "profile.student@example.edu",
+                "name": {"fullName": "Profile Student"},
             }
         )
 
@@ -139,6 +137,9 @@ class FakeCourses:
 class FakeClassroomService:
     def courses(self):
         return FakeCourses()
+
+    def userProfiles(self):
+        return FakeUserProfiles()
 
 
 class FakeDriveFiles:

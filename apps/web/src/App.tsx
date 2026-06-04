@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { ActionBar } from "./components/ActionBar";
+import { useEffect, useMemo, useState } from "react";
 import { ConnectView, InlineError } from "./components/ConnectView";
 import { DoneView } from "./components/DoneView";
 import { DryRunDrawer } from "./components/DryRunDrawer";
@@ -59,8 +58,6 @@ export function App() {
   const [selectedActivityIds, setSelectedActivityIds] = useState<string[]>([]);
   const [classQuery, setClassQuery] = useState("");
   const [activityQuery, setActivityQuery] = useState("");
-  const [cursorIndex, setCursorIndex] = useState(0);
-  const [keyboardActive, setKeyboardActive] = useState(false);
   const [dryRunOpen, setDryRunOpen] = useState(false);
   const [job, setJob] = useState<ExportJob | null>(null);
   const [lastResult, setLastResult] = useState<LocalExportHistoryItem | null>(null);
@@ -70,7 +67,6 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState({ completed: 0, total: 0, currentPath: "" });
   const [progressLog, setProgressLog] = useState<ProgressLogItem[]>([]);
-  const [gradingQueue, setGradingQueue] = useState<GradingQueueItem[]>([]);
   const [selectedGradingItem, setSelectedGradingItem] = useState<GradingQueueItem | null>(null);
   const [gradingJob, setGradingJob] = useState<GradingJob | null>(null);
   const [privacyAudit, setPrivacyAudit] = useState<PrivacyAudit | null>(null);
@@ -86,13 +82,6 @@ export function App() {
     () => activities.filter((activity) => selectedActivityIds.includes(activity.id)),
     [activities, selectedActivityIds],
   );
-  const filteredActivities = useMemo(
-    () =>
-      activities.filter((activity) =>
-        `${activity.title} ${activity.work_type}`.toLowerCase().includes(activityQuery.toLowerCase()),
-      ),
-    [activities, activityQuery],
-  );
   const previewTree = selectedCourse
     ? buildPreviewTree(selectedCourse, selectedActivities, job)
     : null;
@@ -106,10 +95,6 @@ export function App() {
       setView("workspace");
     }
   }, [connected, view]);
-
-  useEffect(() => {
-    setCursorIndex(0);
-  }, [selectedCourseId, activityQuery]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -137,49 +122,11 @@ export function App() {
 
       if (view !== "workspace") return;
       if (inField && event.key !== "Escape") return;
-
-      if (event.ctrlKey && event.key.toLowerCase() === "a") {
-        event.preventDefault();
-        toggleAllActivities(filteredActivities, true);
-        return;
-      }
-
-      if (event.ctrlKey && event.key.toLowerCase() === "d") {
-        event.preventDefault();
-        if (selectedActivityIds.length > 0) setDryRunOpen(true);
-        return;
-      }
-
-      if (event.ctrlKey && event.key === "Enter") {
-        event.preventDefault();
-        void startExport();
-        return;
-      }
-
-      if (event.key === "ArrowDown") {
-        event.preventDefault();
-        setKeyboardActive(true);
-        setCursorIndex((index) => Math.min(filteredActivities.length - 1, index + 1));
-      }
-
-      if (event.key === "ArrowUp") {
-        event.preventDefault();
-        setKeyboardActive(true);
-        setCursorIndex((index) => Math.max(0, index - 1));
-      }
-
-      if (event.key === " ") {
-        const activity = filteredActivities[cursorIndex];
-        if (activity) {
-          event.preventDefault();
-          toggleActivity(activity.id);
-        }
-      }
     };
 
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [cursorIndex, dryRunOpen, filteredActivities, selectedActivityIds.length, view]);
+  }, [dryRunOpen, view]);
 
   async function bootstrap() {
     setLoading(true);
@@ -225,7 +172,7 @@ export function App() {
     try {
       const activityList = await api.activities(courseId);
       setActivities(activityList);
-      setSelectedActivityIds(activityList.map((activity) => activity.id));
+      setSelectedActivityIds([]);
     } catch (caught) {
       setActivities([]);
       setError(caught instanceof Error ? caught.message : "Falha ao carregar atividades.");
@@ -234,17 +181,6 @@ export function App() {
     }
   }
 
-  async function loadGradingQueue() {
-    setGraderBusy(true);
-    setError(null);
-    try {
-      setGradingQueue(await api.gradingQueue());
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Falha ao carregar a fila de correção.");
-    } finally {
-      setGraderBusy(false);
-    }
-  }
 
   async function connectClassroom() {
     setBusy(true);
@@ -263,8 +199,30 @@ export function App() {
     }
   }
 
-  async function startExport() {
-    if (!selectedCourse || selectedActivityIds.length === 0 || busy) return;
+  async function logoutClassroom() {
+    setBusy(true);
+    setError(null);
+    try {
+      const nextAuth = await api.logoutGoogle();
+      setAuth(nextAuth);
+      setCourses([]);
+      setActivities([]);
+      setSelectedCourseId("");
+      setSelectedActivityIds([]);
+      setSelectedGradingItem(null);
+      setGradingJob(null);
+      setPrivacyAudit(null);
+      setJob(null);
+      setView("connect");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Falha ao sair da conta Google.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function startExport(activityIds = selectedActivityIds) {
+    if (!selectedCourse || activityIds.length === 0 || busy) return;
     if (deliveryMode === "zip") {
       setError("A entrega por zip ainda é placeholder nesta versão. Use Chrome ou Edge para exportar para uma pasta.");
       return;
@@ -278,7 +236,7 @@ export function App() {
 
     try {
       const root = await pickExportFolder();
-      const exportJob = await api.createExport(selectedCourse.id, selectedActivityIds);
+      const exportJob = await api.createExport(selectedCourse.id, activityIds);
       setJob(exportJob);
       setProgress({ completed: 0, total: exportJob.files.length, currentPath: "Preparando arquivos..." });
       setView("progress");
@@ -293,7 +251,7 @@ export function App() {
 
       const historyItem = {
         courseName: selectedCourse.name,
-        activityCount: selectedActivityIds.length,
+        activityCount: activityIds.length,
         fileCount: exportJob.files.length,
         outputLabel: `${root.name}/${selectedCourse.name}`,
       };
@@ -317,25 +275,6 @@ export function App() {
     }
   }
 
-  function toggleActivity(activityId: string) {
-    setSelectedActivityIds((current) =>
-      current.includes(activityId)
-        ? current.filter((id) => id !== activityId)
-        : [...current, activityId],
-    );
-  }
-
-  const toggleAllActivities = useCallback((rows: Activity[], selected: boolean) => {
-    setSelectedActivityIds((current) => {
-      const next = new Set(current);
-      for (const row of rows) {
-        if (selected) next.add(row.id);
-        else next.delete(row.id);
-      }
-      return Array.from(next);
-    });
-  }, []);
-
   function pickCourse(courseId: string) {
     setSelectedCourseId(courseId);
     void loadActivities(courseId);
@@ -343,8 +282,30 @@ export function App() {
 
   function navigate(nextView: AppView) {
     if (!connected && nextView !== "connect") return;
-    if (nextView === "graderQueue") void loadGradingQueue();
     setView(nextView);
+  }
+
+  function previewActivity(activity: Activity) {
+    setSelectedActivityIds([activity.id]);
+    setJob(null);
+    setDryRunOpen(true);
+  }
+
+  function gradeActivity(activity: Activity) {
+    if (!selectedCourse) return;
+    setSelectedGradingItem({
+      course_id: selectedCourse.id,
+      course_name: selectedCourse.name,
+      activity_id: activity.id,
+      activity_title: activity.title,
+      due_label: activity.due_label,
+      submission_count: 0,
+      status: "ready",
+      latest_job_id: null,
+      reviewed_submissions: 0,
+      total_submissions: 0,
+    });
+    setView("graderSetup");
   }
 
   async function openGradingJob(jobId: string) {
@@ -393,7 +354,6 @@ export function App() {
       const audit = await api.runPrivacyAudit(created.id);
       setPrivacyAudit(audit);
       setView("graderAudit");
-      void loadGradingQueue();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Falha ao executar a auditoria de privacidade.");
     } finally {
@@ -423,7 +383,6 @@ export function App() {
       setGradingJob(drafted);
       setActiveGradingSubmissionId(drafted.submissions[0]?.id ?? null);
       setView("graderReview");
-      void loadGradingQueue();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Falha ao gerar rascunhos de notas.");
     } finally {
@@ -494,6 +453,7 @@ export function App() {
         auth={auth}
         history={history}
         onNavigate={navigate}
+        onLogout={() => void logoutClassroom()}
         themeMode={themeMode}
         onThemeChange={setThemeMode}
       />
@@ -522,26 +482,17 @@ export function App() {
               <ActivityList
                 course={selectedCourse}
                 activities={activities}
-                selectedIds={selectedActivityIds}
                 query={activityQuery}
-                cursorIndex={cursorIndex}
-                keyboardActive={keyboardActive}
                 loading={activitiesLoading}
-                onToggle={toggleActivity}
-                onToggleAll={toggleAllActivities}
                 onQuery={setActivityQuery}
+                onGrade={gradeActivity}
+                onPreview={previewActivity}
+                onDownload={(activity) => void startExport([activity.id])}
+                busy={busy}
+                deliveryMode={deliveryMode}
               />
             </div>
             {error ? <InlineError message={error} /> : null}
-            <ActionBar
-              selectedCount={selectedActivityIds.length}
-              fileEstimate={job?.files.length ?? 0}
-              deliveryMode={deliveryMode}
-              disabled={selectedActivityIds.length === 0 || deliveryMode === "zip"}
-              busy={busy}
-              onDryRun={() => setDryRunOpen(true)}
-              onDownload={() => void startExport()}
-            />
             {dryRunOpen && previewTree ? (
               <DryRunDrawer
                 tree={previewTree}
@@ -581,9 +532,8 @@ export function App() {
         {view === "graderQueue" ? (
           <>
             <GraderQueue
-              items={gradingQueue}
-              loading={graderBusy}
-              onRefresh={() => void loadGradingQueue()}
+              items={[]}
+              loading={false}
               onSetup={(item) => {
                 setSelectedGradingItem(item);
                 setView("graderSetup");
@@ -600,7 +550,7 @@ export function App() {
             <GraderSetup
               item={selectedGradingItem}
               busy={graderBusy}
-              onBack={() => setView("graderQueue")}
+              onBack={() => setView("workspace")}
               onStart={(payload) => void runGradingPrivacyAudit(payload)}
             />
             {error ? <InlineError message={error} /> : null}
@@ -627,10 +577,7 @@ export function App() {
               busy={graderBusy}
               activeSubmissionId={activeGradingSubmissionId}
               onActiveSubmission={setActiveGradingSubmissionId}
-              onBack={() => {
-                setView("graderQueue");
-                void loadGradingQueue();
-              }}
+              onBack={() => setView("workspace")}
               onWrap={() => setView("graderWrap")}
               onAccept={(submission, score, feedback) =>
                 void acceptGradingDraft(submission, score, feedback)
@@ -647,10 +594,7 @@ export function App() {
               job={gradingJob}
               busy={graderBusy}
               onBack={() => setView("graderReview")}
-              onQueue={() => {
-                setView("graderQueue");
-                void loadGradingQueue();
-              }}
+              onQueue={() => setView("workspace")}
               onDeleteCache={() => void deleteGradingCache()}
             />
             {error ? <InlineError message={error} /> : null}
@@ -660,3 +604,4 @@ export function App() {
     </div>
   );
 }
+

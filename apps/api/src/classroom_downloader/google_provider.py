@@ -1,8 +1,10 @@
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from io import BytesIO
 from pathlib import Path
 from urllib.parse import urlencode
 
+from .settings import get_settings
 from .observability import byte_preview, get_logger, log_error, log_event, log_warning
 
 
@@ -14,6 +16,35 @@ GOOGLE_NATIVE_EXPORTS = {
     "application/vnd.google-apps.spreadsheet": ("application/pdf", ".pdf"),
     "application/vnd.google-apps.presentation": ("application/pdf", ".pdf"),
 }
+
+
+@dataclass
+class _TtlCacheEntry:
+    value: object
+    expires_at: datetime
+
+
+_GOOGLE_PROVIDER_CACHE: dict[str, tuple[object, float | None]] = {}
+_PROFILE_CACHE: dict[str, _TtlCacheEntry] = {}
+_ACCOUNT_PROFILE_CACHE: _TtlCacheEntry | None = None
+_DRIVE_METADATA_CACHE: dict[str, _TtlCacheEntry] = {}
+
+
+def clear_google_provider_caches() -> None:
+    _GOOGLE_PROVIDER_CACHE.clear()
+    _PROFILE_CACHE.clear()
+    global _ACCOUNT_PROFILE_CACHE
+    _ACCOUNT_PROFILE_CACHE = None
+    _DRIVE_METADATA_CACHE.clear()
+    log_event(logger, "google.cache.clear")
+
+
+def _ttl(minutes: int) -> datetime:
+    return datetime.now(UTC) + timedelta(minutes=minutes)
+
+
+def _cache_hit(entry: _TtlCacheEntry | None) -> bool:
+    return bool(entry and entry.expires_at > datetime.now(UTC))
 
 
 @dataclass(frozen=True)
@@ -58,7 +89,13 @@ class GoogleProvider:
     def account_profile(self) -> AccountProfile:
         return AccountProfile(name=None, email=None, picture=None)
 
+    def get_course(self, course_id: str) -> ClassroomCourse:
+        raise NotImplementedError
+
     def list_courses(self) -> list[ClassroomCourse]:
+        raise NotImplementedError
+
+    def get_activity(self, course_id: str, activity_id: str) -> ClassroomActivity:
         raise NotImplementedError
 
     def list_activities(self, course_id: str) -> list[ClassroomActivity]:
@@ -165,12 +202,18 @@ class TokenStore:
     def save(self, credentials_json: str) -> None:
         self.token_path.parent.mkdir(parents=True, exist_ok=True)
         self.token_path.write_text(credentials_json, encoding="utf-8")
+        clear_google_provider_caches()
         log_event(
             logger,
             "google.token.save",
             path=str(self.token_path),
             byte_size=len(credentials_json.encode("utf-8")),
         )
+
+    def delete(self) -> None:
+        self.token_path.unlink(missing_ok=True)
+        clear_google_provider_caches()
+        log_event(logger, "google.token.delete", path=str(self.token_path))
 
     def load_credentials(self):
         if not self.token_path.exists():
@@ -180,6 +223,29 @@ class TokenStore:
 
         log_event(logger, "google.token.load", path=str(self.token_path))
         return Credentials.from_authorized_user_file(str(self.token_path))
+
+    def load_valid_credentials(self):
+        credentials = self.load_credentials()
+        if credentials.valid:
+            return credentials
+        if credentials.expired and credentials.refresh_token:
+            from google.auth.transport.requests import Request
+
+            log_event(logger, "google.token.refresh", path=str(self.token_path))
+            credentials.refresh(Request())
+            self.save(credentials.to_json())
+            return credentials
+
+        from google.auth.exceptions import RefreshError
+
+        log_warning(
+            logger,
+            "google.token.not_refreshable",
+            path=str(self.token_path),
+            expired=credentials.expired,
+            has_refresh_token=bool(credentials.refresh_token),
+        )
+        raise RefreshError("Stored Google credentials cannot be refreshed.")
 
 
 class GoogleApiProvider(GoogleProvider):
@@ -192,9 +258,15 @@ class GoogleApiProvider(GoogleProvider):
         )
         self.drive = build("drive", "v3", credentials=credentials, cache_discovery=False)
         self._profile_cache: dict[str, tuple[str | None, str | None]] = {}
-        self._roster_cache: dict[str, dict[str, tuple[str | None, str | None]]] = {}
 
     def account_profile(self) -> AccountProfile:
+        global _ACCOUNT_PROFILE_CACHE
+        settings = get_settings()
+        if _cache_hit(_ACCOUNT_PROFILE_CACHE):
+            profile = _ACCOUNT_PROFILE_CACHE.value
+            if isinstance(profile, AccountProfile):
+                log_event(logger, "google.account_profile.cache_hit", email=profile.email)
+                return profile
         log_event(logger, "google.account_profile.start")
         try:
             profile = self.classroom.userProfiles().get(userId="me").execute()
@@ -212,6 +284,10 @@ class GoogleApiProvider(GoogleProvider):
             name=account.name,
             email=account.email,
             picture=account.picture,
+        )
+        _ACCOUNT_PROFILE_CACHE = _TtlCacheEntry(
+            account,
+            _ttl(settings.google_profile_cache_ttl_minutes),
         )
         return account
 
@@ -252,6 +328,18 @@ class GoogleApiProvider(GoogleProvider):
                     courses=[course.__dict__ for course in courses],
                 )
                 return courses
+
+    def get_course(self, course_id: str) -> ClassroomCourse:
+        log_event(logger, "google.course.get.start", course_id=course_id)
+        course = self.classroom.courses().get(id=course_id).execute()
+        row = ClassroomCourse(
+            id=course["id"],
+            name=course.get("name", "Untitled course"),
+            section=course.get("section"),
+            course_state=course.get("courseState", "ACTIVE"),
+        )
+        log_event(logger, "google.course.get.complete", course=row.__dict__)
+        return row
 
     def list_activities(self, course_id: str) -> list[ClassroomActivity]:
         log_event(logger, "google.activities.start", course_id=course_id)
@@ -300,6 +388,25 @@ class GoogleApiProvider(GoogleProvider):
                     activities=[activity.__dict__ for activity in activities],
                 )
                 return activities
+
+    def get_activity(self, course_id: str, activity_id: str) -> ClassroomActivity:
+        log_event(logger, "google.activity.get.start", course_id=course_id, activity_id=activity_id)
+        activity = (
+            self.classroom.courses()
+            .courseWork()
+            .get(courseId=course_id, id=activity_id)
+            .execute()
+        )
+        row = ClassroomActivity(
+            id=activity["id"],
+            course_id=course_id,
+            title=activity.get("title", "Untitled activity"),
+            work_type=activity.get("workType", "ASSIGNMENT"),
+            state=activity.get("state", "PUBLISHED"),
+            due_label=_due_label(activity),
+        )
+        log_event(logger, "google.activity.get.complete", activity=row.__dict__)
+        return row
 
     def list_submission_files(
         self, course_id: str, activity_ids: list[str] | None = None
@@ -392,74 +499,54 @@ class GoogleApiProvider(GoogleProvider):
         return content, media_type
 
     def _profile(self, user_id: str) -> tuple[str | None, str | None]:
-        if user_id in self._profile_cache:
-            log_event(logger, "google.profile.cache_hit", user_id=user_id, profile=self._profile_cache[user_id])
-            return self._profile_cache[user_id]
+        settings = get_settings()
+        cached = _PROFILE_CACHE.get(user_id)
+        if _cache_hit(cached):
+            profile = cached.value
+            if isinstance(profile, tuple):
+                log_event(logger, "google.profile.cache_hit", user_id=user_id, profile=profile)
+                return profile
         log_event(logger, "google.profile.fetch", user_id=user_id)
         try:
             profile = self.classroom.userProfiles().get(userId=user_id).execute()
         except Exception:
             log_error(logger, "google.profile.failed", user_id=user_id)
-            self._profile_cache[user_id] = (None, user_id)
-            return self._profile_cache[user_id]
+            fallback = (None, user_id)
+            _PROFILE_CACHE[user_id] = _TtlCacheEntry(
+                fallback,
+                _ttl(settings.google_profile_cache_ttl_minutes),
+            )
+            return fallback
         name = profile.get("name", {}).get("fullName")
         email = profile.get("emailAddress")
-        self._profile_cache[user_id] = (email, name)
+        _PROFILE_CACHE[user_id] = _TtlCacheEntry(
+            (email, name),
+            _ttl(settings.google_profile_cache_ttl_minutes),
+        )
         log_event(logger, "google.profile.complete", user_id=user_id, email=email, name=name)
-        return self._profile_cache[user_id]
+        return email, name
 
     def _student_identity(
         self, course_id: str, user_id: str
     ) -> tuple[str | None, str | None]:
-        roster = self._course_roster(course_id)
-        if user_id in roster:
-            log_event(logger, "google.student_identity.roster_hit", course_id=course_id, user_id=user_id, identity=roster[user_id])
-            return roster[user_id]
-        log_event(logger, "google.student_identity.profile_fallback", course_id=course_id, user_id=user_id)
+        log_event(logger, "google.student_identity.profile", course_id=course_id, user_id=user_id)
         return self._profile(user_id)
 
-    def _course_roster(self, course_id: str) -> dict[str, tuple[str | None, str | None]]:
-        if course_id in self._roster_cache:
-            log_event(logger, "google.roster.cache_hit", course_id=course_id, count=len(self._roster_cache[course_id]))
-            return self._roster_cache[course_id]
-
-        log_event(logger, "google.roster.fetch.start", course_id=course_id)
-        roster: dict[str, tuple[str | None, str | None]] = {}
-        page_token = None
-        try:
-            while True:
-                response = (
-                    self.classroom.courses()
-                    .students()
-                    .list(courseId=course_id, pageSize=100, pageToken=page_token)
-                    .execute()
-                )
-                for student in response.get("students", []):
-                    user_id = student.get("userId")
-                    profile = student.get("profile", {})
-                    if not user_id:
-                        continue
-                    roster[user_id] = (
-                        profile.get("emailAddress"),
-                        profile.get("name", {}).get("fullName"),
-                    )
-                page_token = response.get("nextPageToken")
-                if not page_token:
-                    break
-        except Exception:
-            log_error(logger, "google.roster.fetch.failed", course_id=course_id)
-            roster = {}
-
-        self._roster_cache[course_id] = roster
-        log_event(logger, "google.roster.fetch.complete", course_id=course_id, count=len(roster), roster=roster)
-        return roster
-
     def _drive_metadata(self, file_id: str) -> dict:
+        settings = get_settings()
+        cached = _DRIVE_METADATA_CACHE.get(file_id)
+        if _cache_hit(cached) and isinstance(cached.value, dict):
+            log_event(logger, "google.drive.metadata.cache_hit", file_id=file_id)
+            return cached.value
         log_event(logger, "google.drive.metadata.start", file_id=file_id)
         metadata = (
             self.drive.files()
             .get(fileId=file_id, fields="id,name,mimeType")
             .execute()
+        )
+        _DRIVE_METADATA_CACHE[file_id] = _TtlCacheEntry(
+            metadata,
+            _ttl(settings.google_drive_metadata_cache_ttl_minutes),
         )
         log_event(logger, "google.drive.metadata.complete", file_id=file_id, metadata=metadata)
         return metadata
@@ -566,9 +653,23 @@ class MockGoogleProvider(GoogleProvider):
         log_event(logger, "mock.account_profile", profile=profile.__dict__)
         return profile
 
+    def get_course(self, course_id: str) -> ClassroomCourse:
+        for course in self.courses:
+            if course.id == course_id:
+                log_event(logger, "mock.course.get", course=course.__dict__)
+                return course
+        raise KeyError(course_id)
+
     def list_courses(self) -> list[ClassroomCourse]:
         log_event(logger, "mock.courses", count=len(self.courses), courses=[course.__dict__ for course in self.courses])
         return self.courses
+
+    def get_activity(self, course_id: str, activity_id: str) -> ClassroomActivity:
+        for activity in self.activities:
+            if activity.course_id == course_id and activity.id == activity_id:
+                log_event(logger, "mock.activity.get", activity=activity.__dict__)
+                return activity
+        raise KeyError(activity_id)
 
     def list_activities(self, course_id: str) -> list[ClassroomActivity]:
         rows = [activity for activity in self.activities if activity.course_id == course_id]
@@ -624,10 +725,27 @@ class MockGoogleProvider(GoogleProvider):
 
 
 def get_google_provider() -> GoogleProvider:
-    from .settings import get_settings
-
     settings = get_settings()
     log_event(logger, "google.provider.select", provider=settings.google_provider)
     if settings.google_provider == "google":
-        return GoogleApiProvider(TokenStore(settings.google_token_path).load_credentials())
+        token_store = TokenStore(settings.google_token_path)
+        token_mtime = (
+            token_store.token_path.stat().st_mtime
+            if token_store.token_path.exists()
+            else None
+        )
+        cached = _GOOGLE_PROVIDER_CACHE.get(settings.google_token_path)
+        if cached and cached[1] == token_mtime:
+            log_event(logger, "google.provider.cache_hit")
+            provider = cached[0]
+            if isinstance(provider, GoogleProvider):
+                return provider
+        provider = GoogleApiProvider(token_store.load_valid_credentials())
+        token_mtime = (
+            token_store.token_path.stat().st_mtime
+            if token_store.token_path.exists()
+            else None
+        )
+        _GOOGLE_PROVIDER_CACHE[settings.google_token_path] = (provider, token_mtime)
+        return provider
     return MockGoogleProvider()

@@ -1,8 +1,10 @@
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+from hashlib import sha256
 import json
 import os
 from pathlib import Path
+import shutil
 from secrets import token_urlsafe
 from uuid import uuid4
 
@@ -26,6 +28,7 @@ from .google_provider import (
     GoogleProvider,
     TokenStore,
     build_oauth_authorization_url,
+    clear_google_provider_caches,
     get_google_provider,
 )
 from .models import (
@@ -38,6 +41,8 @@ from .models import (
     GradingJob,
     GradingStatus,
     GradingSubmission,
+    GradingFileCache,
+    GradingScrubCache,
 )
 from .naming import build_output_path
 from .observability import configure_logging, get_logger, log_error, log_event, log_warning
@@ -95,8 +100,73 @@ app.add_middleware(
 )
 
 
-def provider_dependency() -> GoogleProvider:
-    return get_google_provider()
+def purge_cached_classroom_state(session: Session) -> None:
+    clear_google_provider_caches()
+    for row in session.exec(select(Activity)).all():
+        session.delete(row)
+    for row in session.exec(select(Course)).all():
+        session.delete(row)
+    now = datetime.now(UTC)
+    for row in session.exec(select(GradingFileCache)).all():
+        row.deleted_at = row.deleted_at or now
+        session.add(row)
+    for row in session.exec(select(GradingScrubCache)).all():
+        row.deleted_at = row.deleted_at or now
+        session.add(row)
+    for row in session.exec(select(ExportFile)).all():
+        row.cached_path = None
+        row.content_hash = None
+        row.byte_size = None
+        row.cache_expires_at = None
+        session.add(row)
+    session.commit()
+    shutil.rmtree(Path(settings.grading_cache_path), ignore_errors=True)
+    shutil.rmtree(Path(settings.export_cache_path), ignore_errors=True)
+
+
+def provider_dependency(session: Session = Depends(get_session)) -> GoogleProvider:
+    try:
+        return get_google_provider()
+    except Exception as error:
+        auth_error = google_auth_http_exception(error)
+        if auth_error:
+            TokenStore(settings.google_token_path).delete()
+            purge_cached_classroom_state(session)
+            raise auth_error from error
+        raise
+
+
+def disconnected_auth_state() -> AuthState:
+    return AuthState(
+        signed_in=False,
+        identity_scopes=False,
+        classroom_scopes=False,
+        drive_scopes=False,
+        provider=settings.google_provider,
+    )
+
+
+def google_auth_http_exception(error: Exception) -> HTTPException | None:
+    try:
+        from google.auth.exceptions import RefreshError
+        from googleapiclient.errors import HttpError
+    except Exception:
+        return None
+
+    if isinstance(error, RefreshError):
+        log_warning(logger, "google.auth.refresh_failed")
+        return HTTPException(
+            status_code=401,
+            detail="Google session expired. Logout and connect your Google account again.",
+        )
+    status_code = getattr(getattr(error, "resp", None), "status", None)
+    if isinstance(error, HttpError) and status_code in {401, 403}:
+        log_warning(logger, "google.auth.api_denied", status_code=status_code)
+        return HTTPException(
+            status_code=401,
+            detail="Google authorization failed. Logout and connect your Google account again.",
+        )
+    return None
 
 
 def ensure_privacy_audit_allows_draft(
@@ -121,7 +191,7 @@ def health() -> dict[str, str]:
 
 
 @app.get("/api/auth/me", response_model=AuthState)
-def auth_me() -> AuthState:
+def auth_me(session: Session = Depends(get_session)) -> AuthState:
     log_event(logger, "auth.me.start", provider=settings.google_provider)
     if settings.google_provider == "google":
         token_store = TokenStore(settings.google_token_path)
@@ -139,10 +209,9 @@ def auth_me() -> AuthState:
                 picture = profile.picture
             except Exception:
                 log_error(logger, "auth.me.profile_failed")
-                scopes = set()
-                name = None
-                email = None
-                picture = None
+                TokenStore(settings.google_token_path).delete()
+                purge_cached_classroom_state(session)
+                return disconnected_auth_state()
         log_event(
             logger,
             "auth.me.google",
@@ -156,7 +225,7 @@ def auth_me() -> AuthState:
         has_google_identity = {"openid", "email", "profile"}.issubset(scopes)
         has_classroom_identity = any("classroom.profile.emails" in scope for scope in scopes)
         return AuthState(
-            signed_in=token_store.exists(),
+            signed_in=bool(scopes),
             identity_scopes=has_google_identity or has_classroom_identity,
             classroom_scopes=any(scope.startswith("classroom.") for scope in scopes)
             or any("classroom" in scope for scope in scopes),
@@ -184,6 +253,15 @@ def auth_me() -> AuthState:
         picture=profile.picture,
         provider=settings.google_provider,
     )
+
+
+@app.post("/api/auth/google/logout", response_model=AuthState)
+def auth_logout(session: Session = Depends(get_session)) -> AuthState:
+    log_event(logger, "auth.google.logout", provider=settings.google_provider)
+    if settings.google_provider == "google":
+        TokenStore(settings.google_token_path).delete()
+        purge_cached_classroom_state(session)
+    return disconnected_auth_state()
 
 
 @app.post("/api/auth/google/start", response_model=AuthStart)
@@ -270,13 +348,29 @@ def auth_callback(request: Request, code: str, state: str) -> RedirectResponse:
 
 @app.get("/api/courses", response_model=list[CourseRead])
 def list_courses(
+    refresh: bool = False,
     session: Session = Depends(get_session),
     provider: GoogleProvider = Depends(provider_dependency),
 ) -> list[Course]:
     log_event(logger, "classroom.courses.start")
-    active_courses = [
-        course for course in provider.list_courses() if course.course_state != "ARCHIVED"
-    ]
+    cached_rows = session.exec(select(Course).where(Course.course_state != "ARCHIVED")).all()
+    if cached_rows and not refresh and all(_is_fresh(row.fetched_at, settings.classroom_cache_ttl_minutes) for row in cached_rows):
+        log_event(logger, "classroom.courses.cache_hit", stored_count=len(cached_rows))
+        return cached_rows
+    try:
+        active_courses = [
+            course for course in provider.list_courses() if course.course_state != "ARCHIVED"
+        ]
+    except Exception as error:
+        auth_error = google_auth_http_exception(error)
+        if auth_error:
+            TokenStore(settings.google_token_path).delete()
+            purge_cached_classroom_state(session)
+            raise auth_error from error
+        if cached_rows:
+            log_warning(logger, "classroom.courses.stale_fallback", stored_count=len(cached_rows))
+            return cached_rows
+        raise
     log_event(
         logger,
         "classroom.courses.provider_result",
@@ -290,6 +384,8 @@ def list_courses(
                 name=course.name,
                 section=course.section,
                 course_state=course.course_state,
+                fetched_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
             )
         )
     session.commit()
@@ -301,11 +397,27 @@ def list_courses(
 @app.get("/api/courses/{course_id}/activities", response_model=list[ActivityRead])
 def list_activities(
     course_id: str,
+    refresh: bool = False,
     session: Session = Depends(get_session),
     provider: GoogleProvider = Depends(provider_dependency),
 ) -> list[Activity]:
     log_event(logger, "classroom.activities.start", course_id=course_id)
-    activities = provider.list_activities(course_id)
+    cached_rows = session.exec(select(Activity).where(Activity.course_id == course_id)).all()
+    if cached_rows and not refresh and all(_is_fresh(row.fetched_at, settings.classroom_cache_ttl_minutes) for row in cached_rows):
+        log_event(logger, "classroom.activities.cache_hit", course_id=course_id, stored_count=len(cached_rows))
+        return cached_rows
+    try:
+        activities = provider.list_activities(course_id)
+    except Exception as error:
+        auth_error = google_auth_http_exception(error)
+        if auth_error:
+            TokenStore(settings.google_token_path).delete()
+            purge_cached_classroom_state(session)
+            raise auth_error from error
+        if cached_rows:
+            log_warning(logger, "classroom.activities.stale_fallback", course_id=course_id, stored_count=len(cached_rows))
+            return cached_rows
+        raise
     log_event(
         logger,
         "classroom.activities.provider_result",
@@ -324,6 +436,8 @@ def list_activities(
                 work_type=activity.work_type,
                 state=activity.state,
                 due_label=activity.due_label,
+                fetched_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
             )
         )
     session.commit()
@@ -478,6 +592,7 @@ def read_export(job_id: str, session: Session = Depends(get_session)) -> ExportJ
 def stream_export_file(
     job_id: str,
     file_id: str,
+    request: Request,
     session: Session = Depends(get_session),
     provider: GoogleProvider = Depends(provider_dependency),
 ) -> Response:
@@ -485,6 +600,9 @@ def stream_export_file(
     file = session.get(ExportFile, file_id)
     if file is None or file.job_id != job_id:
         raise HTTPException(status_code=404, detail="Export file not found.")
+    cached_response = _export_file_cache_response(request, file)
+    if cached_response is not None:
+        return cached_response
     try:
         content, media_type = provider.get_file_content(file.source_file_id)
     except KeyError as error:
@@ -505,58 +623,50 @@ def stream_export_file(
         media_type=media_type,
         byte_size=len(content),
     )
-    return Response(content=content, media_type=media_type)
+    return _store_and_stream_export_file(session, job_id, file, content, media_type, request)
 
 
 @app.get("/api/grading/queue", response_model=list[GradingQueueItem])
 def grading_queue(
+    course_id: str | None = None,
+    activity_id: str | None = None,
     session: Session = Depends(get_session),
     provider: GoogleProvider = Depends(provider_dependency),
 ) -> list[GradingQueueItem]:
-    log_event(logger, "grading.queue.start")
-    items: list[GradingQueueItem] = []
-    active_courses = [
-        course for course in provider.list_courses() if course.course_state != "ARCHIVED"
-    ]
-    for course in active_courses:
-        for activity in provider.list_activities(course.id):
-            files = provider.list_submission_files(course.id, [activity.id])
-            log_event(
-                logger,
-                "grading.queue.activity",
-                course_id=course.id,
-                course_name=course.name,
-                activity_id=activity.id,
-                activity_title=activity.title,
-                submission_count=len(files),
-            )
-            latest_job = session.exec(
-                select(GradingJob)
-                .where(GradingJob.course_id == course.id)
-                .where(GradingJob.activity_id == activity.id)
-                .order_by(GradingJob.created_at.desc())
-            ).first()
-            status = "ready"
-            if latest_job:
-                status = latest_job.status.value
-            items.append(
-                GradingQueueItem(
-                    course_id=course.id,
-                    course_name=course.name,
-                    activity_id=activity.id,
-                    activity_title=activity.title,
-                    due_label=activity.due_label,
-                    submission_count=len(files),
-                    status=status,
-                    latest_job_id=latest_job.id if latest_job else None,
-                    reviewed_submissions=latest_job.reviewed_submissions
-                    if latest_job
-                    else 0,
-                    total_submissions=latest_job.total_submissions if latest_job else len(files),
-                )
-            )
-    log_event(logger, "grading.queue.complete", item_count=len(items))
-    return items
+    log_event(logger, "grading.queue.start", course_id=course_id, activity_id=activity_id)
+    if not course_id or not activity_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Grading queue requires course_id and activity_id; global scans are disabled.",
+        )
+
+    try:
+        course = provider.get_course(course_id)
+        activity = provider.get_activity(course_id, activity_id)
+        files = provider.list_submission_files(course_id, [activity_id])
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail="Course or activity not found.") from error
+
+    latest_job = session.exec(
+        select(GradingJob)
+        .where(GradingJob.course_id == course.id)
+        .where(GradingJob.activity_id == activity.id)
+        .order_by(GradingJob.created_at.desc())
+    ).first()
+    item = GradingQueueItem(
+        course_id=course.id,
+        course_name=course.name,
+        activity_id=activity.id,
+        activity_title=activity.title,
+        due_label=activity.due_label,
+        submission_count=len(files),
+        status=latest_job.status.value if latest_job else "ready",
+        latest_job_id=latest_job.id if latest_job else None,
+        reviewed_submissions=latest_job.reviewed_submissions if latest_job else 0,
+        total_submissions=latest_job.total_submissions if latest_job else len(files),
+    )
+    log_event(logger, "grading.queue.complete", item=item.model_dump())
+    return [item]
 
 
 @app.post("/api/grading/jobs", response_model=GradingJobRead)
@@ -574,22 +684,31 @@ def create_grading_job(
         teacher_loop=payload.teacher_loop,
         criteria_count=len(payload.criteria or []),
     )
-    course = next(
-        (course for course in provider.list_courses() if course.id == payload.course_id),
-        None,
-    )
-    if course is None or course.course_state == "ARCHIVED":
+    try:
+        course = provider.get_course(payload.course_id)
+        activity = provider.get_activity(payload.course_id, payload.activity_id)
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail="Course or activity not found.") from error
+    if course.course_state == "ARCHIVED":
         raise HTTPException(status_code=404, detail="Active course not found.")
-    activity = next(
-        (
-            activity
-            for activity in provider.list_activities(course.id)
-            if activity.id == payload.activity_id
-        ),
-        None,
+    session.merge(
+        Course(
+            id=course.id,
+            name=course.name,
+            section=course.section,
+            course_state=course.course_state,
+        )
     )
-    if activity is None:
-        raise HTTPException(status_code=404, detail="Activity not found.")
+    session.merge(
+        Activity(
+            id=activity.id,
+            course_id=activity.course_id,
+            title=activity.title,
+            work_type=activity.work_type,
+            state=activity.state,
+            due_label=activity.due_label,
+        )
+    )
 
     job = GradingJob(
         id=str(uuid4()),
@@ -675,6 +794,7 @@ def read_grading_privacy_audit(
 @app.get("/api/grading/jobs/{job_id}/privacy-audit/export.csv")
 def export_privacy_audit_csv(
     job_id: str,
+    request: Request,
     session: Session = Depends(get_session),
 ) -> Response:
     job = session.get(GradingJob, job_id)
@@ -684,7 +804,8 @@ def export_privacy_audit_csv(
     if audit is None:
         raise HTTPException(status_code=404, detail="Privacy audit not found.")
     safe_name = "".join(char if char.isalnum() else "-" for char in job.activity_title)
-    return Response(
+    return _conditional_response(
+        request=request,
         content=privacy_audit_csv(session, audit),
         media_type="text/csv",
         headers={
@@ -696,15 +817,21 @@ def export_privacy_audit_csv(
 @app.get("/api/grading/jobs/{job_id}/privacy-audit/export.json", response_model=PrivacyAuditRead)
 def export_privacy_audit_json(
     job_id: str,
+    request: Request,
     session: Session = Depends(get_session),
-) -> PrivacyAuditRead:
+) -> Response:
     job = session.get(GradingJob, job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Grading job not found.")
     audit = latest_privacy_audit(session, job.id)
     if audit is None:
         raise HTTPException(status_code=404, detail="Privacy audit not found.")
-    return privacy_audit_snapshot(session, audit)
+    payload = privacy_audit_snapshot(session, audit).model_dump_json()
+    return _conditional_response(
+        request=request,
+        content=payload,
+        media_type="application/json",
+    )
 
 
 @app.post("/api/grading/jobs/{job_id}/draft", response_model=GradingJobRead)
@@ -829,6 +956,7 @@ def delete_grading_cache(
 @app.get("/api/grading/jobs/{job_id}/export.csv")
 def export_grading_csv(
     job_id: str,
+    request: Request,
     session: Session = Depends(get_session),
 ) -> Response:
     job = session.get(GradingJob, job_id)
@@ -836,10 +964,114 @@ def export_grading_csv(
         raise HTTPException(status_code=404, detail="Grading job not found.")
     body = grading_csv(session, job)
     safe_name = "".join(char if char.isalnum() else "-" for char in job.activity_title)
-    return Response(
+    return _conditional_response(
+        request=request,
         content=body,
         media_type="text/csv",
         headers={
             "Content-Disposition": f'attachment; filename="{safe_name}-grading-drafts.csv"'
         },
     )
+
+
+def _is_fresh(value: datetime | None, ttl_minutes: int) -> bool:
+    if value is None:
+        return False
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=UTC)
+    return value > datetime.now(UTC) - timedelta(minutes=ttl_minutes)
+
+
+def _etag(content: bytes | str) -> str:
+    body = content.encode("utf-8") if isinstance(content, str) else content
+    return f'"{sha256(body).hexdigest()}"'
+
+
+def _cache_headers(etag: str, max_age_seconds: int) -> dict[str, str]:
+    return {
+        "Cache-Control": f"private, max-age={max_age_seconds}",
+        "ETag": etag,
+    }
+
+
+def _if_none_match(request: Request) -> set[str]:
+    header = request.headers.get("if-none-match", "")
+    return {part.strip() for part in header.split(",") if part.strip()}
+
+
+def _conditional_response(
+    request: Request,
+    content: bytes | str,
+    media_type: str,
+    headers: dict[str, str] | None = None,
+    max_age_seconds: int = 300,
+) -> Response:
+    etag = _etag(content)
+    response_headers = {
+        **(headers or {}),
+        **_cache_headers(etag, max_age_seconds),
+    }
+    if etag in _if_none_match(request):
+        return Response(status_code=304, headers=response_headers)
+    return Response(content=content, media_type=media_type, headers=response_headers)
+
+
+def _export_file_cache_response(request: Request, file: ExportFile) -> Response | None:
+    if not file.cached_path or not file.content_hash or not file.cache_expires_at:
+        return None
+    if not _is_future(file.cache_expires_at):
+        return None
+    path = Path(file.cached_path)
+    if not path.exists() or not path.is_file():
+        return None
+    etag = f'"{file.content_hash}"'
+    headers = _cache_headers(etag, settings.export_cache_ttl_hours * 3600)
+    if etag in _if_none_match(request):
+        log_event(logger, "export.file.stream.not_modified", file_id=file.id)
+        return Response(status_code=304, headers=headers)
+    content = path.read_bytes()
+    log_event(
+        logger,
+        "export.file.stream.cache_hit",
+        file_id=file.id,
+        cached_path=file.cached_path,
+        byte_size=len(content),
+    )
+    return Response(content=content, media_type=file.export_mime_type or file.mime_type, headers=headers)
+
+
+def _store_and_stream_export_file(
+    session: Session,
+    job_id: str,
+    file: ExportFile,
+    content: bytes,
+    media_type: str,
+    request: Request,
+) -> Response:
+    digest = sha256(content).hexdigest()
+    cache_dir = Path(settings.export_cache_path) / job_id
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    suffix = Path(file.output_path).suffix or ".bin"
+    cache_path = cache_dir / f"{file.id}-{digest[:12]}{suffix}"
+    cache_path.write_bytes(content)
+    file.cached_path = str(cache_path)
+    file.content_hash = digest
+    file.byte_size = len(content)
+    file.cache_expires_at = datetime.now(UTC) + timedelta(hours=settings.export_cache_ttl_hours)
+    session.add(file)
+    session.commit()
+    session.refresh(file)
+    return _conditional_response(
+        request=request,
+        content=content,
+        media_type=media_type,
+        max_age_seconds=settings.export_cache_ttl_hours * 3600,
+    )
+
+
+def _is_future(value: datetime | None) -> bool:
+    if value is None:
+        return False
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=UTC)
+    return value > datetime.now(UTC)
