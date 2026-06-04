@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ConnectView, InlineError } from "./components/ConnectView";
 import { DoneView } from "./components/DoneView";
 import { DryRunDrawer } from "./components/DryRunDrawer";
-import { GraderAudit, GraderReview, GraderSetup, GraderWrap } from "./components/Grader";
+import { GraderAudit, GraderQueue, GraderReview, GraderSetup, GraderWrap } from "./components/Grader";
 import { HistoryView } from "./components/HistoryView";
 import { ProgressView, type ProgressLogItem } from "./components/ProgressView";
 import { Rail } from "./components/Rail";
@@ -282,10 +282,6 @@ export function App() {
 
   function navigate(nextView: AppView) {
     if (!connected && nextView !== "connect") return;
-    if (nextView === "graderQueue") {
-      setView("workspace");
-      return;
-    }
     setView(nextView);
   }
 
@@ -532,6 +528,22 @@ export function App() {
         ) : null}
 
         {view === "history" ? <HistoryView items={history} onBack={() => setView("workspace")} /> : null}
+
+        {view === "graderQueue" ? (
+          <>
+            <GraderQueue
+              items={[]}
+              loading={false}
+              onSetup={(item) => {
+                setSelectedGradingItem(item);
+                setView("graderSetup");
+              }}
+              onOpenJob={(jobId) => void openGradingJob(jobId)}
+              onDownloadInstead={() => setView("workspace")}
+            />
+            {error ? <InlineError message={error} /> : null}
+          </>
+        ) : null}
 
         {view === "graderSetup" && selectedGradingItem ? (
           <>
