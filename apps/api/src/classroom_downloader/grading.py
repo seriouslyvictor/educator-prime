@@ -254,6 +254,7 @@ def cache_submission_file(
     submission: GradingSubmission,
     file: SubmissionFile,
     provider: GoogleProvider,
+    commit: bool = True,
 ) -> GradingFileCache:
     now = datetime.now(UTC)
     existing = session.exec(
@@ -315,7 +316,10 @@ def cache_submission_file(
     session.add(row)
     job.cache_expires_at = row.expires_at
     session.add(job)
-    session.commit()
+    if commit:
+        session.commit()
+    else:
+        session.flush()
     session.refresh(row)
     log_event(
         logger,
@@ -339,6 +343,7 @@ def scrub_submission_cached(
     job: GradingJob,
     submission: GradingSubmission,
     cache_file: GradingFileCache,
+    commit: bool = True,
 ) -> CachedScrubbedSubmission:
     now = datetime.now(UTC)
     identity_hash = _identity_hash(submission)
@@ -399,7 +404,10 @@ def scrub_submission_cached(
         expires_at=min(_aware(cache_file.expires_at), default_cache_expiry()),
     )
     session.add(row)
-    session.commit()
+    if commit:
+        session.commit()
+    else:
+        session.flush()
     session.refresh(row)
     log_event(
         logger,
