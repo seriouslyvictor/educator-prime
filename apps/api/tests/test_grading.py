@@ -17,6 +17,7 @@ from classroom_downloader.models import (
     GradingAiAttempt,
     GradingFileCache,
     GradingPseudonym,
+    GradingScrubCache,
     PrivacyAudit,
     PrivacyAuditRow,
 )
@@ -216,6 +217,38 @@ def test_draft_auto_runs_privacy_audit_when_missing(tmp_path) -> None:
     assert drafted["total_submissions"] == 2
     assert audit_response.status_code == 200
     assert audit_response.json()["total_files"] == 2
+
+
+def test_draft_reuses_privacy_audit_scrub_cache(tmp_path) -> None:
+    get_settings().grading_cache_path = str(tmp_path / "grading")
+    with TestClient(app) as client:
+        job = client.post(
+            "/api/grading/jobs",
+            json={
+                "course_id": "course-1",
+                "activity_id": "activity-1",
+                "rubric_mode": "infer",
+                "teacher_loop": "approve",
+            },
+        ).json()
+        audit = client.post(f"/api/grading/jobs/{job['id']}/privacy-audit").json()
+        assert audit["total_files"] == 2
+
+        with Session(engine) as session:
+            before = session.exec(
+                select(GradingScrubCache).where(GradingScrubCache.job_id == job["id"])
+            ).all()
+
+        drafted = client.post(f"/api/grading/jobs/{job['id']}/draft").json()
+
+    with Session(engine) as session:
+        after = session.exec(
+            select(GradingScrubCache).where(GradingScrubCache.job_id == job["id"])
+        ).all()
+
+    assert drafted["total_submissions"] == 2
+    assert len(before) == 2
+    assert len(after) == len(before)
 
 
 def test_draft_blocks_when_latest_audit_has_high_risk_rows(tmp_path) -> None:

@@ -50,6 +50,25 @@ def test_file_content_streams() -> None:
     assert response.content
 
 
+def test_file_content_stream_uses_private_etag_cache() -> None:
+    with TestClient(app) as client:
+        job = client.post(
+            "/api/exports",
+            json={"course_id": "course-1", "activity_ids": ["activity-1"]},
+        ).json()
+        file_id = job["files"][0]["id"]
+        first = client.get(f"/api/exports/{job['id']}/files/{file_id}/content")
+        second = client.get(
+            f"/api/exports/{job['id']}/files/{file_id}/content",
+            headers={"If-None-Match": first.headers["etag"]},
+        )
+
+    assert first.status_code == 200
+    assert first.headers["cache-control"].startswith("private")
+    assert first.headers["etag"]
+    assert second.status_code == 304
+
+
 def test_auth_me_does_not_treat_stale_google_token_as_signed_in(
     monkeypatch, tmp_path
 ) -> None:
