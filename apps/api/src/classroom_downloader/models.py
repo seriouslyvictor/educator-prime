@@ -23,6 +23,7 @@ class Course(SQLModel, table=True):
     name: str
     section: str | None = None
     course_state: str = "ACTIVE"
+    fetched_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
@@ -33,6 +34,7 @@ class Activity(SQLModel, table=True):
     work_type: str = "ASSIGNMENT"
     state: str = "PUBLISHED"
     due_label: str | None = None
+    fetched_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
@@ -62,6 +64,10 @@ class ExportFile(SQLModel, table=True):
     output_path: str
     status: str = "ready"
     error: str | None = None
+    cached_path: str | None = None
+    content_hash: str | None = None
+    byte_size: int | None = None
+    cache_expires_at: datetime | None = None
 
 
 class ExportError(SQLModel, table=True):
@@ -157,6 +163,26 @@ class GradingAiAttempt(SQLModel, table=True):
     cost_cents: float | None = None
     latency_ms: int | None = None
     retry_count: int = 0
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class GradingScrubCache(SQLModel, table=True):
+    id: str = Field(primary_key=True)
+    job_id: str = Field(index=True)
+    submission_id: str = Field(index=True)
+    content_hash: str = Field(index=True)
+    identity_hash: str = Field(index=True)
+    student_label: str
+    source_label: str
+    safe_source_label: str
+    scrubbed_content: str
+    extraction_status: str
+    extraction_error: str | None = None
+    privacy_status: str
+    privacy_flags_json: str = "[]"
+    byte_size: int
+    expires_at: datetime
+    deleted_at: datetime | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 

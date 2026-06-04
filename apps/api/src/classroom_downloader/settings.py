@@ -17,6 +17,11 @@ class Settings(BaseSettings):
     google_oauth_state_path: str = ".tokens/google-oauth-state.txt"
     grading_cache_path: str = ".cache/grading"
     grading_cache_ttl_hours: int = 24
+    classroom_cache_ttl_minutes: int = 10
+    google_profile_cache_ttl_minutes: int = 30
+    google_drive_metadata_cache_ttl_minutes: int = 30
+    export_cache_path: str = ".cache/exports"
+    export_cache_ttl_hours: int = 24
     grading_engine: Literal["mock", "litellm"] = "mock"
     litellm_model: str = "openai/gpt-5"
     litellm_timeout_seconds: int = 60
