@@ -1,8 +1,10 @@
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from io import BytesIO
 from pathlib import Path
 from urllib.parse import urlencode
 
+from .settings import get_settings
 from .observability import byte_preview, get_logger, log_error, log_event, log_warning
 
 
@@ -14,6 +16,35 @@ GOOGLE_NATIVE_EXPORTS = {
     "application/vnd.google-apps.spreadsheet": ("application/pdf", ".pdf"),
     "application/vnd.google-apps.presentation": ("application/pdf", ".pdf"),
 }
+
+
+@dataclass
+class _TtlCacheEntry:
+    value: object
+    expires_at: datetime
+
+
+_GOOGLE_PROVIDER_CACHE: dict[str, tuple[object, float | None]] = {}
+_PROFILE_CACHE: dict[str, _TtlCacheEntry] = {}
+_ACCOUNT_PROFILE_CACHE: _TtlCacheEntry | None = None
+_DRIVE_METADATA_CACHE: dict[str, _TtlCacheEntry] = {}
+
+
+def clear_google_provider_caches() -> None:
+    _GOOGLE_PROVIDER_CACHE.clear()
+    _PROFILE_CACHE.clear()
+    global _ACCOUNT_PROFILE_CACHE
+    _ACCOUNT_PROFILE_CACHE = None
+    _DRIVE_METADATA_CACHE.clear()
+    log_event(logger, "google.cache.clear")
+
+
+def _ttl(minutes: int) -> datetime:
+    return datetime.now(UTC) + timedelta(minutes=minutes)
+
+
+def _cache_hit(entry: _TtlCacheEntry | None) -> bool:
+    return bool(entry and entry.expires_at > datetime.now(UTC))
 
 
 @dataclass(frozen=True)
@@ -171,6 +202,7 @@ class TokenStore:
     def save(self, credentials_json: str) -> None:
         self.token_path.parent.mkdir(parents=True, exist_ok=True)
         self.token_path.write_text(credentials_json, encoding="utf-8")
+        clear_google_provider_caches()
         log_event(
             logger,
             "google.token.save",
@@ -180,6 +212,7 @@ class TokenStore:
 
     def delete(self) -> None:
         self.token_path.unlink(missing_ok=True)
+        clear_google_provider_caches()
         log_event(logger, "google.token.delete", path=str(self.token_path))
 
     def load_credentials(self):
@@ -227,6 +260,13 @@ class GoogleApiProvider(GoogleProvider):
         self._profile_cache: dict[str, tuple[str | None, str | None]] = {}
 
     def account_profile(self) -> AccountProfile:
+        global _ACCOUNT_PROFILE_CACHE
+        settings = get_settings()
+        if _cache_hit(_ACCOUNT_PROFILE_CACHE):
+            profile = _ACCOUNT_PROFILE_CACHE.value
+            if isinstance(profile, AccountProfile):
+                log_event(logger, "google.account_profile.cache_hit", email=profile.email)
+                return profile
         log_event(logger, "google.account_profile.start")
         try:
             profile = self.classroom.userProfiles().get(userId="me").execute()
@@ -244,6 +284,10 @@ class GoogleApiProvider(GoogleProvider):
             name=account.name,
             email=account.email,
             picture=account.picture,
+        )
+        _ACCOUNT_PROFILE_CACHE = _TtlCacheEntry(
+            account,
+            _ttl(settings.google_profile_cache_ttl_minutes),
         )
         return account
 
@@ -455,21 +499,32 @@ class GoogleApiProvider(GoogleProvider):
         return content, media_type
 
     def _profile(self, user_id: str) -> tuple[str | None, str | None]:
-        if user_id in self._profile_cache:
-            log_event(logger, "google.profile.cache_hit", user_id=user_id, profile=self._profile_cache[user_id])
-            return self._profile_cache[user_id]
+        settings = get_settings()
+        cached = _PROFILE_CACHE.get(user_id)
+        if _cache_hit(cached):
+            profile = cached.value
+            if isinstance(profile, tuple):
+                log_event(logger, "google.profile.cache_hit", user_id=user_id, profile=profile)
+                return profile
         log_event(logger, "google.profile.fetch", user_id=user_id)
         try:
             profile = self.classroom.userProfiles().get(userId=user_id).execute()
         except Exception:
             log_error(logger, "google.profile.failed", user_id=user_id)
-            self._profile_cache[user_id] = (None, user_id)
-            return self._profile_cache[user_id]
+            fallback = (None, user_id)
+            _PROFILE_CACHE[user_id] = _TtlCacheEntry(
+                fallback,
+                _ttl(settings.google_profile_cache_ttl_minutes),
+            )
+            return fallback
         name = profile.get("name", {}).get("fullName")
         email = profile.get("emailAddress")
-        self._profile_cache[user_id] = (email, name)
+        _PROFILE_CACHE[user_id] = _TtlCacheEntry(
+            (email, name),
+            _ttl(settings.google_profile_cache_ttl_minutes),
+        )
         log_event(logger, "google.profile.complete", user_id=user_id, email=email, name=name)
-        return self._profile_cache[user_id]
+        return email, name
 
     def _student_identity(
         self, course_id: str, user_id: str
@@ -478,11 +533,20 @@ class GoogleApiProvider(GoogleProvider):
         return self._profile(user_id)
 
     def _drive_metadata(self, file_id: str) -> dict:
+        settings = get_settings()
+        cached = _DRIVE_METADATA_CACHE.get(file_id)
+        if _cache_hit(cached) and isinstance(cached.value, dict):
+            log_event(logger, "google.drive.metadata.cache_hit", file_id=file_id)
+            return cached.value
         log_event(logger, "google.drive.metadata.start", file_id=file_id)
         metadata = (
             self.drive.files()
             .get(fileId=file_id, fields="id,name,mimeType")
             .execute()
+        )
+        _DRIVE_METADATA_CACHE[file_id] = _TtlCacheEntry(
+            metadata,
+            _ttl(settings.google_drive_metadata_cache_ttl_minutes),
         )
         log_event(logger, "google.drive.metadata.complete", file_id=file_id, metadata=metadata)
         return metadata
@@ -661,10 +725,27 @@ class MockGoogleProvider(GoogleProvider):
 
 
 def get_google_provider() -> GoogleProvider:
-    from .settings import get_settings
-
     settings = get_settings()
     log_event(logger, "google.provider.select", provider=settings.google_provider)
     if settings.google_provider == "google":
-        return GoogleApiProvider(TokenStore(settings.google_token_path).load_valid_credentials())
+        token_store = TokenStore(settings.google_token_path)
+        token_mtime = (
+            token_store.token_path.stat().st_mtime
+            if token_store.token_path.exists()
+            else None
+        )
+        cached = _GOOGLE_PROVIDER_CACHE.get(settings.google_token_path)
+        if cached and cached[1] == token_mtime:
+            log_event(logger, "google.provider.cache_hit")
+            provider = cached[0]
+            if isinstance(provider, GoogleProvider):
+                return provider
+        provider = GoogleApiProvider(token_store.load_valid_credentials())
+        token_mtime = (
+            token_store.token_path.stat().st_mtime
+            if token_store.token_path.exists()
+            else None
+        )
+        _GOOGLE_PROVIDER_CACHE[settings.google_token_path] = (provider, token_mtime)
+        return provider
     return MockGoogleProvider()
