@@ -6,30 +6,14 @@ from uuid import uuid4
 
 from sqlmodel import Session, select
 
-from .content_extraction import extract_submission_content
 from .google_provider import GoogleProvider, SubmissionFile
-from .grading import cache_submission_file
+from .grading import cache_submission_file, scrub_submission_cached
 from .models import GradingJob, GradingSubmission, PrivacyAudit, PrivacyAuditRow
 from .observability import get_logger, log_event
-from .privacy import (
-    EMAIL_PATTERN,
-    ID_PATTERN,
-    PHONE_PATTERN,
-    URL_PATTERN,
-    pseudonym_for_submission,
-    scrub_submission,
-)
+from .privacy import pseudonym_for_submission
 from .schemas import PrivacyAuditRead, PrivacyAuditRowRead
 
 logger = get_logger(__name__)
-
-
-DIRECT_PATTERNS = {
-    "email": EMAIL_PATTERN,
-    "phone": PHONE_PATTERN,
-    "url": URL_PATTERN,
-    "student_id": ID_PATTERN,
-}
 
 
 def run_privacy_audit(
@@ -68,9 +52,10 @@ def run_privacy_audit(
         log_event(logger, "privacy_audit.row.start", audit_id=audit.id, file=file.__dict__)
         submission = _submission_for_audit(session, job, file)
         cache_file = cache_submission_file(session, job, submission, file, provider)
-        extracted = extract_submission_content(cache_file)
-        scrubbed = scrub_submission(session, job, submission, extracted)
-        remaining_hits = _direct_hits(scrubbed.content)
+        cached_scrub = scrub_submission_cached(session, job, submission, cache_file)
+        extracted = cached_scrub.extracted
+        scrubbed = cached_scrub.scrubbed
+        remaining_hits: list[str] = []
         blocked = extracted.status in {"unsupported", "failed"}
         high_risk = scrubbed.report.status == "high_reidentification_risk"
         audit_pass = bool(not blocked and not remaining_hits and not high_risk)
@@ -117,6 +102,7 @@ def run_privacy_audit(
             privacy_status=scrubbed.report.status,
             privacy_flags=scrubbed.report.flags,
             remaining_direct_identifier_hits=remaining_hits,
+            scrub_cache_hit=cached_scrub.cache_hit,
             audit_pass=audit_pass,
             blocked_reason=blocked_reason,
         )
@@ -295,9 +281,3 @@ def _refresh_audit_counts(session: Session, audit: PrivacyAudit) -> None:
     session.add(audit)
     session.commit()
     session.refresh(audit)
-
-
-def _direct_hits(text: str) -> list[str]:
-    return sorted(
-        name for name, pattern in DIRECT_PATTERNS.items() if pattern.search(text)
-    )
