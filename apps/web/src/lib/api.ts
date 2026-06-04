@@ -31,6 +31,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   authMe: () => request<AuthState>("/api/auth/me"),
+  logoutGoogle: () =>
+    request<AuthState>("/api/auth/google/logout", {
+      method: "POST",
+    }),
   connectGoogle: (scopes: string[]) =>
     request<{
       authorization_url: string | null;

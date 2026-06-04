@@ -56,48 +56,39 @@ export function ClassroomList({
 export function ActivityList({
   course,
   activities,
-  selectedIds,
   query,
-  cursorIndex,
-  keyboardActive,
   loading,
-  onToggle,
-  onToggleAll,
   onQuery,
+  onGrade,
+  onPreview,
+  onDownload,
+  busy,
+  deliveryMode,
 }: {
   course: Course | undefined;
   activities: Activity[];
-  selectedIds: string[];
   query: string;
-  cursorIndex: number;
-  keyboardActive: boolean;
   loading: boolean;
-  onToggle: (activityId: string) => void;
-  onToggleAll: (activities: Activity[], selected: boolean) => void;
   onQuery: (query: string) => void;
+  onGrade: (activity: Activity) => void;
+  onPreview: (activity: Activity) => void;
+  onDownload: (activity: Activity) => void;
+  busy: boolean;
+  deliveryMode: "folder" | "zip";
 }) {
   const filtered = activities.filter((activity) =>
     `${activity.title} ${activity.work_type}`.toLowerCase().includes(query.toLowerCase()),
   );
-  const allSelected =
-    filtered.length > 0 && filtered.every((activity) => selectedIds.includes(activity.id));
 
   return (
     <section className="pane pane-right">
       <div className="assign-toolbar">
         <div className="toolbar-left">
           <div className="toolbar-title">{course?.name ?? "Selecione uma turma"}</div>
-          <div className="toolbar-sub">
-            {activities.length} atividades · {selectedIds.length} selecionadas
-          </div>
+          <div className="toolbar-sub">{activities.length} atividades</div>
         </div>
         <div className="head-tools">
           <SearchBox value={query} onChange={onQuery} placeholder="Filtrar atividades..." />
-          <button className="btn btn-secondary" onClick={() => onToggleAll(filtered, !allSelected)}>
-            <AppIcon name="check" />
-            {allSelected ? "Desmarcar" : "Selecionar tudo"}
-            <span className="kbd">Ctrl+A</span>
-          </button>
         </div>
       </div>
 
@@ -107,19 +98,10 @@ export function ActivityList({
           <EmptyState icon="file" title="Nenhuma atividade" copy="Esta turma não tem atividades correspondentes." />
         ) : null}
         {!loading
-          ? filtered.map((activity, index) => {
-              const selected = selectedIds.includes(activity.id);
-              const cursor = keyboardActive && index === cursorIndex;
+          ? filtered.map((activity) => {
+              const disabled = busy || !course;
               return (
-                <div
-                  key={activity.id}
-                  className={`assign-row ${selected ? "selected" : ""} ${cursor ? "cursor" : ""}`}
-                  onClick={() => onToggle(activity.id)}
-                  role="checkbox"
-                  aria-checked={selected}
-                  tabIndex={0}
-                >
-                  <span className="checkbox">{selected ? <AppIcon name="check" /> : null}</span>
+                <div key={activity.id} className="assign-row">
                   <div className="a-main">
                     <div className="ttl">{activity.title}</div>
                     <div className="meta-row">
@@ -135,6 +117,24 @@ export function ActivityList({
                     <span className={`badge ${activity.state === "PUBLISHED" ? "badge-pub" : "badge-draft"}`}>
                       {activity.state === "PUBLISHED" ? "Publicado" : activity.state}
                     </span>
+                    <div className="assign-actions">
+                      <button className="btn btn-primary" onClick={() => onGrade(activity)} disabled={disabled}>
+                        <AppIcon name="sparkle" />
+                        Corrigir com IA
+                      </button>
+                      <button className="icon-text-btn" onClick={() => onPreview(activity)} disabled={disabled}>
+                        <AppIcon name="eye" />
+                        Prévia
+                      </button>
+                      <button
+                        className="icon-text-btn"
+                        onClick={() => onDownload(activity)}
+                        disabled={disabled || deliveryMode === "zip"}
+                      >
+                        <AppIcon name={deliveryMode === "zip" ? "archive" : "folderOpen"} />
+                        Baixar
+                      </button>
+                    </div>
                   </div>
                 </div>
               );

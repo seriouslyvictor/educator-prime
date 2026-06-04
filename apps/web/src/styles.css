@@ -288,6 +288,7 @@ button:disabled {
 
 .account-copy {
   min-width: 0;
+  flex: 1;
 }
 
 .acct-name {
@@ -308,6 +309,22 @@ button:disabled {
   color: var(--success);
 }
 
+.logout-btn {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--muted);
+}
+
+.logout-btn:hover {
+  color: var(--danger);
+}
+
 .main {
   position: relative;
   min-width: 0;
@@ -317,7 +334,7 @@ button:disabled {
 
 .workspace {
   display: grid;
-  height: calc(100vh - 82px);
+  height: 100vh;
   grid-template-columns: 280px minmax(0, 1fr);
 }
 
@@ -479,7 +496,7 @@ button:disabled {
 
 .assign-row {
   gap: 12px;
-  min-height: var(--row-h);
+  min-height: 72px;
   margin-bottom: 8px;
   padding: 9px 12px;
   border: 1px solid var(--border);
@@ -557,6 +574,18 @@ button:disabled {
   flex: none;
   align-items: center;
   gap: 8px;
+}
+
+.assign-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.assign-actions .btn,
+.assign-actions .icon-text-btn {
+  min-height: 32px;
 }
 
 .badge {
