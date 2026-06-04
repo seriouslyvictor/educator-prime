@@ -58,7 +58,13 @@ class GoogleProvider:
     def account_profile(self) -> AccountProfile:
         return AccountProfile(name=None, email=None, picture=None)
 
+    def get_course(self, course_id: str) -> ClassroomCourse:
+        raise NotImplementedError
+
     def list_courses(self) -> list[ClassroomCourse]:
+        raise NotImplementedError
+
+    def get_activity(self, course_id: str, activity_id: str) -> ClassroomActivity:
         raise NotImplementedError
 
     def list_activities(self, course_id: str) -> list[ClassroomActivity]:
@@ -219,7 +225,6 @@ class GoogleApiProvider(GoogleProvider):
         )
         self.drive = build("drive", "v3", credentials=credentials, cache_discovery=False)
         self._profile_cache: dict[str, tuple[str | None, str | None]] = {}
-        self._roster_cache: dict[str, dict[str, tuple[str | None, str | None]]] = {}
 
     def account_profile(self) -> AccountProfile:
         log_event(logger, "google.account_profile.start")
@@ -280,6 +285,18 @@ class GoogleApiProvider(GoogleProvider):
                 )
                 return courses
 
+    def get_course(self, course_id: str) -> ClassroomCourse:
+        log_event(logger, "google.course.get.start", course_id=course_id)
+        course = self.classroom.courses().get(id=course_id).execute()
+        row = ClassroomCourse(
+            id=course["id"],
+            name=course.get("name", "Untitled course"),
+            section=course.get("section"),
+            course_state=course.get("courseState", "ACTIVE"),
+        )
+        log_event(logger, "google.course.get.complete", course=row.__dict__)
+        return row
+
     def list_activities(self, course_id: str) -> list[ClassroomActivity]:
         log_event(logger, "google.activities.start", course_id=course_id)
         activities: list[ClassroomActivity] = []
@@ -327,6 +344,25 @@ class GoogleApiProvider(GoogleProvider):
                     activities=[activity.__dict__ for activity in activities],
                 )
                 return activities
+
+    def get_activity(self, course_id: str, activity_id: str) -> ClassroomActivity:
+        log_event(logger, "google.activity.get.start", course_id=course_id, activity_id=activity_id)
+        activity = (
+            self.classroom.courses()
+            .courseWork()
+            .get(courseId=course_id, id=activity_id)
+            .execute()
+        )
+        row = ClassroomActivity(
+            id=activity["id"],
+            course_id=course_id,
+            title=activity.get("title", "Untitled activity"),
+            work_type=activity.get("workType", "ASSIGNMENT"),
+            state=activity.get("state", "PUBLISHED"),
+            due_label=_due_label(activity),
+        )
+        log_event(logger, "google.activity.get.complete", activity=row.__dict__)
+        return row
 
     def list_submission_files(
         self, course_id: str, activity_ids: list[str] | None = None
@@ -438,48 +474,8 @@ class GoogleApiProvider(GoogleProvider):
     def _student_identity(
         self, course_id: str, user_id: str
     ) -> tuple[str | None, str | None]:
-        roster = self._course_roster(course_id)
-        if user_id in roster:
-            log_event(logger, "google.student_identity.roster_hit", course_id=course_id, user_id=user_id, identity=roster[user_id])
-            return roster[user_id]
-        log_event(logger, "google.student_identity.profile_fallback", course_id=course_id, user_id=user_id)
+        log_event(logger, "google.student_identity.profile", course_id=course_id, user_id=user_id)
         return self._profile(user_id)
-
-    def _course_roster(self, course_id: str) -> dict[str, tuple[str | None, str | None]]:
-        if course_id in self._roster_cache:
-            log_event(logger, "google.roster.cache_hit", course_id=course_id, count=len(self._roster_cache[course_id]))
-            return self._roster_cache[course_id]
-
-        log_event(logger, "google.roster.fetch.start", course_id=course_id)
-        roster: dict[str, tuple[str | None, str | None]] = {}
-        page_token = None
-        try:
-            while True:
-                response = (
-                    self.classroom.courses()
-                    .students()
-                    .list(courseId=course_id, pageSize=100, pageToken=page_token)
-                    .execute()
-                )
-                for student in response.get("students", []):
-                    user_id = student.get("userId")
-                    profile = student.get("profile", {})
-                    if not user_id:
-                        continue
-                    roster[user_id] = (
-                        profile.get("emailAddress"),
-                        profile.get("name", {}).get("fullName"),
-                    )
-                page_token = response.get("nextPageToken")
-                if not page_token:
-                    break
-        except Exception:
-            log_error(logger, "google.roster.fetch.failed", course_id=course_id)
-            roster = {}
-
-        self._roster_cache[course_id] = roster
-        log_event(logger, "google.roster.fetch.complete", course_id=course_id, count=len(roster), roster=roster)
-        return roster
 
     def _drive_metadata(self, file_id: str) -> dict:
         log_event(logger, "google.drive.metadata.start", file_id=file_id)
@@ -593,9 +589,23 @@ class MockGoogleProvider(GoogleProvider):
         log_event(logger, "mock.account_profile", profile=profile.__dict__)
         return profile
 
+    def get_course(self, course_id: str) -> ClassroomCourse:
+        for course in self.courses:
+            if course.id == course_id:
+                log_event(logger, "mock.course.get", course=course.__dict__)
+                return course
+        raise KeyError(course_id)
+
     def list_courses(self) -> list[ClassroomCourse]:
         log_event(logger, "mock.courses", count=len(self.courses), courses=[course.__dict__ for course in self.courses])
         return self.courses
+
+    def get_activity(self, course_id: str, activity_id: str) -> ClassroomActivity:
+        for activity in self.activities:
+            if activity.course_id == course_id and activity.id == activity_id:
+                log_event(logger, "mock.activity.get", activity=activity.__dict__)
+                return activity
+        raise KeyError(activity_id)
 
     def list_activities(self, course_id: str) -> list[ClassroomActivity]:
         rows = [activity for activity in self.activities if activity.course_id == course_id]

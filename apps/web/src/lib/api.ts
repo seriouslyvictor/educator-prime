@@ -54,7 +54,10 @@ export const api = {
     }),
   fileUrl: (jobId: string, fileId: string) =>
     `${API_BASE}/api/exports/${jobId}/files/${fileId}/content`,
-  gradingQueue: () => request<GradingQueueItem[]>("/api/grading/queue"),
+  gradingQueue: (courseId: string, activityId: string) =>
+    request<GradingQueueItem[]>(
+      `/api/grading/queue?course_id=${encodeURIComponent(courseId)}&activity_id=${encodeURIComponent(activityId)}`,
+    ),
   createGradingJob: (payload: {
     course_id: string;
     activity_id: string;

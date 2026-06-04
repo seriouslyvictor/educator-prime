@@ -583,53 +583,45 @@ def stream_export_file(
 
 @app.get("/api/grading/queue", response_model=list[GradingQueueItem])
 def grading_queue(
+    course_id: str | None = None,
+    activity_id: str | None = None,
     session: Session = Depends(get_session),
     provider: GoogleProvider = Depends(provider_dependency),
 ) -> list[GradingQueueItem]:
-    log_event(logger, "grading.queue.start")
-    items: list[GradingQueueItem] = []
-    active_courses = [
-        course for course in provider.list_courses() if course.course_state != "ARCHIVED"
-    ]
-    for course in active_courses:
-        for activity in provider.list_activities(course.id):
-            files = provider.list_submission_files(course.id, [activity.id])
-            log_event(
-                logger,
-                "grading.queue.activity",
-                course_id=course.id,
-                course_name=course.name,
-                activity_id=activity.id,
-                activity_title=activity.title,
-                submission_count=len(files),
-            )
-            latest_job = session.exec(
-                select(GradingJob)
-                .where(GradingJob.course_id == course.id)
-                .where(GradingJob.activity_id == activity.id)
-                .order_by(GradingJob.created_at.desc())
-            ).first()
-            status = "ready"
-            if latest_job:
-                status = latest_job.status.value
-            items.append(
-                GradingQueueItem(
-                    course_id=course.id,
-                    course_name=course.name,
-                    activity_id=activity.id,
-                    activity_title=activity.title,
-                    due_label=activity.due_label,
-                    submission_count=len(files),
-                    status=status,
-                    latest_job_id=latest_job.id if latest_job else None,
-                    reviewed_submissions=latest_job.reviewed_submissions
-                    if latest_job
-                    else 0,
-                    total_submissions=latest_job.total_submissions if latest_job else len(files),
-                )
-            )
-    log_event(logger, "grading.queue.complete", item_count=len(items))
-    return items
+    log_event(logger, "grading.queue.start", course_id=course_id, activity_id=activity_id)
+    if not course_id or not activity_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Grading queue requires course_id and activity_id; global scans are disabled.",
+        )
+
+    try:
+        course = provider.get_course(course_id)
+        activity = provider.get_activity(course_id, activity_id)
+        files = provider.list_submission_files(course_id, [activity_id])
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail="Course or activity not found.") from error
+
+    latest_job = session.exec(
+        select(GradingJob)
+        .where(GradingJob.course_id == course.id)
+        .where(GradingJob.activity_id == activity.id)
+        .order_by(GradingJob.created_at.desc())
+    ).first()
+    item = GradingQueueItem(
+        course_id=course.id,
+        course_name=course.name,
+        activity_id=activity.id,
+        activity_title=activity.title,
+        due_label=activity.due_label,
+        submission_count=len(files),
+        status=latest_job.status.value if latest_job else "ready",
+        latest_job_id=latest_job.id if latest_job else None,
+        reviewed_submissions=latest_job.reviewed_submissions if latest_job else 0,
+        total_submissions=latest_job.total_submissions if latest_job else len(files),
+    )
+    log_event(logger, "grading.queue.complete", item=item.model_dump())
+    return [item]
 
 
 @app.post("/api/grading/jobs", response_model=GradingJobRead)
@@ -647,22 +639,31 @@ def create_grading_job(
         teacher_loop=payload.teacher_loop,
         criteria_count=len(payload.criteria or []),
     )
-    course = next(
-        (course for course in provider.list_courses() if course.id == payload.course_id),
-        None,
-    )
-    if course is None or course.course_state == "ARCHIVED":
+    try:
+        course = provider.get_course(payload.course_id)
+        activity = provider.get_activity(payload.course_id, payload.activity_id)
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail="Course or activity not found.") from error
+    if course.course_state == "ARCHIVED":
         raise HTTPException(status_code=404, detail="Active course not found.")
-    activity = next(
-        (
-            activity
-            for activity in provider.list_activities(course.id)
-            if activity.id == payload.activity_id
-        ),
-        None,
+    session.merge(
+        Course(
+            id=course.id,
+            name=course.name,
+            section=course.section,
+            course_state=course.course_state,
+        )
     )
-    if activity is None:
-        raise HTTPException(status_code=404, detail="Activity not found.")
+    session.merge(
+        Activity(
+            id=activity.id,
+            course_id=activity.course_id,
+            title=activity.title,
+            work_type=activity.work_type,
+            state=activity.state,
+            due_label=activity.due_label,
+        )
+    )
 
     job = GradingJob(
         id=str(uuid4()),

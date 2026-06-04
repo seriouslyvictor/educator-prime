@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ConnectView, InlineError } from "./components/ConnectView";
 import { DoneView } from "./components/DoneView";
 import { DryRunDrawer } from "./components/DryRunDrawer";
-import { GraderAudit, GraderQueue, GraderReview, GraderSetup, GraderWrap } from "./components/Grader";
+import { GraderAudit, GraderReview, GraderSetup, GraderWrap } from "./components/Grader";
 import { HistoryView } from "./components/HistoryView";
 import { ProgressView, type ProgressLogItem } from "./components/ProgressView";
 import { Rail } from "./components/Rail";
@@ -67,7 +67,6 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState({ completed: 0, total: 0, currentPath: "" });
   const [progressLog, setProgressLog] = useState<ProgressLogItem[]>([]);
-  const [gradingQueue, setGradingQueue] = useState<GradingQueueItem[]>([]);
   const [selectedGradingItem, setSelectedGradingItem] = useState<GradingQueueItem | null>(null);
   const [gradingJob, setGradingJob] = useState<GradingJob | null>(null);
   const [privacyAudit, setPrivacyAudit] = useState<PrivacyAudit | null>(null);
@@ -182,17 +181,6 @@ export function App() {
     }
   }
 
-  async function loadGradingQueue() {
-    setGraderBusy(true);
-    setError(null);
-    try {
-      setGradingQueue(await api.gradingQueue());
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Falha ao carregar a fila de correção.");
-    } finally {
-      setGraderBusy(false);
-    }
-  }
 
   async function connectClassroom() {
     setBusy(true);
@@ -221,7 +209,6 @@ export function App() {
       setActivities([]);
       setSelectedCourseId("");
       setSelectedActivityIds([]);
-      setGradingQueue([]);
       setSelectedGradingItem(null);
       setGradingJob(null);
       setPrivacyAudit(null);
@@ -371,7 +358,6 @@ export function App() {
       const audit = await api.runPrivacyAudit(created.id);
       setPrivacyAudit(audit);
       setView("graderAudit");
-      void loadGradingQueue();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Falha ao executar a auditoria de privacidade.");
     } finally {
@@ -401,7 +387,6 @@ export function App() {
       setGradingJob(drafted);
       setActiveGradingSubmissionId(drafted.submissions[0]?.id ?? null);
       setView("graderReview");
-      void loadGradingQueue();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Falha ao gerar rascunhos de notas.");
     } finally {
@@ -548,29 +533,12 @@ export function App() {
 
         {view === "history" ? <HistoryView items={history} onBack={() => setView("workspace")} /> : null}
 
-        {view === "graderQueue" ? (
-          <>
-            <GraderQueue
-              items={gradingQueue}
-              loading={graderBusy}
-              onRefresh={() => void loadGradingQueue()}
-              onSetup={(item) => {
-                setSelectedGradingItem(item);
-                setView("graderSetup");
-              }}
-              onOpenJob={(jobId) => void openGradingJob(jobId)}
-              onDownloadInstead={() => setView("workspace")}
-            />
-            {error ? <InlineError message={error} /> : null}
-          </>
-        ) : null}
-
         {view === "graderSetup" && selectedGradingItem ? (
           <>
             <GraderSetup
               item={selectedGradingItem}
               busy={graderBusy}
-              onBack={() => setView("graderQueue")}
+              onBack={() => setView("workspace")}
               onStart={(payload) => void runGradingPrivacyAudit(payload)}
             />
             {error ? <InlineError message={error} /> : null}
@@ -597,10 +565,7 @@ export function App() {
               busy={graderBusy}
               activeSubmissionId={activeGradingSubmissionId}
               onActiveSubmission={setActiveGradingSubmissionId}
-              onBack={() => {
-                setView("graderQueue");
-                void loadGradingQueue();
-              }}
+              onBack={() => setView("workspace")}
               onWrap={() => setView("graderWrap")}
               onAccept={(submission, score, feedback) =>
                 void acceptGradingDraft(submission, score, feedback)
@@ -617,10 +582,7 @@ export function App() {
               job={gradingJob}
               busy={graderBusy}
               onBack={() => setView("graderReview")}
-              onQueue={() => {
-                setView("graderQueue");
-                void loadGradingQueue();
-              }}
+              onQueue={() => setView("workspace")}
               onDeleteCache={() => void deleteGradingCache()}
             />
             {error ? <InlineError message={error} /> : null}
@@ -630,3 +592,4 @@ export function App() {
     </div>
   );
 }
+
