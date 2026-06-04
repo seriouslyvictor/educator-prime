@@ -1,4 +1,5 @@
 import os
+import logging
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -121,6 +122,34 @@ def test_privacy_audit_endpoint_returns_safe_report_shape(tmp_path) -> None:
         "submission.png",
     }
     assert all("diagram" not in row["redacted_source_name"] for row in body["rows"])
+
+
+def test_submission_file_logs_do_not_expose_student_identity(tmp_path, caplog) -> None:
+    get_settings().grading_cache_path = str(tmp_path / "grading")
+    with caplog.at_level(logging.INFO):
+        with TestClient(app) as client:
+            job = client.post(
+                "/api/grading/jobs",
+                json={
+                    "course_id": "course-1",
+                    "activity_id": "activity-1",
+                    "rubric_mode": "infer",
+                    "teacher_loop": "approve",
+                },
+            ).json()
+            response = client.post(f"/api/grading/jobs/{job['id']}/privacy-audit")
+
+    assert response.status_code == 200
+    submission_file_messages = [
+        record.message
+        for record in caplog.records
+        if "submission_files" in record.message or "files_loaded" in record.message
+    ]
+    assert submission_file_messages
+    rendered = "\n".join(submission_file_messages)
+    assert "ana.silva@example.edu" not in rendered
+    assert "Ana Silva" not in rendered
+    assert "'student_email': '<redacted>'" in rendered
 
 
 def test_privacy_audit_exports_safe_csv_and_json(tmp_path) -> None:

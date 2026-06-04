@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     llm_model_catalog_max_age_hours: int = 24
     log_level: str = "INFO"
     log_rich: bool = True
+    log_format: Literal["text", "json"] = "text"
     log_payload_previews: bool = True
     log_preview_chars: int = 1000
 

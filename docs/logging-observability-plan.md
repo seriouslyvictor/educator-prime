@@ -1,6 +1,27 @@
 # Implementation Plan: Logging & cache observability
 
-> Status: **Planned — not yet started.**
+## Progress log
+
+- [x] Synced latest `origin/main` and created branch `logging-observability`.
+- [x] Phase 0 safety baseline: `CD_GOOGLE_PROVIDER=mock uv run --extra dev pytest -q`
+  passed with 46 tests before implementation. Running without the mock-provider
+  override selected the real Google provider locally and failed on missing
+  `.tokens/google-user.json`.
+- [x] Phase 0 taxonomy: documented in `observability.py` module docstring.
+- [x] Phase 1 formatter: plain text now includes timestamp, level, and logger;
+  `CD_LOG_FORMAT=json` emits JSON log records.
+- [x] Phase 2 redaction and bounded dumps: `safe_fields(...)` redacts student
+  identity/token-like fields, bounds nested values, and replaces raw object dumps
+  at production call sites.
+- [x] Phase 3 cache instrumentation: cache events use the shared
+  `cache.hit` / `cache.miss` pair with `cache` and `key` fields.
+- [x] Phase 4 summaries and DEBUG tier: grading draft and privacy-audit
+  completion logs include file/scrub cache hit/miss counters; noisy lifecycle
+  events moved to DEBUG.
+- [x] Verification: focused logging tests passed, then full backend suite passed
+  with `CD_GOOGLE_PROVIDER=mock`: 52 passed.
+
+> Status: **Implemented through Phase 4; Phase 5 request correlation left optional.**
 > Scope: `apps/api` backend logging (`observability.py` + ~168 call sites).
 > Goal: make cache hit/miss measurable, keep PII out of logs, and make output
 > readable and operable by default.

@@ -9,7 +9,7 @@ from sqlmodel import Session, select
 from .google_provider import GoogleProvider, SubmissionFile
 from .grading import cache_submission_file, scrub_submission_cached
 from .models import GradingJob, GradingSubmission, PrivacyAudit, PrivacyAuditRow
-from .observability import get_logger, log_event
+from .observability import get_logger, log_debug, log_event, safe_fields
 from .privacy import pseudonym_for_submission
 from .schemas import PrivacyAuditRead, PrivacyAuditRowRead
 
@@ -46,17 +46,29 @@ def run_privacy_audit(
         audit_id=audit.id,
         job_id=job.id,
         count=len(files),
-        files=[file.__dict__ for file in files],
+        files=[safe_fields(file) for file in files],
     )
+    file_cache_hits = 0
+    file_cache_misses = 0
+    scrub_cache_hits = 0
+    scrub_cache_misses = 0
     for file in files:
-        log_event(logger, "privacy_audit.row.start", audit_id=audit.id, file=file.__dict__)
+        log_debug(logger, "privacy_audit.row.start", audit_id=audit.id, file=safe_fields(file))
         submission = _submission_for_audit(session, job, file)
         cache_file = cache_submission_file(
             session, job, submission, file, provider, commit=False
         )
+        if getattr(cache_file, "_cache_hit", False):
+            file_cache_hits += 1
+        else:
+            file_cache_misses += 1
         cached_scrub = scrub_submission_cached(
             session, job, submission, cache_file, commit=False
         )
+        if cached_scrub.cache_hit:
+            scrub_cache_hits += 1
+        else:
+            scrub_cache_misses += 1
         extracted = cached_scrub.extracted
         scrubbed = cached_scrub.scrubbed
         remaining_hits: list[str] = []
@@ -124,6 +136,10 @@ def run_privacy_audit(
         redacted=audit.redacted_files,
         blocked=audit.blocked_files,
         high_risk=audit.high_risk_files,
+        file_cache_hits=file_cache_hits,
+        file_cache_misses=file_cache_misses,
+        scrub_cache_hits=scrub_cache_hits,
+        scrub_cache_misses=scrub_cache_misses,
     )
     return audit
 

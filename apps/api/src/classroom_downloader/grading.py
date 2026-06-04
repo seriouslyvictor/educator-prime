@@ -27,7 +27,16 @@ from .models import (
     GradingStatus,
     GradingSubmission,
 )
-from .observability import get_logger, log_error, log_event, text_preview
+from .observability import (
+    get_logger,
+    log_cache_hit,
+    log_cache_miss,
+    log_debug,
+    log_error,
+    log_event,
+    safe_fields,
+    text_preview,
+)
 from .privacy import PrivacyReport, ScrubbedSubmission, scrub_submission
 from .schemas import (
     GradingCriterionInput,
@@ -177,11 +186,23 @@ def draft_grading_job(
     session.commit()
 
     files = provider.list_submission_files(job.course_id, [job.activity_id])
-    log_event(logger, "grading.draft.files_loaded", job_id=job.id, count=len(files), files=[file.__dict__ for file in files])
+    log_event(logger, "grading.draft.files_loaded", job_id=job.id, count=len(files), files=[safe_fields(file) for file in files])
+    file_cache_hits = 0
+    file_cache_misses = 0
+    scrub_cache_hits = 0
+    scrub_cache_misses = 0
     for file in files:
         submission = _submission_for_file(session, job, file)
         cache_file = cache_submission_file(session, job, submission, file, provider)
-        _draft_submission(session, job, submission, cache_file, grading_engine)
+        if getattr(cache_file, "_cache_hit", False):
+            file_cache_hits += 1
+        else:
+            file_cache_misses += 1
+        cached_scrub = _draft_submission(session, job, submission, cache_file, grading_engine)
+        if cached_scrub and cached_scrub.cache_hit:
+            scrub_cache_hits += 1
+        elif cached_scrub:
+            scrub_cache_misses += 1
 
     _refresh_counts(session, job)
     job.status = GradingStatus.completed if job.reviewed_submissions == job.total_submissions and job.total_submissions else GradingStatus.reviewing
@@ -197,6 +218,10 @@ def draft_grading_job(
         total_submissions=job.total_submissions,
         reviewed_submissions=job.reviewed_submissions,
         flagged_submissions=job.flagged_submissions,
+        file_cache_hits=file_cache_hits,
+        file_cache_misses=file_cache_misses,
+        scrub_cache_hits=scrub_cache_hits,
+        scrub_cache_misses=scrub_cache_misses,
     )
     return job
 
@@ -269,9 +294,10 @@ def cache_submission_file(
         and _aware(existing.expires_at) > now
         and Path(existing.cached_path).exists()
     ):
-        log_event(
+        log_cache_hit(
             logger,
-            "grading.cache.hit",
+            "grading.file",
+            file.source_file_id,
             job_id=job.id,
             submission_id=submission.id,
             cache_id=existing.id,
@@ -282,11 +308,13 @@ def cache_submission_file(
             content_hash=existing.content_hash,
             expires_at=existing.expires_at,
         )
+        existing._cache_hit = True
         return existing
 
-    log_event(
+    log_cache_miss(
         logger,
-        "grading.cache.miss",
+        "grading.file",
+        file.source_file_id,
         job_id=job.id,
         submission_id=submission.id,
         source_file_id=file.source_file_id,
@@ -335,6 +363,7 @@ def cache_submission_file(
         content_hash=digest,
         expires_at=row.expires_at,
     )
+    row._cache_hit = False
     return row
 
 
@@ -372,9 +401,10 @@ def scrub_submission_cached(
                 flags=json.loads(existing.privacy_flags_json),
             ),
         )
-        log_event(
+        log_cache_hit(
             logger,
-            "grading.scrub_cache.hit",
+            "grading.scrub",
+            cache_file.content_hash,
             job_id=job.id,
             submission_id=submission.id,
             cache_id=existing.id,
@@ -384,6 +414,14 @@ def scrub_submission_cached(
         )
         return CachedScrubbedSubmission(extracted, scrubbed, cache_hit=True)
 
+    log_cache_miss(
+        logger,
+        "grading.scrub",
+        cache_file.content_hash,
+        job_id=job.id,
+        submission_id=submission.id,
+        content_hash=cache_file.content_hash,
+    )
     extracted = extract_submission_content(cache_file)
     scrubbed = scrub_submission(session, job, submission, extracted)
     row = GradingScrubCache(
@@ -500,8 +538,8 @@ def _draft_submission(
     cache_file: GradingFileCache,
     grading_engine: GradingEngine,
     reset_review: bool = False,
-) -> None:
-    log_event(
+) -> CachedScrubbedSubmission:
+    log_debug(
         logger,
         "grading.submission.draft.start",
         job_id=job.id,
@@ -551,10 +589,10 @@ def _draft_submission(
         submission.error = attempt.safe_error
         submission.updated_at = datetime.now(UTC)
         session.add(submission)
-        return
+        return cached_scrub
 
     try:
-        log_event(
+        log_debug(
             logger,
             "grading.submission.engine_call.start",
             job_id=job.id,
@@ -604,7 +642,7 @@ def _draft_submission(
         submission.error = attempt.safe_error
         submission.updated_at = datetime.now(UTC)
         session.add(submission)
-        return
+        return cached_scrub
 
     flags = sorted(set([*scrubbed.report.flags, *result.flags]))
     attempt_metadata = _attempt_metadata(grading_engine)
@@ -659,6 +697,7 @@ def _draft_submission(
         flag=submission.flag,
         error=submission.error,
     )
+    return cached_scrub
 
 
 def _record_attempt(

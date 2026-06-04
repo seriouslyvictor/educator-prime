@@ -1,4 +1,5 @@
 import os
+import logging
 
 os.environ["CD_DATABASE_URL"] = "sqlite:///:memory:"
 os.environ["CD_GOOGLE_PROVIDER"] = "mock"
@@ -19,6 +20,19 @@ def test_courses_exclude_archived() -> None:
     course_ids = {course["id"] for course in response.json()}
     assert "course-1" in course_ids
     assert "course-archived" not in course_ids
+
+
+def test_course_cache_logs_standard_hit_miss_pair(caplog) -> None:
+    with caplog.at_level(logging.INFO):
+        with TestClient(app) as client:
+            first = client.get("/api/courses?refresh=true")
+            second = client.get("/api/courses")
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    messages = [record.message for record in caplog.records]
+    assert any("cache.miss cache='classroom.courses' key='active'" in message for message in messages)
+    assert any("cache.hit cache='classroom.courses' key='active'" in message for message in messages)
 
 
 def test_export_creates_email_first_manifest_paths() -> None:

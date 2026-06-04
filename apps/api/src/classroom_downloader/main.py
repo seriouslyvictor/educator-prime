@@ -45,7 +45,17 @@ from .models import (
     GradingScrubCache,
 )
 from .naming import build_output_path
-from .observability import configure_logging, get_logger, log_error, log_event, log_warning
+from .observability import (
+    configure_logging,
+    get_logger,
+    log_cache_hit,
+    log_cache_miss,
+    log_debug,
+    log_error,
+    log_event,
+    log_warning,
+    safe_fields,
+)
 from .privacy_audit import (
     latest_privacy_audit,
     privacy_audit_csv,
@@ -355,8 +365,9 @@ def list_courses(
     log_event(logger, "classroom.courses.start")
     cached_rows = session.exec(select(Course).where(Course.course_state != "ARCHIVED")).all()
     if cached_rows and not refresh and all(_is_fresh(row.fetched_at, settings.classroom_cache_ttl_minutes) for row in cached_rows):
-        log_event(logger, "classroom.courses.cache_hit", stored_count=len(cached_rows))
+        log_cache_hit(logger, "classroom.courses", "active", stored_count=len(cached_rows))
         return cached_rows
+    log_cache_miss(logger, "classroom.courses", "active", stored_count=len(cached_rows))
     try:
         active_courses = [
             course for course in provider.list_courses() if course.course_state != "ARCHIVED"
@@ -373,9 +384,9 @@ def list_courses(
         raise
     log_event(
         logger,
-        "classroom.courses.provider_result",
+        "classroom.courses.complete",
         active_count=len(active_courses),
-        courses=[course.__dict__ for course in active_courses],
+        courses=[safe_fields(course) for course in active_courses],
     )
     for course in active_courses:
         session.merge(
@@ -404,8 +415,9 @@ def list_activities(
     log_event(logger, "classroom.activities.start", course_id=course_id)
     cached_rows = session.exec(select(Activity).where(Activity.course_id == course_id)).all()
     if cached_rows and not refresh and all(_is_fresh(row.fetched_at, settings.classroom_cache_ttl_minutes) for row in cached_rows):
-        log_event(logger, "classroom.activities.cache_hit", course_id=course_id, stored_count=len(cached_rows))
+        log_cache_hit(logger, "classroom.activities", course_id, course_id=course_id, stored_count=len(cached_rows))
         return cached_rows
+    log_cache_miss(logger, "classroom.activities", course_id, course_id=course_id, stored_count=len(cached_rows))
     try:
         activities = provider.list_activities(course_id)
     except Exception as error:
@@ -420,10 +432,10 @@ def list_activities(
         raise
     log_event(
         logger,
-        "classroom.activities.provider_result",
+        "classroom.activities.complete",
         course_id=course_id,
         count=len(activities),
-        activities=[activity.__dict__ for activity in activities],
+        activities=[safe_fields(activity) for activity in activities],
     )
     if not activities:
         raise HTTPException(status_code=404, detail="Course not found or has no activities.")
@@ -473,7 +485,7 @@ def create_export(
         course_id=course.id,
         activity_ids=payload.activity_ids,
         file_count=len(files),
-        files=[file.__dict__ for file in files],
+        files=[safe_fields(file) for file in files],
     )
     used_paths: set[str] = set()
     job = ExportJob(
@@ -502,7 +514,7 @@ def create_export(
                 logger,
                 "export.create.missing_activity",
                 job_id=job.id,
-                file=file.__dict__,
+                file=safe_fields(submission_file),
             )
             continue
 
@@ -603,6 +615,7 @@ def stream_export_file(
     cached_response = _export_file_cache_response(request, file)
     if cached_response is not None:
         return cached_response
+    log_cache_miss(logger, "export.file.stream", file.id, file_id=file.id)
     try:
         content, media_type = provider.get_file_content(file.source_file_id)
     except KeyError as error:
@@ -1027,12 +1040,13 @@ def _export_file_cache_response(request: Request, file: ExportFile) -> Response 
     etag = f'"{file.content_hash}"'
     headers = _cache_headers(etag, settings.export_cache_ttl_hours * 3600)
     if etag in _if_none_match(request):
-        log_event(logger, "export.file.stream.not_modified", file_id=file.id)
+        log_debug(logger, "export.file.stream.not_modified", file_id=file.id)
         return Response(status_code=304, headers=headers)
     content = path.read_bytes()
-    log_event(
+    log_cache_hit(
         logger,
-        "export.file.stream.cache_hit",
+        "export.file.stream",
+        file.id,
         file_id=file.id,
         cached_path=file.cached_path,
         byte_size=len(content),
