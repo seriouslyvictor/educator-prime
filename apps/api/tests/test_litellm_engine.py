@@ -151,3 +151,53 @@ def test_engine_calls_litellm_with_scrubbed_payload(monkeypatch) -> None:
         "completion_tokens": 40,
         "total_tokens": 140,
     }
+
+
+def test_engine_uses_json_schema_response_format_when_supported(monkeypatch) -> None:
+    captured = {}
+
+    def fake_completion(**kwargs):
+        captured.update(kwargs)
+
+        class Choice:
+            message = {
+                "content": json.dumps(
+                    {
+                        "score": 91,
+                        "confidence": 0.9,
+                        "feedback": "Strong work.",
+                        "criterion_notes": [],
+                        "flags": [],
+                    }
+                )
+            }
+
+        class Response:
+            choices = [Choice()]
+            usage = {"prompt_tokens": 100, "completion_tokens": 40, "total_tokens": 140}
+
+        return Response()
+
+    monkeypatch.setattr("classroom_downloader.litellm_engine.litellm.completion", fake_completion)
+    engine = LiteLlmGradingEngine(model=model_entry(), timeout_seconds=30, max_retries=1)
+
+    engine.grade(
+        GradingEngineRequest(
+            job_id="job-1",
+            submission_id="submission-1",
+            activity_title="Essay Draft",
+            rubric_mode="brief",
+            teacher_loop="approve",
+            rubric_text=None,
+            criteria=[],
+            student_label="student_001",
+            source_label="submission_001",
+            mime_type="text/plain",
+            content="This is scrubbed work.",
+        )
+    )
+
+    response_format = captured["response_format"]
+    assert response_format["type"] == "json_schema"
+    assert response_format["json_schema"]["strict"] is True
+    assert "score" in response_format["json_schema"]["schema"]["properties"]

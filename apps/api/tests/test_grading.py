@@ -608,7 +608,13 @@ def test_litellm_engine_attempt_metadata_is_persisted(monkeypatch, tmp_path) -> 
 
         class Response:
             choices = [Choice()]
-            usage = {"prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150}
+            usage = {
+                "prompt_tokens": 100,
+                "completion_tokens": 50,
+                "total_tokens": 150,
+                "cache_read_input_tokens": 25,
+                "cache_creation_input_tokens": 10,
+            }
 
         return Response()
 
@@ -645,6 +651,8 @@ def test_litellm_engine_attempt_metadata_is_persisted(monkeypatch, tmp_path) -> 
     assert submission["ai_prompt_tokens"] == 100
     assert submission["ai_completion_tokens"] == 50
     assert submission["ai_token_count"] == 150
+    assert submission["ai_cached_prompt_tokens"] == 25
+    assert submission["ai_cache_write_tokens"] == 10
     assert submission["ai_cost_cents"] == 0.03
 
 

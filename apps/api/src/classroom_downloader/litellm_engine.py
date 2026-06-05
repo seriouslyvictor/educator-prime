@@ -9,6 +9,7 @@ import litellm
 from .grading_engine import GradingEngineRequest, GradingEngineResult
 from .llm_catalog import LlmModelEntry
 from .observability import get_logger, log_event
+from .settings import get_settings
 
 
 logger = get_logger(__name__)
@@ -72,7 +73,7 @@ class LiteLlmGradingEngine:
             timeout=self.timeout_seconds,
             num_retries=self.max_retries,
             max_tokens=self.max_output_tokens,
-            response_format={"type": "json_object"},
+            response_format=_response_format(self.catalog_model),
         )
         self.last_latency_ms = int((time.monotonic() - started) * 1000)
         self.last_usage = _usage_dict(getattr(response, "usage", None))
@@ -175,6 +176,52 @@ def _build_messages(request: GradingEngineRequest) -> list[dict[str, str]]:
     ]
 
 
+def _response_format(model: LlmModelEntry) -> dict[str, Any]:
+    settings = get_settings()
+    if (
+        settings.grading_structured_output == "auto"
+        and model.supports_response_schema
+    ):
+        litellm.enable_json_schema_validation = True
+        return {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "grading_draft",
+                "strict": True,
+                "schema": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "score": {"type": ["number", "null"], "minimum": 0, "maximum": 100},
+                        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+                        "feedback": {"type": "string", "minLength": 1},
+                        "criterion_notes": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "additionalProperties": False,
+                                "properties": {
+                                    "criterion": {"type": "string"},
+                                    "note": {"type": "string"},
+                                },
+                                "required": ["criterion", "note"],
+                            },
+                        },
+                        "flags": {"type": "array", "items": {"type": "string"}},
+                    },
+                    "required": [
+                        "score",
+                        "confidence",
+                        "feedback",
+                        "criterion_notes",
+                        "flags",
+                    ],
+                },
+            },
+        }
+    return {"type": "json_object"}
+
+
 def _response_content(response: Any) -> str:
     choices = _get_field(response, "choices")
     if not isinstance(choices, list) or not choices:
@@ -189,7 +236,13 @@ def _response_content(response: Any) -> str:
 
 def _usage_dict(usage: Any) -> dict[str, int]:
     result: dict[str, int] = {}
-    for key in ("prompt_tokens", "completion_tokens", "total_tokens"):
+    for key in (
+        "prompt_tokens",
+        "completion_tokens",
+        "total_tokens",
+        "cache_read_input_tokens",
+        "cache_creation_input_tokens",
+    ):
         value = _get_field(usage, key)
         if isinstance(value, int):
             result[key] = value

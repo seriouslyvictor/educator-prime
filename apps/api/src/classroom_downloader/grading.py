@@ -705,6 +705,8 @@ def _draft_submission(
         prompt_tokens=attempt_metadata["prompt_tokens"],
         completion_tokens=attempt_metadata["completion_tokens"],
         token_count=attempt_metadata["token_count"],
+        cached_prompt_tokens=attempt_metadata["cached_prompt_tokens"],
+        cache_write_tokens=attempt_metadata["cache_write_tokens"],
         cost_cents=attempt_metadata["cost_cents"],
         latency_ms=attempt_metadata["latency_ms"],
     )
@@ -777,6 +779,8 @@ def _record_attempt(
     prompt_tokens: int | None = None,
     completion_tokens: int | None = None,
     token_count: int | None = None,
+    cached_prompt_tokens: int | None = None,
+    cache_write_tokens: int | None = None,
     cost_cents: float | None = None,
     latency_ms: int | None = None,
 ) -> GradingAiAttempt:
@@ -794,6 +798,8 @@ def _record_attempt(
         prompt_tokens=prompt_tokens,
         completion_tokens=completion_tokens,
         token_count=token_count,
+        cached_prompt_tokens=cached_prompt_tokens,
+        cache_write_tokens=cache_write_tokens,
         cost_cents=cost_cents,
         latency_ms=latency_ms,
         retry_count=retry_count,
@@ -817,6 +823,8 @@ def _record_attempt(
         prompt_tokens=attempt.prompt_tokens,
         completion_tokens=attempt.completion_tokens,
         token_count=attempt.token_count,
+        cached_prompt_tokens=attempt.cached_prompt_tokens,
+        cache_write_tokens=attempt.cache_write_tokens,
         cost_cents=attempt.cost_cents,
         latency_ms=attempt.latency_ms,
         retry_count=attempt.retry_count,
@@ -829,6 +837,8 @@ def _attempt_metadata(grading_engine: GradingEngine) -> dict[str, int | float | 
     prompt_tokens = _int_or_none(usage.get("prompt_tokens"))
     completion_tokens = _int_or_none(usage.get("completion_tokens"))
     token_count = _int_or_none(usage.get("total_tokens"))
+    cached_prompt_tokens = _int_or_none(usage.get("cache_read_input_tokens"))
+    cache_write_tokens = _int_or_none(usage.get("cache_creation_input_tokens"))
     latency_ms = _int_or_none(getattr(grading_engine, "last_latency_ms", None))
     cost_cents: float | None = None
 
@@ -854,6 +864,8 @@ def _attempt_metadata(grading_engine: GradingEngine) -> dict[str, int | float | 
         "prompt_tokens": prompt_tokens,
         "completion_tokens": completion_tokens,
         "token_count": token_count,
+        "cached_prompt_tokens": cached_prompt_tokens,
+        "cache_write_tokens": cache_write_tokens,
         "cost_cents": cost_cents,
         "latency_ms": latency_ms,
     }
@@ -887,6 +899,8 @@ def _submission_read(
         ai_prompt_tokens=attempt.prompt_tokens if attempt else None,
         ai_completion_tokens=attempt.completion_tokens if attempt else None,
         ai_token_count=attempt.token_count if attempt else None,
+        ai_cached_prompt_tokens=attempt.cached_prompt_tokens if attempt else None,
+        ai_cache_write_tokens=attempt.cache_write_tokens if attempt else None,
         ai_cost_cents=attempt.cost_cents if attempt else None,
         ai_latency_ms=attempt.latency_ms if attempt else None,
     )

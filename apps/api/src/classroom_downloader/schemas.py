@@ -138,6 +138,8 @@ class GradingSubmissionRead(BaseModel):
     ai_prompt_tokens: int | None = None
     ai_completion_tokens: int | None = None
     ai_token_count: int | None = None
+    ai_cached_prompt_tokens: int | None = None
+    ai_cache_write_tokens: int | None = None
     ai_cost_cents: float | None = None
     ai_latency_ms: int | None = None
 
