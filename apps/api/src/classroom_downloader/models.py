@@ -87,10 +87,20 @@ class GradingJob(SQLModel, table=True):
     rubric_mode: str
     teacher_loop: str
     rubric_text: str | None = None
+    batch_mode: str = "per_submission"
     status: GradingStatus = Field(default=GradingStatus.ready)
     total_submissions: int = 0
     reviewed_submissions: int = 0
     flagged_submissions: int = 0
+    total_prompt_tokens: int | None = None
+    total_completion_tokens: int | None = None
+    total_cached_tokens: int | None = None
+    total_cost_cents: float | None = None
+    wall_clock_ms: int | None = None
+    submissions_graded: int = 0
+    ai_engine: str | None = None
+    ai_mode: str | None = None
+    ai_model: str | None = None
     cache_expires_at: datetime | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

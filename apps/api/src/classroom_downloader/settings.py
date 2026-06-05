@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     litellm_max_retries: int = 2
     grading_auto_accept_confidence: float = 0.85
     grading_structured_output: Literal["auto", "json_object"] = "auto"
+    grading_batch_mode: Literal["per_submission", "class_batch"] = "per_submission"
     llm_model_catalog_mode: Literal["remote_cached", "local_only", "remote_required"] = "remote_cached"
     llm_model_catalog_url: str = (
         "https://raw.githubusercontent.com/BerriAI/litellm/main/"

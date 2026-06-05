@@ -195,10 +195,20 @@ class GradingJobRead(BaseModel):
     rubric_mode: str
     teacher_loop: str
     rubric_text: str | None = None
+    batch_mode: str = "per_submission"
     status: GradingStatus
     total_submissions: int
     reviewed_submissions: int
     flagged_submissions: int
+    total_prompt_tokens: int | None = None
+    total_completion_tokens: int | None = None
+    total_cached_tokens: int | None = None
+    total_cost_cents: float | None = None
+    wall_clock_ms: int | None = None
+    submissions_graded: int = 0
+    ai_engine: str | None = None
+    ai_mode: str | None = None
+    ai_model: str | None = None
     cache_expires_at: str | None = None
     criteria: list[GradingCriterionRead] = []
     submissions: list[GradingSubmissionRead] = []

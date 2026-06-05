@@ -7,6 +7,9 @@ from pathlib import Path
 import shutil
 from uuid import uuid4
 import json
+import time
+
+import litellm
 
 from sqlmodel import Session, select
 
@@ -131,10 +134,20 @@ def grading_job_snapshot(session: Session, job: GradingJob) -> GradingJobRead:
         rubric_mode=job.rubric_mode,
         teacher_loop=job.teacher_loop,
         rubric_text=job.rubric_text,
+        batch_mode=job.batch_mode,
         status=job.status,
         total_submissions=job.total_submissions,
         reviewed_submissions=job.reviewed_submissions,
         flagged_submissions=job.flagged_submissions,
+        total_prompt_tokens=job.total_prompt_tokens,
+        total_completion_tokens=job.total_completion_tokens,
+        total_cached_tokens=job.total_cached_tokens,
+        total_cost_cents=job.total_cost_cents,
+        wall_clock_ms=job.wall_clock_ms,
+        submissions_graded=job.submissions_graded,
+        ai_engine=job.ai_engine,
+        ai_mode=job.ai_mode,
+        ai_model=job.ai_model,
         cache_expires_at=_iso(job.cache_expires_at),
         criteria=[
             GradingCriterionRead.model_validate(row, from_attributes=True)
@@ -168,6 +181,7 @@ def draft_grading_job(
     grading_engine: GradingEngine | None = None,
 ) -> GradingJob:
     grading_engine = grading_engine or get_grading_engine()
+    started = time.monotonic()
     log_event(
         logger,
         "grading.draft.start",
@@ -206,6 +220,7 @@ def draft_grading_job(
             scrub_cache_misses += 1
 
     _refresh_counts(session, job)
+    _refresh_cost_rollup(session, job, grading_engine, started)
     job.status = GradingStatus.completed if job.reviewed_submissions == job.total_submissions and job.total_submissions else GradingStatus.reviewing
     job.updated_at = datetime.now(UTC)
     session.add(job)
@@ -225,6 +240,40 @@ def draft_grading_job(
         scrub_cache_misses=scrub_cache_misses,
     )
     return job
+
+
+def _refresh_cost_rollup(
+    session: Session,
+    job: GradingJob,
+    grading_engine: GradingEngine,
+    started: float,
+) -> None:
+    attempts = session.exec(
+        select(GradingAiAttempt).where(GradingAiAttempt.job_id == job.id)
+    ).all()
+    job.total_prompt_tokens = _sum_optional(row.prompt_tokens for row in attempts)
+    job.total_completion_tokens = _sum_optional(row.completion_tokens for row in attempts)
+    job.total_cached_tokens = _sum_optional(row.cached_prompt_tokens for row in attempts)
+    job.total_cost_cents = _sum_float_optional(row.cost_cents for row in attempts)
+    job.wall_clock_ms = int((time.monotonic() - started) * 1000)
+    job.submissions_graded = sum(1 for row in attempts if row.status == "completed")
+    job.ai_engine = grading_engine.name
+    job.ai_mode = job.batch_mode
+    job.ai_model = getattr(grading_engine, "model", None)
+    log_event(
+        logger,
+        "grading.job.cost.summary",
+        job_id=job.id,
+        total_prompt_tokens=job.total_prompt_tokens,
+        total_completion_tokens=job.total_completion_tokens,
+        total_cached_tokens=job.total_cached_tokens,
+        total_cost_cents=job.total_cost_cents,
+        wall_clock_ms=job.wall_clock_ms,
+        submissions_graded=job.submissions_graded,
+        engine=job.ai_engine,
+        mode=job.ai_mode,
+        model=job.ai_model,
+    )
 
 
 def retry_submission(
@@ -847,18 +896,20 @@ def _attempt_metadata(grading_engine: GradingEngine) -> dict[str, int | float | 
         and prompt_tokens is not None
         and completion_tokens is not None
     ):
-        from .llm_catalog import estimate_cost_cents, load_llm_catalog
+        cost_cents = _completion_cost_cents(grading_engine)
+        if cost_cents is None:
+            from .llm_catalog import estimate_cost_cents, load_llm_catalog
 
-        catalog_model = getattr(grading_engine, "catalog_model", None)
-        if catalog_model is None:
-            model_id = getattr(grading_engine, "model", None)
-            catalog_model = load_llm_catalog().models.get(model_id)
-        if catalog_model is not None:
-            cost_cents = estimate_cost_cents(
-                catalog_model,
-                prompt_tokens,
-                completion_tokens,
-            )
+            catalog_model = getattr(grading_engine, "catalog_model", None)
+            if catalog_model is None:
+                model_id = getattr(grading_engine, "model", None)
+                catalog_model = load_llm_catalog().models.get(model_id)
+            if catalog_model is not None:
+                cost_cents = estimate_cost_cents(
+                    catalog_model,
+                    prompt_tokens,
+                    completion_tokens,
+                )
 
     return {
         "prompt_tokens": prompt_tokens,
@@ -869,6 +920,34 @@ def _attempt_metadata(grading_engine: GradingEngine) -> dict[str, int | float | 
         "cost_cents": cost_cents,
         "latency_ms": latency_ms,
     }
+
+
+def _completion_cost_cents(grading_engine: GradingEngine) -> float | None:
+    response = getattr(grading_engine, "last_response", None)
+    if response is None:
+        return None
+    try:
+        cost_usd = litellm.completion_cost(completion_response=response)
+    except Exception:
+        return None
+    try:
+        return round(float(cost_usd) * 100, 4)
+    except (TypeError, ValueError):
+        return None
+
+
+def _sum_optional(values) -> int | None:
+    present = [value for value in values if value is not None]
+    if not present:
+        return None
+    return sum(present)
+
+
+def _sum_float_optional(values) -> float | None:
+    present = [value for value in values if value is not None]
+    if not present:
+        return None
+    return round(sum(present), 4)
 
 
 def _submission_read(

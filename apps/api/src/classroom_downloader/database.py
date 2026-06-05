@@ -37,6 +37,16 @@ def _ensure_grading_job_columns(target_engine: Engine) -> None:
         "gradingjob",
         {
             "rubric_text": "VARCHAR",
+            "batch_mode": "VARCHAR DEFAULT 'per_submission'",
+            "total_prompt_tokens": "INTEGER",
+            "total_completion_tokens": "INTEGER",
+            "total_cached_tokens": "INTEGER",
+            "total_cost_cents": "FLOAT",
+            "wall_clock_ms": "INTEGER",
+            "submissions_graded": "INTEGER DEFAULT 0",
+            "ai_engine": "VARCHAR",
+            "ai_mode": "VARCHAR",
+            "ai_model": "VARCHAR",
         },
     )
 

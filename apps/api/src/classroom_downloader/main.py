@@ -732,6 +732,7 @@ def create_grading_job(
         rubric_mode=payload.rubric_mode,
         teacher_loop=payload.teacher_loop,
         rubric_text=payload.rubric_text,
+        batch_mode=settings.grading_batch_mode,
         status=GradingStatus.ready,
         cache_expires_at=default_cache_expiry(),
     )
@@ -750,6 +751,7 @@ def create_grading_job(
         rubric_mode=job.rubric_mode,
         teacher_loop=job.teacher_loop,
         rubric_text=job.rubric_text,
+        batch_mode=job.batch_mode,
         cache_expires_at=job.cache_expires_at,
     )
     return grading_job_snapshot(session, job)

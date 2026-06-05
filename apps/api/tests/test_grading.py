@@ -618,8 +618,14 @@ def test_litellm_engine_attempt_metadata_is_persisted(monkeypatch, tmp_path) -> 
 
         return Response()
 
+    def fake_completion_cost(**kwargs):
+        return 0.1234
+
     monkeypatch.setattr(
         "classroom_downloader.litellm_engine.litellm.completion", fake_completion
+    )
+    monkeypatch.setattr(
+        "classroom_downloader.grading.litellm.completion_cost", fake_completion_cost
     )
 
     try:
@@ -653,7 +659,16 @@ def test_litellm_engine_attempt_metadata_is_persisted(monkeypatch, tmp_path) -> 
     assert submission["ai_token_count"] == 150
     assert submission["ai_cached_prompt_tokens"] == 25
     assert submission["ai_cache_write_tokens"] == 10
-    assert submission["ai_cost_cents"] == 0.03
+    assert submission["ai_cost_cents"] == 12.34
+    assert body["total_prompt_tokens"] == 100
+    assert body["total_completion_tokens"] == 50
+    assert body["total_cached_tokens"] == 25
+    assert body["total_cost_cents"] == 12.34
+    assert body["submissions_graded"] == 1
+    assert body["ai_engine"] == "litellm"
+    assert body["ai_model"] == "openai/gpt-5"
+    assert body["ai_mode"] == "per_submission"
+    assert body["wall_clock_ms"] is not None
 
 
 def test_litellm_malformed_response_marks_attempt_failed(

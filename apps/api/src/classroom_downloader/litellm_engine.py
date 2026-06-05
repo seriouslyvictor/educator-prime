@@ -35,6 +35,7 @@ class LiteLlmGradingEngine:
         )
         self.last_usage: dict[str, int] = {}
         self.last_latency_ms: int | None = None
+        self.last_response: Any | None = None
 
     def grade(self, request: GradingEngineRequest) -> GradingEngineResult:
         messages = _build_messages(request)
@@ -75,6 +76,7 @@ class LiteLlmGradingEngine:
             max_tokens=self.max_output_tokens,
             response_format=_response_format(self.catalog_model),
         )
+        self.last_response = response
         self.last_latency_ms = int((time.monotonic() - started) * 1000)
         self.last_usage = _usage_dict(getattr(response, "usage", None))
         result = parse_litellm_result(_response_content(response))
