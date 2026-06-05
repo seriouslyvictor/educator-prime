@@ -25,6 +25,89 @@ from classroom_downloader.models import (
 from classroom_downloader.settings import get_settings
 
 
+def _enable_litellm_engine(tmp_path, settings) -> None:
+    """Point settings at a local single-model catalog with litellm selected.
+    conftest restores the settings singleton after each test."""
+    cache_path = tmp_path / "model-prices.json"
+    overlay_path = tmp_path / "overlay.json"
+    cache_path.write_text(
+        '{"openai/gpt-5":{"litellm_provider":"openai","mode":"chat","input_cost_per_token":0.000001,"output_cost_per_token":0.000004}}',
+        encoding="utf-8",
+    )
+    overlay_path.write_text(
+        '{"schema_version":1,"default_model":"openai/gpt-5","models":{"openai/gpt-5":{"enabled":true,"use_cases":["grading_draft"]}}}',
+        encoding="utf-8",
+    )
+    settings.grading_cache_path = str(tmp_path / "grading")
+    settings.grading_engine = "litellm"
+    settings.litellm_model = "openai/gpt-5"
+    settings.llm_model_catalog_mode = "local_only"
+    settings.llm_model_catalog_cache_path = str(cache_path)
+    settings.llm_model_overlay_path = str(overlay_path)
+
+
+def test_grading_health_mock_engine_is_ready() -> None:
+    with TestClient(app) as client:
+        body = client.get("/api/grading/health").json()
+
+    assert body["engine"] == "mock"
+    assert body["ready"] is True
+    assert body["status"] == "mock"
+
+
+def test_grading_health_ready_when_provider_key_present(tmp_path) -> None:
+    _enable_litellm_engine(tmp_path, get_settings())  # conftest sets OPENAI_API_KEY
+    with TestClient(app) as client:
+        body = client.get("/api/grading/health").json()
+
+    assert body["engine"] == "litellm"
+    assert body["model"] == "openai/gpt-5"
+    assert body["ready"] is True
+    assert body["status"] == "ok"
+    assert body["missing_keys"] == []
+
+
+def test_grading_health_reports_missing_provider_key(tmp_path, monkeypatch) -> None:
+    _enable_litellm_engine(tmp_path, get_settings())
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    with TestClient(app) as client:
+        body = client.get("/api/grading/health").json()
+
+    assert body["ready"] is False
+    assert body["status"] == "provider_key_missing"
+    assert "OPENAI_API_KEY" in body["missing_keys"]
+
+
+def test_grading_health_reports_model_not_enabled(tmp_path) -> None:
+    settings = get_settings()
+    _enable_litellm_engine(tmp_path, settings)
+    settings.litellm_model = "openai/not-in-catalog"
+    with TestClient(app) as client:
+        body = client.get("/api/grading/health").json()
+
+    assert body["ready"] is False
+    assert body["status"] == "model_not_enabled"
+
+
+def test_draft_returns_503_when_provider_key_missing(tmp_path, monkeypatch) -> None:
+    _enable_litellm_engine(tmp_path, get_settings())
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    with TestClient(app) as client:
+        job = client.post(
+            "/api/grading/jobs",
+            json={
+                "course_id": "course-2",
+                "activity_id": "activity-3",
+                "rubric_mode": "brief",
+                "teacher_loop": "approve",
+            },
+        ).json()
+        response = client.post(f"/api/grading/jobs/{job['id']}/draft")
+
+    assert response.status_code == 503
+    assert "provider API key" in response.json()["detail"]
+
+
 def test_grading_queue_rejects_global_scans() -> None:
     with TestClient(app) as client:
         response = client.get("/api/grading/queue")

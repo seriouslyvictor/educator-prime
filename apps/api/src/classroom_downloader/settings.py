@@ -1,11 +1,35 @@
+import os
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
+from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Tests must ignore the developer's apps/api/.env so the suite stays deterministic
+# regardless of local CD_* / provider-key configuration. conftest sets CD_TESTING
+# before importing the app.
+_TESTING = bool(os.environ.get("CD_TESTING"))
+_ENV_PATH = Path(__file__).resolve().parents[2] / ".env"
+
+# Outside tests, export apps/api/.env into the process environment so SDKs that
+# read os.environ directly -- notably LiteLLM, which reads provider keys by their
+# native names (OPENAI_API_KEY, ANTHROPIC_API_KEY, GEMINI_API_KEY, ...) -- get
+# them from the same file pydantic uses for the CD_* settings. override=False
+# keeps real shell environment variables authoritative.
+if not _TESTING:
+    load_dotenv(_ENV_PATH, override=False)
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_prefix="CD_")
+    # extra="ignore": the .env also holds provider keys (OPENAI_API_KEY,
+    # GEMINI_API_KEY, ...) for LiteLLM, which are not CD_ settings fields; without
+    # this pydantic-settings raises extra_forbidden on those non-CD_ keys.
+    model_config = SettingsConfigDict(
+        env_file=None if _TESTING else str(_ENV_PATH),
+        env_prefix="CD_",
+        extra="ignore",
+    )
 
     database_url: str = "sqlite:///./classroom_downloader.db"
     frontend_origin: str = "http://localhost:5173"

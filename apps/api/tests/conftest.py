@@ -20,7 +20,19 @@ Two isolation concerns are handled here:
 
 import os
 
+# Set before any classroom_downloader import: tells settings.py to skip loading
+# the developer's apps/api/.env so the suite is deterministic.
+os.environ.setdefault("CD_TESTING", "1")
 os.environ.setdefault("CD_DATABASE_URL", "sqlite:///:memory:")
+# Pin the provider to the in-memory mock so a developer's real apps/api/.env
+# (CD_GOOGLE_PROVIDER=google), now loaded into os.environ via settings.load_dotenv,
+# never leaks the real Google provider into the suite. A real shell env var still
+# wins. This makes a plain `uv run --extra dev pytest -q` green with no overrides.
+os.environ.setdefault("CD_GOOGLE_PROVIDER", "mock")
+# A dummy provider key so litellm-engine tests (which mock the actual completion
+# call) pass the new provider-key readiness gate. Tests covering the missing-key
+# path delete it via monkeypatch.
+os.environ.setdefault("OPENAI_API_KEY", "test-openai-key")
 os.environ.setdefault("CD_GOOGLE_CLIENT_ID", "client-id")
 os.environ.setdefault("CD_GOOGLE_CLIENT_SECRET", "client-secret")
 os.environ.setdefault(

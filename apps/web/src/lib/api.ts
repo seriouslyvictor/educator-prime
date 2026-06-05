@@ -3,6 +3,7 @@ import type {
   AuthState,
   Course,
   ExportJob,
+  GradingHealth,
   GradingJob,
   GradingQueueItem,
   PrivacyAudit,
@@ -118,6 +119,12 @@ export const api = {
       method: "POST",
       body: JSON.stringify(scopes),
     }),
+  gradingHealth: (probe = false) =>
+    request<GradingHealth>(
+      `/api/grading/health${probe ? "?probe=true" : ""}`,
+      undefined,
+      { ttlMs: 30_000 },
+    ),
   courses: () => request<Course[]>("/api/courses", undefined, { ttlMs: 120_000 }),
   activities: (courseId: string) =>
     request<Activity[]>(`/api/courses/${courseId}/activities`, undefined, {

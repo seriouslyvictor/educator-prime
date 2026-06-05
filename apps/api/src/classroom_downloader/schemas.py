@@ -72,6 +72,18 @@ class AuthStart(BaseModel):
     scopes: list[str]
 
 
+class GradingHealthRead(BaseModel):
+    engine: str
+    ready: bool
+    status: str
+    model: str | None = None
+    provider: str | None = None
+    missing_keys: list[str] = []
+    detail: str
+    probed: bool = False
+    probe_ok: bool | None = None
+
+
 class GradingQueueItem(BaseModel):
     course_id: str
     course_name: str

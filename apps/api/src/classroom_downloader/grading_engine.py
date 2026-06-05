@@ -103,6 +103,141 @@ class MockGradingEngine:
 DEFAULT_GRADING_ENGINE: GradingEngine = MockGradingEngine()
 
 
+# Provider -> conventional env var for an explicit (live) key probe. LiteLLM
+# reads these itself for the actual call; we only need the var name to resolve a
+# key for `check_valid_key`. The offline readiness check below does not need it.
+_PROVIDER_KEY_ENV = {
+    "openai": "OPENAI_API_KEY",
+    "anthropic": "ANTHROPIC_API_KEY",
+    "gemini": "GEMINI_API_KEY",
+}
+
+
+@dataclass(frozen=True)
+class GradingReadiness:
+    engine: str
+    ready: bool
+    status: str  # ok | mock | model_not_enabled | provider_key_missing | unknown_engine
+    model: str | None
+    provider: str | None
+    missing_keys: list[str]
+    detail: str
+    probed: bool = False
+    probe_ok: bool | None = None
+
+
+def _missing_provider_keys(litellm_model: str) -> list[str]:
+    """Offline check via litellm.validate_environment: which provider env vars
+    the selected model needs but the process environment is missing."""
+    import litellm
+
+    try:
+        result = litellm.validate_environment(litellm_model)
+    except Exception:  # litellm could not introspect the model; do not block.
+        return []
+    if not isinstance(result, dict) or result.get("keys_in_environment"):
+        return []
+    return [key for key in (result.get("missing_keys") or []) if isinstance(key, str)]
+
+
+def _probe_valid_key(litellm_model: str) -> tuple[bool | None, str]:
+    """Live check via litellm.check_valid_key. Returns (ok, detail); ok is None
+    when the provider key cannot be resolved for a probe (offline result stands)."""
+    import os
+
+    import litellm
+
+    provider = litellm_model.split("/", 1)[0] if "/" in litellm_model else ""
+    env_var = _PROVIDER_KEY_ENV.get(provider)
+    api_key = os.environ.get(env_var) if env_var else None
+    if not api_key:
+        return None, "Live key probe is not supported for this provider; offline check only."
+    try:
+        ok = bool(litellm.check_valid_key(model=litellm_model, api_key=api_key))
+    except Exception:
+        return False, "Live key probe could not reach the provider."
+    if ok:
+        return True, f"Live key probe succeeded for {litellm_model}."
+    return False, f"Live key probe rejected the credential for {litellm_model}."
+
+
+def inspect_grading_readiness(settings=None, *, probe: bool = False) -> GradingReadiness:
+    """Non-raising readiness report for the configured grading engine. Used by
+    the health endpoint and (the offline part) by get_grading_engine."""
+    from .settings import get_settings
+
+    settings = settings or get_settings()
+    engine = settings.grading_engine
+    if engine == "mock":
+        return GradingReadiness(
+            engine="mock",
+            ready=True,
+            status="mock",
+            model=None,
+            provider=None,
+            missing_keys=[],
+            detail="Using the deterministic mock grader; no provider key required.",
+        )
+    if engine != "litellm":
+        return GradingReadiness(
+            engine=engine,
+            ready=False,
+            status="unknown_engine",
+            model=None,
+            provider=None,
+            missing_keys=[],
+            detail=f"Unknown grading engine '{engine}'.",
+        )
+
+    from .llm_catalog import load_llm_catalog
+
+    catalog = load_llm_catalog(settings)
+    model = catalog.models.get(settings.litellm_model)
+    if model is None or not model.enabled:
+        return GradingReadiness(
+            engine="litellm",
+            ready=False,
+            status="model_not_enabled",
+            model=settings.litellm_model,
+            provider=model.provider if model else None,
+            missing_keys=[],
+            detail=(
+                f"Model '{settings.litellm_model}' is not enabled in the catalog overlay "
+                "(config/llm-model-overrides.json)."
+            ),
+        )
+
+    missing = _missing_provider_keys(model.litellm_model)
+    if missing:
+        return GradingReadiness(
+            engine="litellm",
+            ready=False,
+            status="provider_key_missing",
+            model=model.litellm_model,
+            provider=model.provider,
+            missing_keys=missing,
+            detail=f"Missing provider credential(s): {', '.join(missing)}.",
+        )
+
+    detail = f"{model.litellm_model} is configured and its provider key is present."
+    probed = False
+    probe_ok: bool | None = None
+    if probe:
+        probed = True
+        probe_ok, detail = _probe_valid_key(model.litellm_model)
+    return GradingReadiness(
+        engine="litellm",
+        ready=True,
+        status="ok",
+        model=model.litellm_model,
+        provider=model.provider,
+        missing_keys=[],
+        detail=detail,
+        probed=probed,
+        probe_ok=probe_ok,
+    )
+
+
 def get_grading_engine() -> GradingEngine:
     from .settings import get_settings
 
@@ -117,6 +252,16 @@ def get_grading_engine() -> GradingEngine:
         model = catalog.models.get(settings.litellm_model)
         if model is None or not model.enabled:
             raise ValueError("grading_model_not_enabled")
+        missing = _missing_provider_keys(model.litellm_model)
+        if missing:
+            log_event(
+                logger,
+                "grading.engine.provider_key_missing",
+                model=model.litellm_model,
+                provider=model.provider,
+                missing_keys=missing,
+            )
+            raise ValueError("grading_provider_key_missing")
         return LiteLlmGradingEngine(
             model=model,
             timeout_seconds=settings.litellm_timeout_seconds,

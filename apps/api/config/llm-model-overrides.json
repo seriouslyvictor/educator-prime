@@ -8,7 +8,39 @@
       "use_cases": ["grading_draft"],
       "rpm_limit": null,
       "tpm_limit": null,
-      "notes": "Default draft grading model. Prices and context come from LiteLLM upstream when available."
+      "notes": "Default draft grading model. Needs OPENAI_API_KEY. Prices and context come from LiteLLM upstream when available."
+    },
+    "gemini/gemini-3.1-flash-lite": {
+      "enabled": true,
+      "display_name": "Gemini 3.1 Flash Lite",
+      "use_cases": ["grading_draft"],
+      "rpm_limit": null,
+      "tpm_limit": null,
+      "notes": "Needs GEMINI_API_KEY. supports_response_schema=true (strict JSON output)."
+    },
+    "gemini/gemini-2.5-flash": {
+      "enabled": true,
+      "display_name": "Gemini 2.5 Flash",
+      "use_cases": ["grading_draft"],
+      "rpm_limit": null,
+      "tpm_limit": null,
+      "notes": "Needs GEMINI_API_KEY. Stable fallback; supports_response_schema=true."
+    },
+    "xai/grok-4-1-fast-non-reasoning": {
+      "enabled": true,
+      "display_name": "Grok 4.1 Fast (non-reasoning)",
+      "use_cases": ["grading_draft"],
+      "rpm_limit": null,
+      "tpm_limit": null,
+      "notes": "Needs XAI_API_KEY. supports_response_schema=true. Most other grok ids are schema=false and fall back to json_object."
+    },
+    "deepseek/deepseek-chat": {
+      "enabled": true,
+      "display_name": "DeepSeek Chat",
+      "use_cases": ["grading_draft"],
+      "rpm_limit": null,
+      "tpm_limit": null,
+      "notes": "Needs DEEPSEEK_API_KEY. supports_response_schema=true."
     }
   }
 }

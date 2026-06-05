@@ -474,6 +474,32 @@ pseudonymized content; blocked/high-risk submissions never enter a batch.
   per-submission calls concurrently (wall-clock only). Keep behind a flag; skip unless
   explicitly requested.
 
+## Task 11 (TODO, future): in-app model picker via `get_valid_models`
+
+> Spawned 2026-06-05 from the provider-key health-check work. Today `CD_LITELLM_MODEL`
+> selects the single active grading model; the overlay (`config/llm-model-overrides.json`)
+> enables several (gpt-5, gemini, grok, deepseek) but teachers can't choose per job. This
+> augments — does **not** replace — the static catalog (which stays the source of truth for
+> cost/context/`supports_response_schema`).
+
+- [ ] **Backend reachability helper** (`grading_engine.py` / `llm_catalog.py`): wrap
+  `litellm.get_valid_models(check_provider_endpoint=True)` (cached, ~5–15 min TTL; it hits
+  the provider) to compute which **enabled** catalog models are actually reachable with the
+  present keys. Reuse `_missing_provider_keys` for the offline "key present" signal.
+- [ ] **`GET /api/grading/models`** → list of enabled `grading_draft` catalog models, each
+  annotated `{ id, display_name, provider, supports_response_schema, key_present: bool,
+  reachable: bool | null }`. `reachable` is null when the provider endpoint isn't probed.
+- [ ] **UI dropdown in `GraderSetup`**: populate from `/api/grading/models`; disable/flag
+  models without a key (lean on the existing health banner copy). Default to
+  `CD_LITELLM_MODEL`.
+- [ ] **Per-job model**: add `GradingJob.model` (additive column + dev migration) so the
+  chosen model is persisted and passed into `get_grading_engine`/the request instead of the
+  global setting. `inspect_grading_readiness` should accept an explicit model override.
+- [ ] Tests: reachability helper (monkeypatch `get_valid_models`), endpoint annotation
+  shape, and draft using a per-job model. Keep the catalog as metadata source of truth.
+- [ ] Note: this is the check that would have auto-caught the `openai/gemini-3.1-flash-lite`
+  misconfiguration (wrong prefix + not enabled) at setup time.
+
 ---
 
 ## Final verification
@@ -482,7 +508,8 @@ pseudonymized content; blocked/high-risk submissions never enter a batch.
   *(Note: a local `apps/api/.env` with `CD_GOOGLE_PROVIDER=google` forces the real provider
   into the cached settings singleton and fails ~27 tests with `FileNotFoundError: .tokens/...`;
   run with `CD_GOOGLE_PROVIDER=mock` — CI has no `.env`, so its default `mock` applies.)*
-- [ ] `cd apps/web && pnpm build` — additive schema fields don't break TS. *(Not run this pass.)*
+- [x] `cd apps/web && pnpm build` — additive schema fields don't break TS *(green 2026-06-05,
+  during the health-check work)*.
 - [ ] Mock smoke: `per_submission` and `class_batch` both print a job cost summary.
   *(Deferred — `class_batch` is Phase 4.)*
 - [x] `git log --oneline` shows per-phase commits (`Implement grading intervention levels`,

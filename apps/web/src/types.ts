@@ -9,6 +9,18 @@ export interface AuthState {
   provider: string;
 }
 
+export interface GradingHealth {
+  engine: string;
+  ready: boolean;
+  status: "ok" | "mock" | "model_not_enabled" | "provider_key_missing" | "unknown_engine";
+  model: string | null;
+  provider: string | null;
+  missing_keys: string[];
+  detail: string;
+  probed: boolean;
+  probe_ok: boolean | null;
+}
+
 export interface Course {
   id: string;
   name: string;

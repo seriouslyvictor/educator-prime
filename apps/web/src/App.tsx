@@ -18,12 +18,14 @@ import {
 import { useLocalExportHistory } from "./lib/local-history";
 import { buildPreviewTree } from "./lib/preview-tree";
 import { useThemePreference } from "./lib/theme";
+import { AppIcon } from "./components/icons";
 import type {
   Activity,
   AppView,
   AuthState,
   Course,
   ExportJob,
+  GradingHealth,
   GradingJob,
   GradingQueueItem,
   GradingSubmission,
@@ -54,6 +56,7 @@ export function App() {
 
   const [view, setView] = useState<AppView>("connect");
   const [auth, setAuth] = useState<AuthState | null>(null);
+  const [gradingHealth, setGradingHealth] = useState<GradingHealth | null>(null);
   const [courses, setCourses] = useState<Course[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [selectedCourseId, setSelectedCourseId] = useState("");
@@ -141,6 +144,8 @@ export function App() {
         setView("connect");
         return;
       }
+      // Checked right after login: AI grading depends on a configured provider key.
+      void api.gradingHealth().then(setGradingHealth).catch(() => setGradingHealth(null));
       try {
         await loadCourses();
       } catch (caught) {
@@ -472,6 +477,9 @@ export function App() {
 
         {view === "workspace" ? (
           <>
+            {gradingHealth && !gradingHealth.ready ? (
+              <GradingHealthBanner health={gradingHealth} />
+            ) : null}
             <div className="workspace">
               <ClassroomList
                 courses={courses}
@@ -603,6 +611,28 @@ export function App() {
           </>
         ) : null}
       </main>
+    </div>
+  );
+}
+
+function GradingHealthBanner({ health }: { health: GradingHealth }) {
+  const message =
+    health.status === "provider_key_missing"
+      ? `Falta a chave da API do provedor${
+          health.missing_keys.length ? ` (${health.missing_keys.join(", ")})` : ""
+        }. Configure em apps/api/.env e reinicie a API.`
+      : health.status === "model_not_enabled"
+        ? "O modelo selecionado não está habilitado no catálogo (config/llm-model-overrides.json)."
+        : health.detail;
+  return (
+    <div className="notice notice-warning" role="alert">
+      <div className="notice-icon">
+        <AppIcon name="triangleAlert" />
+      </div>
+      <div className="notice-copy">
+        <div className="notice-title">Correção por IA indisponível</div>
+        <div className="notice-desc">{message}</div>
+      </div>
     </div>
   );
 }

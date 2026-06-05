@@ -14,6 +14,7 @@ from fastapi.responses import RedirectResponse, Response
 from sqlmodel import Session, select
 
 from .database import get_session, init_db
+from . import grading
 from .grading import (
     default_cache_expiry,
     delete_job_cache,
@@ -31,6 +32,7 @@ from .google_provider import (
     clear_google_provider_caches,
     get_google_provider,
 )
+from .grading_engine import GradingEngine, inspect_grading_readiness
 from .models import (
     Activity,
     Course,
@@ -71,6 +73,7 @@ from .schemas import (
     ExportErrorRead,
     ExportFileRead,
     ExportJobRead,
+    GradingHealthRead,
     GradingJobCreate,
     GradingJobRead,
     GradingQueueItem,
@@ -144,6 +147,34 @@ def provider_dependency(session: Session = Depends(get_session)) -> GoogleProvid
             purge_cached_classroom_state(session)
             raise auth_error from error
         raise
+
+
+_GRADING_ENGINE_ERRORS: dict[str, tuple[int, str]] = {
+    "grading_provider_key_missing": (
+        503,
+        "AI grading is unavailable: the provider API key is missing. "
+        "Set it in apps/api/.env and restart the API.",
+    ),
+    "grading_model_not_enabled": (
+        503,
+        "AI grading is unavailable: the selected model is not enabled in the "
+        "catalog overlay (config/llm-model-overrides.json).",
+    ),
+    "unknown_grading_engine": (500, "AI grading engine is misconfigured."),
+}
+
+
+def resolve_grading_engine() -> GradingEngine:
+    """Build the grading engine, translating config failures (missing key /
+    disabled model) into a clear HTTP error before any work is done. Resolved via
+    the grading module so test monkeypatches of grading.get_grading_engine apply."""
+    try:
+        return grading.get_grading_engine()
+    except ValueError as error:
+        status_code, detail = _GRADING_ENGINE_ERRORS.get(
+            str(error), (500, "AI grading engine error.")
+        )
+        raise HTTPException(status_code=status_code, detail=detail) from error
 
 
 def disconnected_auth_state() -> AuthState:
@@ -639,6 +670,34 @@ def stream_export_file(
     return _store_and_stream_export_file(session, job_id, file, content, media_type, request)
 
 
+@app.get("/api/grading/health", response_model=GradingHealthRead)
+def grading_health(probe: bool = False) -> GradingHealthRead:
+    readiness = inspect_grading_readiness(probe=probe)
+    log_event(
+        logger,
+        "grading.health",
+        engine=readiness.engine,
+        ready=readiness.ready,
+        status=readiness.status,
+        model=readiness.model,
+        provider=readiness.provider,
+        missing_keys=readiness.missing_keys,
+        probed=readiness.probed,
+        probe_ok=readiness.probe_ok,
+    )
+    return GradingHealthRead(
+        engine=readiness.engine,
+        ready=readiness.ready,
+        status=readiness.status,
+        model=readiness.model,
+        provider=readiness.provider,
+        missing_keys=readiness.missing_keys,
+        detail=readiness.detail,
+        probed=readiness.probed,
+        probe_ok=readiness.probe_ok,
+    )
+
+
 @app.get("/api/grading/queue", response_model=list[GradingQueueItem])
 def grading_queue(
     course_id: str | None = None,
@@ -861,8 +920,9 @@ def draft_job(
     job = session.get(GradingJob, job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Grading job not found.")
+    grading_engine = resolve_grading_engine()
     ensure_privacy_audit_allows_draft(job, session, provider)
-    job = draft_grading_job(session, job, provider)
+    job = draft_grading_job(session, job, provider, grading_engine)
     log_event(
         logger,
         "grading.draft.endpoint.complete",
@@ -944,7 +1004,8 @@ def retry_grading_submission(
     submission = session.get(GradingSubmission, submission_id)
     if job is None or submission is None or submission.job_id != job.id:
         raise HTTPException(status_code=404, detail="Grading submission not found.")
-    job = retry_submission(session, job, submission, provider)
+    grading_engine = resolve_grading_engine()
+    job = retry_submission(session, job, submission, provider, grading_engine)
     log_event(
         logger,
         "grading.retry.endpoint.complete",
