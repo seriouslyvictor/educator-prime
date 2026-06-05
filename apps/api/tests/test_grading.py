@@ -540,6 +540,82 @@ def test_teacher_loop_auto_accepts_clean_high_confidence_drafts(monkeypatch, tmp
     assert all(row["final_score"] == 94 for row in body["submissions"])
 
 
+def test_teacher_loop_auto_holds_low_confidence_drafts(monkeypatch, tmp_path) -> None:
+    settings = get_settings()
+    settings.grading_cache_path = str(tmp_path / "grading")
+    settings.grading_auto_accept_confidence = 0.85
+
+    class LowConfidenceEngine(GradingEngine):
+        name = "capture"
+        model = None
+
+        def grade(self, request: GradingEngineRequest) -> GradingEngineResult:
+            return GradingEngineResult(
+                score=90,
+                confidence=0.70,
+                feedback="Below the auto-accept threshold.",
+                flags=[],
+            )
+
+    with TestClient(app) as client:
+        job = client.post(
+            "/api/grading/jobs",
+            json={
+                "course_id": "course-2",
+                "activity_id": "activity-3",
+                "rubric_mode": "infer",
+                "teacher_loop": "auto",
+            },
+        ).json()
+        from classroom_downloader import grading
+
+        monkeypatch.setattr(grading, "get_grading_engine", lambda: LowConfidenceEngine())
+        body = client.post(f"/api/grading/jobs/{job['id']}/draft").json()
+
+    assert body["status"] == "reviewing"
+    assert body["reviewed_submissions"] == 0
+    assert all(row["reviewed"] is False for row in body["submissions"])
+    assert all(row["ai_score"] == 90 for row in body["submissions"])
+
+
+def test_teacher_loop_auto_holds_flagged_drafts(monkeypatch, tmp_path) -> None:
+    settings = get_settings()
+    settings.grading_cache_path = str(tmp_path / "grading")
+    settings.grading_auto_accept_confidence = 0.85
+
+    class FlaggedEngine(GradingEngine):
+        name = "capture"
+        model = None
+
+        def grade(self, request: GradingEngineRequest) -> GradingEngineResult:
+            return GradingEngineResult(
+                score=96,
+                confidence=0.99,
+                feedback="High confidence but flagged for a human.",
+                flags=["needs_human"],
+            )
+
+    with TestClient(app) as client:
+        job = client.post(
+            "/api/grading/jobs",
+            json={
+                "course_id": "course-2",
+                "activity_id": "activity-3",
+                "rubric_mode": "infer",
+                "teacher_loop": "auto",
+            },
+        ).json()
+        from classroom_downloader import grading
+
+        monkeypatch.setattr(grading, "get_grading_engine", lambda: FlaggedEngine())
+        body = client.post(f"/api/grading/jobs/{job['id']}/draft").json()
+
+    assert body["status"] == "reviewing"
+    assert all(row["reviewed"] is False for row in body["submissions"])
+    assert all(row["flag"] == "needs_human" for row in body["submissions"])
+    assert all(row["ai_score"] == 96 for row in body["submissions"])
+
+
 def test_teacher_loop_cowrite_keeps_score_empty_and_feedback_as_reasoning(
     monkeypatch,
     tmp_path,
@@ -736,6 +812,77 @@ def test_litellm_malformed_response_marks_attempt_failed(
     submission = body["submissions"][0]
     assert submission["ai_attempt_status"] == "failed"
     assert submission["ai_safe_error"] == "grading_engine_failed"
+    assert submission["error"] == "grading_engine_failed"
+
+
+def test_litellm_missing_score_marks_attempt_failed_in_scored_mode(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    settings = get_settings()
+    original_settings = {
+        "grading_cache_path": settings.grading_cache_path,
+        "grading_engine": settings.grading_engine,
+        "litellm_model": settings.litellm_model,
+        "llm_model_catalog_mode": settings.llm_model_catalog_mode,
+        "llm_model_catalog_cache_path": settings.llm_model_catalog_cache_path,
+        "llm_model_overlay_path": settings.llm_model_overlay_path,
+    }
+    cache_path = tmp_path / "model-prices.json"
+    overlay_path = tmp_path / "overlay.json"
+    cache_path.write_text(
+        '{"openai/gpt-5":{"litellm_provider":"openai","mode":"chat","input_cost_per_token":0.000001,"output_cost_per_token":0.000004}}',
+        encoding="utf-8",
+    )
+    overlay_path.write_text(
+        '{"schema_version":1,"default_model":"openai/gpt-5","models":{"openai/gpt-5":{"enabled":true,"use_cases":["grading_draft"]}}}',
+        encoding="utf-8",
+    )
+
+    def fake_completion(**kwargs):
+        # Well-formed JSON, but the score is missing in a scored (approve) draft.
+        class Choice:
+            message = {
+                "content": '{"confidence": 0.9, "feedback": "No score.", "criterion_notes": [], "flags": []}'
+            }
+
+        class Response:
+            choices = [Choice()]
+            usage = {"prompt_tokens": 12, "completion_tokens": 3, "total_tokens": 15}
+
+        return Response()
+
+    monkeypatch.setattr(
+        "classroom_downloader.litellm_engine.litellm.completion",
+        fake_completion,
+    )
+
+    try:
+        settings.grading_cache_path = str(tmp_path / "grading")
+        settings.grading_engine = "litellm"
+        settings.litellm_model = "openai/gpt-5"
+        settings.llm_model_catalog_mode = "local_only"
+        settings.llm_model_catalog_cache_path = str(cache_path)
+        settings.llm_model_overlay_path = str(overlay_path)
+
+        with TestClient(app) as client:
+            job = client.post(
+                "/api/grading/jobs",
+                json={
+                    "course_id": "course-2",
+                    "activity_id": "activity-3",
+                    "rubric_mode": "brief",
+                    "teacher_loop": "approve",
+                },
+            ).json()
+            body = client.post(f"/api/grading/jobs/{job['id']}/draft").json()
+    finally:
+        for key, value in original_settings.items():
+            setattr(settings, key, value)
+
+    submission = body["submissions"][0]
+    assert submission["ai_attempt_status"] == "failed"
+    assert submission["ai_score"] is None
     assert submission["error"] == "grading_engine_failed"
 
 

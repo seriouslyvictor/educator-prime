@@ -10,12 +10,13 @@ from classroom_downloader.grading_engine import GradingEngineRequest
 from classroom_downloader.litellm_engine import (
     DEFAULT_MAX_OUTPUT_TOKENS,
     LiteLlmGradingEngine,
+    _build_messages,
     parse_litellm_result,
 )
 from classroom_downloader.llm_catalog import LlmModelEntry
 
 
-def model_entry() -> LlmModelEntry:
+def model_entry(supports_response_schema: bool = True) -> LlmModelEntry:
     return LlmModelEntry(
         id="openai/gpt-5",
         provider="openai",
@@ -27,12 +28,34 @@ def model_entry() -> LlmModelEntry:
         output_cost_per_token=0.000004,
         max_input_tokens=128000,
         max_output_tokens=8192,
-        supports_response_schema=True,
+        supports_response_schema=supports_response_schema,
         supports_vision=False,
         rpm_limit=None,
         tpm_limit=None,
         notes="",
         raw={},
+    )
+
+
+def _request(
+    *,
+    request_score: bool = True,
+    rubric_text: str | None = None,
+    criteria: list[dict[str, object]] | None = None,
+) -> GradingEngineRequest:
+    return GradingEngineRequest(
+        job_id="job-1",
+        submission_id="submission-1",
+        activity_title="Essay Draft",
+        rubric_mode="brief",
+        teacher_loop="approve" if request_score else "cowrite",
+        request_score=request_score,
+        rubric_text=rubric_text,
+        criteria=list(criteria or []),
+        student_label="student_001",
+        source_label="submission_001",
+        mime_type="text/plain",
+        content="This is scrubbed work.",
     )
 
 
@@ -58,6 +81,137 @@ def test_parse_litellm_result_requires_structured_shape() -> None:
 def test_parse_litellm_result_rejects_malformed_json() -> None:
     with pytest.raises(ValueError, match="malformed_llm_response"):
         parse_litellm_result("not json")
+
+
+def test_parse_litellm_result_requires_score_when_requested() -> None:
+    with pytest.raises(ValueError, match="malformed_llm_response"):
+        parse_litellm_result(
+            json.dumps(
+                {
+                    "confidence": 0.8,
+                    "feedback": "No score returned.",
+                    "criterion_notes": [],
+                    "flags": [],
+                }
+            )
+        )
+
+
+def test_parse_litellm_result_rejects_out_of_range_score_when_requested() -> None:
+    with pytest.raises(ValueError, match="malformed_llm_response"):
+        parse_litellm_result(
+            json.dumps(
+                {
+                    "score": 150,
+                    "confidence": 0.8,
+                    "feedback": "Score is out of bounds.",
+                    "criterion_notes": [],
+                    "flags": [],
+                }
+            )
+        )
+
+
+def test_parse_litellm_result_allows_null_score_in_cowrite() -> None:
+    parsed = parse_litellm_result(
+        json.dumps(
+            {
+                "confidence": 0.8,
+                "feedback": "Reasoning only for the teacher to grade.",
+                "criterion_notes": [{"criterion": "Evidence", "note": "Uses sources."}],
+                "flags": [],
+            }
+        ),
+        request_score=False,
+    )
+
+    assert parsed.score is None
+    assert parsed.confidence == 0.8
+    assert parsed.criterion_notes == [{"criterion": "Evidence", "note": "Uses sources."}]
+
+
+def test_parse_litellm_result_drops_score_in_cowrite() -> None:
+    parsed = parse_litellm_result(
+        json.dumps(
+            {
+                "score": 88,
+                "confidence": 0.8,
+                "feedback": "Reasoning only.",
+                "criterion_notes": [],
+                "flags": [],
+            }
+        ),
+        request_score=False,
+    )
+
+    assert parsed.score is None
+
+
+def test_build_messages_cowrite_forbids_numeric_grade() -> None:
+    cowrite = _build_messages(_request(request_score=False))
+    scored = _build_messages(_request(request_score=True))
+
+    assert cowrite[0]["role"] == "system"
+    assert "do not assign a numeric score" in cowrite[0]["content"].lower()
+    assert "numeric" in scored[0]["content"].lower()
+    assert "do not assign a numeric score" not in scored[0]["content"].lower()
+
+
+def test_build_messages_renders_rubric_and_criteria_after_static_prefix() -> None:
+    messages = _build_messages(
+        _request(
+            request_score=True,
+            rubric_text="Focus on evidence quality.",
+            criteria=[
+                {"name": "Evidence", "weight": 100, "description": "Uses sources."}
+            ],
+        )
+    )
+
+    # Static instruction block must lead (cache-prefix ordering).
+    assert messages[0]["role"] == "system"
+    rendered = json.dumps(messages)
+    assert "Focus on evidence quality." in rendered
+    assert "Evidence" in rendered
+
+
+def test_engine_falls_back_to_json_object_when_schema_unsupported(monkeypatch) -> None:
+    captured = {}
+
+    def fake_completion(**kwargs):
+        captured.update(kwargs)
+
+        class Choice:
+            message = {
+                "content": json.dumps(
+                    {
+                        "score": 80,
+                        "confidence": 0.8,
+                        "feedback": "Solid draft.",
+                        "criterion_notes": [],
+                        "flags": [],
+                    }
+                )
+            }
+
+        class Response:
+            choices = [Choice()]
+            usage = {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}
+
+        return Response()
+
+    monkeypatch.setattr(
+        "classroom_downloader.litellm_engine.litellm.completion", fake_completion
+    )
+    engine = LiteLlmGradingEngine(
+        model=model_entry(supports_response_schema=False),
+        timeout_seconds=30,
+        max_retries=1,
+    )
+
+    engine.grade(_request(request_score=True))
+
+    assert captured["response_format"] == {"type": "json_object"}
 
 
 def test_engine_calls_litellm_with_scrubbed_payload(monkeypatch) -> None:

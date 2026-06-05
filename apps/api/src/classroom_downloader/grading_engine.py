@@ -21,6 +21,7 @@ class GradingEngineRequest:
     source_label: str
     mime_type: str
     content: str
+    request_score: bool = True
 
 
 @dataclass(frozen=True)

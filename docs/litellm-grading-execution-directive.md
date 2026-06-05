@@ -19,6 +19,42 @@
 
 ---
 
+## Implementation status — updated 2026-06-05
+
+**Phases 1–3 implemented; full suite green (`66 passed`). Phases 4–5
+intentionally deferred (gated until Phase 3 ships so batch can be tested
+properly).**
+
+- **Task 1 (rubric_text + policy settings) — done, with deviation.** `rubric_text`
+  persisted + dev migration + flows into the engine; `grading_auto_accept_confidence`,
+  `grading_batch_mode`, `grading_structured_output` added. **Deviation:** the
+  `GradingPolicy`/`policy.py` abstraction was **not** created — the orchestrator and
+  engine branch inline on `teacher_loop`/`request_score`. `tests/test_grading_policy.py`
+  is therefore intentionally absent. **Deferred:** `grading_batch_max_submissions` /
+  `grading_batch_context_fraction` belong to Phase 4 and are not yet added.
+- **Task 2 (per-level prompts + nullable score) — done.** `GradingEngineRequest.request_score`
+  added; `_build_messages` branches on it (cowrite forbids a numeric grade); strict score
+  validation **restored** in `parse_litellm_result(content, request_score=True)` — a
+  missing/null/out-of-range score in a scored level now raises `malformed_llm_response`
+  instead of silently yielding a scoreless row; `request_score=False` tolerates/withholds
+  the score. **Deviation:** types use `list[dict]` rather than the directive's tuple shapes.
+- **Task 3 (orchestrator applies policy) — done.** `off` skips the call, `auto`
+  auto-accepts only clean high-confidence drafts, `cowrite` withholds the score; criterion
+  notes persisted. Negative auto-accept paths (low confidence / flagged) now covered by tests.
+- **Task 4 (strict JSON-schema + cached tokens) — done, with deviation.** Schema gated on
+  `supports_response_schema` + `grading_structured_output=="auto"`, json_object fallback,
+  cached-token capture persisted. **Deviation:** response schema is a hand-written dict, not a
+  Pydantic `GradingDraftModel`; OpenAI `prompt_tokens_details.cached_tokens` not captured.
+- **Task 5 (authoritative cost + rollups) — done, with deviation.** `completion_cost` with
+  catalog fallback; per-job token/cost/time rollups + `grading.job.cost.summary`. **Deviation:**
+  cost computed in `grading.py` (not `engine.last_cost_cents`); rollup fields use the plan's
+  names `wall_clock_ms` / `submissions_graded` (not `draft_wall_clock_ms` / `graded_submissions`);
+  the summary log emits raw token counts but not an explicit cache-hit ratio.
+- **Tasks 6–10 (Phases 4–5) — deferred (intentional).** No `class_batch` path, batch planner,
+  `grade_batch`, batch columns, docs, or smoke extension yet.
+
+---
+
 ## Architecture summary
 
 - **`policy.py` (new):** derive a `GradingPolicy` from `(teacher_loop, rubric_mode,
@@ -50,7 +86,9 @@ pseudonymized content; blocked/high-risk submissions never enter a batch.
 `GradingJobCreate.rubric_text` already exists), `main.py`, new `policy.py`,
 `tests/test_grading_policy.py`, `tests/test_grading.py`.
 
-- [ ] **Step 1 — Failing test for settings + policy.** Create
+- [ ] **Step 1 — Failing test for settings + policy.** *(Not done — `policy.py`
+  abstraction was intentionally inlined into the orchestrator/engine; no
+  `tests/test_grading_policy.py`. See Implementation status.)* Create
   `tests/test_grading_policy.py`:
   ```python
   import os
@@ -85,9 +123,10 @@ pseudonymized content; blocked/high-risk submissions never enter a batch.
       assert p.calls_model and p.request_score and not p.auto_accept
   ```
 
-- [ ] **Step 2 — Run red.** `uv run --extra dev pytest tests/test_grading_policy.py -q`.
+- [ ] **Step 2 — Run red.** *(N/A — see Step 1.)* `uv run --extra dev pytest tests/test_grading_policy.py -q`.
 
-- [ ] **Step 3 — Add settings** (`settings.py`, near the grading block):
+- [x] **Step 3 — Add settings** (`settings.py`, near the grading block) — *3 of 5 added;
+  `grading_batch_max_submissions` / `grading_batch_context_fraction` deferred to Phase 4:*
   ```python
   grading_auto_accept_confidence: float = 0.85
   grading_batch_mode: Literal["per_submission", "class_batch"] = "per_submission"
@@ -96,7 +135,9 @@ pseudonymized content; blocked/high-risk submissions never enter a batch.
   grading_structured_output: Literal["auto", "json_object"] = "auto"
   ```
 
-- [ ] **Step 4 — Create `policy.py`:**
+- [ ] **Step 4 — Create `policy.py`:** *(Not done — intentionally inlined; behavior
+  is equivalent. The `request_score`/`auto_accept`/`calls_model` logic lives in
+  `grading.py` + `litellm_engine.py`.)*
   ```python
   from __future__ import annotations
   from dataclasses import dataclass
@@ -122,34 +163,36 @@ pseudonymized content; blocked/high-risk submissions never enter a batch.
       )
   ```
 
-- [ ] **Step 5 — Persist `rubric_text`.** Add `rubric_text: str | None = None` to
+- [x] **Step 5 — Persist `rubric_text`.** Add `rubric_text: str | None = None` to
   `GradingJob` (`models.py`). Add it to the dev migration in `database.py`
   (`_ensure_grading_job_columns`, mirroring `_ensure_cache_columns`; register it in
   `ensure_sqlite_dev_migrations`). In `main.py::create_grading_job`, pass
   `rubric_text=payload.rubric_text` into the `GradingJob(...)` constructor (line ~713).
 
-- [ ] **Step 6 — Test that create persists rubric_text.** Add to `tests/test_grading.py`
+- [x] **Step 6 — Test that create persists rubric_text.** Add to `tests/test_grading.py`
   a test that POSTs a job with `rubric_text` and asserts the persisted job carries it
   (read the job row via a session, or expose `rubric_text` on `GradingJobRead` and
   assert through the API — do both: add `rubric_text` to `GradingJobRead` and
   `grading_job_snapshot`).
 
-- [ ] **Step 7 — Run green + full suite + commit** (`Persist rubric_text and add grading policy`).
+- [x] **Step 7 — Run green + full suite + commit** (`Persist rubric_text and add grading policy`).
+  *(Shipped as `Implement grading intervention levels`.)*
 
 ## Task 2: Per-level prompts & nullable score in the engine
 
 **Files:** `grading_engine.py`, `litellm_engine.py`, `tests/test_litellm_engine.py`.
 
-- [ ] **Step 1 — Failing engine tests.** In `tests/test_litellm_engine.py`, add:
+- [x] **Step 1 — Failing engine tests.** *(Added 2026-06-05.)* In `tests/test_litellm_engine.py`, add:
   - a cowrite request (`request_score=False`) produces a system/user prompt that
     instructs "no numeric grade" and `parse_litellm_result(..., request_score=False)`
     accepts a payload with `score` absent/null and returns `score is None`.
   - a request carrying `rubric_text` / `criteria` renders them into the messages.
   - the static instruction block is the **first** message (cache-prefix ordering).
 
-- [ ] **Step 2 — Run red.**
+- [x] **Step 2 — Run red.**
 
-- [ ] **Step 3 — Extend request/result types** (`grading_engine.py`):
+- [x] **Step 3 — Extend request/result types** (`grading_engine.py`) — *`request_score`
+  field added; `score`/`criterion_notes` already nullable; shapes use `list[dict]`, not tuples:*
   ```python
   @dataclass(frozen=True)
   class GradingEngineRequest:
@@ -166,25 +209,28 @@ pseudonymized content; blocked/high-risk submissions never enter a batch.
       criterion_notes: tuple[tuple[str, str], ...] = ()
   ```
 
-- [ ] **Step 4 — Per-level prompt** (`litellm_engine.py::_build_messages`). Branch on
+- [x] **Step 4 — Per-level prompt** (`litellm_engine.py::_build_messages`). Branch on
   `request_score`: the cowrite template forbids a numeric grade and asks for reasoning +
   `criterion_notes` only; the scored template keeps today's shape. Put the static
   system + rubric/orientation (`rubric_text`, criteria, required-shape) as the **leading
   message(s)**; only the per-student `submission_text` varies at the tail. Make
   `required_json_shape.score` `"number 0-100 or null"` when `request_score` is False.
 
-- [ ] **Step 5 — Parser tolerates null score** (`parse_litellm_result`). Add a
+- [x] **Step 5 — Parser tolerates null score** (`parse_litellm_result`). *(Fixed
+  2026-06-05: `request_score` param restores strict validation when True.)* Add a
   `request_score: bool = True` param: when False, accept missing/null `score` and return
   `score=None`; when True, keep strict validation. Always parse `criterion_notes`
   defensively. Keep all malformed paths raising `ValueError("malformed_llm_response")`.
 
-- [ ] **Step 6 — Green + full suite + commit** (`Add per-level grading prompts and nullable score`).
+- [x] **Step 6 — Green + full suite + commit** (`Add per-level grading prompts and nullable score`).
+  *(Prompts/score shipped in `Implement grading intervention levels`; strict validation + tests added 2026-06-05.)*
 
 ## Task 3: Orchestrator applies the policy
 
 **Files:** `grading.py`, `tests/test_grading.py`.
 
-- [ ] **Step 1 — Failing orchestration tests** (mock `litellm.completion`):
+- [x] **Step 1 — Failing orchestration tests** (mock `litellm.completion`) — *off/auto/cowrite
+  shipped earlier; the negative auto paths (low confidence / flagged → not reviewed) added 2026-06-05:*
   - `teacher_loop="off"` → draft makes **no** engine call, creates **no**
     `GradingAiAttempt`, submission `ai_score is None`, job still reaches a reviewing/
     completed state with rows present.
@@ -193,16 +239,16 @@ pseudonymized content; blocked/high-risk submissions never enter a batch.
   - `teacher_loop="auto"` with confidence `<0.85` **or** a flag → `reviewed is False`.
   - `teacher_loop="cowrite"` → `ai_score is None`, `feedback` populated, `reviewed is False`.
 
-- [ ] **Step 2 — Run red.**
+- [x] **Step 2 — Run red.**
 
-- [ ] **Step 3 — Build the request with policy** in `_draft_submission`
+- [x] **Step 3 — Build the request with policy** in `_draft_submission`
   (`grading.py:570`): compute `policy = policy_for(job, get_settings())`. If
   `not policy.calls_model`: skip the engine, do **not** call `_record_attempt`, leave
   `submission.ai_score=None`, `reviewed=False`, `error=None`, and return. Otherwise pass
   `request_score=policy.request_score`, `rubric_text=job.rubric_text`, and the job's
   criteria into `GradingEngineRequest`.
 
-- [ ] **Step 4 — Apply outcome by level** after a `completed` result:
+- [x] **Step 4 — Apply outcome by level** after a `completed` result:
   - cowrite (`not policy.request_score`): set `ai_score=None`, keep `confidence`,
     `feedback=result.feedback`, `final_score=None`, `reviewed=False`.
   - auto (`policy.auto_accept`): if `result.score is not None and not flags and
@@ -211,10 +257,11 @@ pseudonymized content; blocked/high-risk submissions never enter a batch.
   - approve: today's behavior.
   - Persist `criterion_notes` onto the job's `GradingCriterion` rows where names match.
 
-- [ ] **Step 5 — Update `_refresh_counts`** so `reviewed_submissions`/status reflect
+- [x] **Step 5 — Update `_refresh_counts`** so `reviewed_submissions`/status reflect
   auto-accepted rows (it already counts `reviewed`; verify auto path increments it).
 
-- [ ] **Step 6 — Green + full suite + commit** (`Wire teacher-intervention levels into drafting`).
+- [x] **Step 6 — Green + full suite + commit** (`Wire teacher-intervention levels into drafting`).
+  *(Shipped in `Implement grading intervention levels`.)*
 
 ---
 
@@ -225,7 +272,8 @@ pseudonymized content; blocked/high-risk submissions never enter a batch.
 **Files:** `litellm_engine.py`, `models.py`, `database.py`, `schemas.py`, `grading.py`,
 `tests/test_litellm_engine.py`, `tests/test_grading.py`.
 
-- [ ] **Step 1 — Failing tests:**
+- [x] **Step 1 — Failing tests:** *(schema + cached-token tests shipped earlier; the
+  json_object fallback test added 2026-06-05.)*
   - When the catalog model has `supports_response_schema=True` and
     `grading_structured_output="auto"`, the engine passes
     `response_format={"type":"json_schema", ...}` (assert the captured kwarg) and sets
@@ -234,27 +282,31 @@ pseudonymized content; blocked/high-risk submissions never enter a batch.
   - Usage carrying `cache_read_input_tokens`/`cache_creation_input_tokens` is captured
     into `last_usage` and persisted as `cached_prompt_tokens`/`cache_write_tokens`.
 
-- [ ] **Step 2 — Run red.**
+- [x] **Step 2 — Run red.**
 
-- [ ] **Step 3 — Define Pydantic output models** (`litellm_engine.py`):
+- [x] **Step 3 — Define Pydantic output models** (`litellm_engine.py`) — *deviation: implemented
+  as a hand-written JSON-schema dict, not a Pydantic `GradingDraftModel` (equivalent for the schema path):*
   `GradingDraftModel` (`score: float | None`, `confidence: float`, `feedback: str`,
   `criterion_notes: list[...]`, `flags: list[str]`). Build `response_format` from it
   with `strict=True` when `self.catalog_model.supports_response_schema` and
   `settings.grading_structured_output == "auto"`; else `{"type":"json_object"}`. Set
   `litellm.enable_json_schema_validation = True` once at module import or in `__init__`.
 
-- [ ] **Step 4 — Capture cached tokens.** Extend `_usage_dict` to also read
+- [x] **Step 4 — Capture cached tokens.** *(Deviation: OpenAI `prompt_tokens_details.cached_tokens`
+  not yet captured — only Anthropic-style `cache_read_input_tokens`/`cache_creation_input_tokens`.)*
+  Extend `_usage_dict` to also read
   `cache_read_input_tokens` and `cache_creation_input_tokens` (and OpenAI's
   `prompt_tokens_details.cached_tokens` if present). Surface them on `last_usage`.
 
-- [ ] **Step 5 — Persist new attempt columns.** Add
+- [x] **Step 5 — Persist new attempt columns.** Add
   `cached_prompt_tokens: int | None`, `cache_write_tokens: int | None` to
   `GradingAiAttempt` (`models.py`), to the dev migration
   (`_ensure_grading_ai_attempt_columns` required_columns), to `_record_attempt` +
   `_attempt_metadata`, and additively to `GradingSubmissionRead` + `_submission_read`
   (`ai_cached_prompt_tokens`, `ai_cache_write_tokens`).
 
-- [ ] **Step 6 — Green + full suite + commit** (`Add strict JSON-schema output and cached-token capture`).
+- [x] **Step 6 — Green + full suite + commit** (`Add strict JSON-schema output and cached-token capture`).
+  *(Shipped in `Add structured LiteLLM output metadata`.)*
 
 ---
 
@@ -265,7 +317,8 @@ pseudonymized content; blocked/high-risk submissions never enter a batch.
 **Files:** `litellm_engine.py`, `llm_catalog.py`, `models.py`, `database.py`,
 `schemas.py`, `grading.py`, `tests/test_grading.py`.
 
-- [ ] **Step 1 — Failing tests:**
+- [x] **Step 1 — Failing tests:** *(Done — rollup fields shipped as `wall_clock_ms` /
+  `submissions_graded`, not the `draft_wall_clock_ms` / `graded_submissions` named here.)*
   - After a litellm draft of a multi-submission job, `GradingJobRead` exposes
     `total_prompt_tokens`, `total_completion_tokens`, `total_cached_tokens`,
     `total_cost_cents`, `draft_wall_clock_ms`, `graded_submissions` with the expected
@@ -273,14 +326,17 @@ pseudonymized content; blocked/high-risk submissions never enter a batch.
   - A `grading.job.cost.summary` event is emitted on draft completion (assert via a
     caplog or a spy — or just assert the rollup fields; keep it simple).
 
-- [ ] **Step 2 — Run red.**
+- [x] **Step 2 — Run red.**
 
-- [ ] **Step 3 — Authoritative cost.** In `litellm_engine.grade`, after the call,
+- [x] **Step 3 — Authoritative cost.** *(Deviation: computed in `grading.py`
+  (`_completion_cost_cents` reads `engine.last_response`), not as `engine.last_cost_cents`.)*
+  In `litellm_engine.grade`, after the call,
   compute `self.last_cost_cents = litellm.completion_cost(completion_response=response)
   * 100` inside a try/except; on failure fall back to `estimate_cost_cents`. Surface
   `last_cost_cents`; have `_attempt_metadata` prefer it over the estimate.
 
-- [ ] **Step 4 — Job rollup fields.** Add to `GradingJob` (`models.py`) +
+- [x] **Step 4 — Job rollup fields.** *(Deviation: the `grading.job.cost.summary` log
+  emits raw token counts but not an explicit cache-hit ratio.)* Add to `GradingJob` (`models.py`) +
   dev migration: `total_prompt_tokens`, `total_completion_tokens`,
   `total_cached_tokens`, `total_cost_cents` (float), `draft_wall_clock_ms`,
   `graded_submissions`, `batch_mode`. In `draft_grading_job` (`grading.py:154`), wrap the
@@ -289,11 +345,15 @@ pseudonymized content; blocked/high-risk submissions never enter a batch.
   (totals + cache-hit ratio = cached/(prompt+cached)). Expose all rollups additively on
   `GradingJobRead` + `grading_job_snapshot`.
 
-- [ ] **Step 5 — Green + full suite + commit** (`Add authoritative cost and per-job grading rollups`).
+- [x] **Step 5 — Green + full suite + commit** (`Add authoritative cost and per-job grading rollups`).
+  *(Shipped in `Add grading cost rollups`.)*
 
 ---
 
 # PHASE 4 — `class_batch` mode (env-gated)
+
+> ⏸ **Deferred (intentional)** — gated until Phase 3 ships so batch can be tested
+> properly. Tasks 6–8 below are not yet implemented.
 
 ## Task 6: Batch prompt builder + parser
 
@@ -392,6 +452,8 @@ pseudonymized content; blocked/high-risk submissions never enter a batch.
 
 # PHASE 5 — Docs & smoke
 
+> ⏸ **Deferred (intentional)** — follows Phase 4. Task 9 not yet implemented.
+
 ## Task 9: Documentation + class-batch smoke
 
 **Files:** `docs/ai-grading-layer.md`, `apps/api/scripts/smoke_litellm_grading.py`
@@ -416,10 +478,16 @@ pseudonymized content; blocked/high-risk submissions never enter a batch.
 
 ## Final verification
 
-- [ ] `cd apps/api && uv run --extra dev pytest -q` — all green.
-- [ ] `cd apps/web && pnpm build` — additive schema fields don't break TS.
+- [x] `cd apps/api && uv run --extra dev pytest -q` — all green (`66 passed`, 2026-06-05).
+  *(Note: a local `apps/api/.env` with `CD_GOOGLE_PROVIDER=google` forces the real provider
+  into the cached settings singleton and fails ~27 tests with `FileNotFoundError: .tokens/...`;
+  run with `CD_GOOGLE_PROVIDER=mock` — CI has no `.env`, so its default `mock` applies.)*
+- [ ] `cd apps/web && pnpm build` — additive schema fields don't break TS. *(Not run this pass.)*
 - [ ] Mock smoke: `per_submission` and `class_batch` both print a job cost summary.
-- [ ] `git log --oneline` shows the per-task commits.
+  *(Deferred — `class_batch` is Phase 4.)*
+- [x] `git log --oneline` shows per-phase commits (`Implement grading intervention levels`,
+  `Add structured LiteLLM output metadata`, `Add grading cost rollups`) — compressed from the
+  5 prescribed per-task commits into 3 per-phase commits.
 
 ## Guardrails (every task)
 

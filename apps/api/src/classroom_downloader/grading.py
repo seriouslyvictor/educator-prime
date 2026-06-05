@@ -685,6 +685,7 @@ def _draft_submission(
                 activity_title=job.activity_title,
                 rubric_mode=job.rubric_mode,
                 teacher_loop=job.teacher_loop,
+                request_score=job.teacher_loop != "cowrite",
                 rubric_text=job.rubric_text,
                 criteria=[
                     {

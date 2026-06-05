@@ -79,7 +79,10 @@ class LiteLlmGradingEngine:
         self.last_response = response
         self.last_latency_ms = int((time.monotonic() - started) * 1000)
         self.last_usage = _usage_dict(getattr(response, "usage", None))
-        result = parse_litellm_result(_response_content(response))
+        result = parse_litellm_result(
+            _response_content(response),
+            request_score=request.request_score,
+        )
 
         log_event(
             logger,
@@ -96,7 +99,10 @@ class LiteLlmGradingEngine:
         return result
 
 
-def parse_litellm_result(content: str) -> GradingEngineResult:
+def parse_litellm_result(
+    content: str,
+    request_score: bool = True,
+) -> GradingEngineResult:
     try:
         payload = json.loads(content)
     except json.JSONDecodeError as exc:
@@ -111,6 +117,15 @@ def parse_litellm_result(content: str) -> GradingEngineResult:
     criterion_notes = payload.get("criterion_notes", [])
     flags = payload.get("flags", [])
 
+    if request_score:
+        # Scored levels (approve/auto) must return a calibrated 0-100 score; a
+        # missing, null, or out-of-range value is a malformed draft, not a
+        # silent scoreless row.
+        if score is None:
+            raise ValueError("malformed_llm_response")
+    else:
+        # Cowrite withholds the numeric grade: ignore any score the model emits.
+        score = None
     if confidence is None:
         raise ValueError("malformed_llm_response")
     if not isinstance(feedback, str) or not feedback.strip():
@@ -136,7 +151,7 @@ def parse_litellm_result(content: str) -> GradingEngineResult:
 
 
 def _build_messages(request: GradingEngineRequest) -> list[dict[str, str]]:
-    cowrite = request.teacher_loop == "cowrite"
+    cowrite = not request.request_score
     required_json_shape = {
         "score": "omit or null in cowrite mode; otherwise number from 0 to 100",
         "confidence": "number from 0 to 1",
