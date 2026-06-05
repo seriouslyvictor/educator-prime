@@ -15,6 +15,8 @@ class GradingEngineRequest:
     activity_title: str
     rubric_mode: str
     teacher_loop: str
+    rubric_text: str | None
+    criteria: list[dict[str, str | int | None]]
     student_label: str
     source_label: str
     mime_type: str
@@ -23,10 +25,11 @@ class GradingEngineRequest:
 
 @dataclass(frozen=True)
 class GradingEngineResult:
-    score: float
+    score: float | None
     confidence: float
     feedback: str
     flags: list[str]
+    criterion_notes: list[dict[str, str]] | None = None
 
 
 class GradingEngine(Protocol):
@@ -50,6 +53,8 @@ class MockGradingEngine:
             activity_title=request.activity_title,
             rubric_mode=request.rubric_mode,
             teacher_loop=request.teacher_loop,
+            rubric_text=bool(request.rubric_text),
+            criteria_count=len(request.criteria),
             student_label=request.student_label,
             source_label=request.source_label,
             mime_type=request.mime_type,
@@ -61,9 +66,10 @@ class MockGradingEngine:
                 "utf-8"
             )
         ).hexdigest()
-        score = float(62 + (int(seed[:4], 16) % 36))
+        score = None if request.teacher_loop == "cowrite" else float(62 + (int(seed[:4], 16) % 36))
         confidence = round(0.72 + ((int(seed[4:8], 16) % 24) / 100), 2)
-        band = "strong" if score >= 85 else "developing" if score >= 72 else "emerging"
+        band_score = score or 0
+        band = "strong" if band_score >= 85 else "developing" if band_score >= 72 else "emerging"
         flags: list[str] = []
         if request.mime_type.startswith("image/"):
             flags.append("visual_submission")
@@ -78,6 +84,7 @@ class MockGradingEngine:
             confidence=confidence,
             feedback=feedback,
             flags=flags,
+            criterion_notes=[],
         )
         log_event(
             logger,

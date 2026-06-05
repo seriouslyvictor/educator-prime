@@ -15,6 +15,19 @@ def main() -> None:
             activity_title="Smoke Test Assignment",
             rubric_mode="brief",
             teacher_loop="approve",
+            rubric_text="Give draft feedback on clarity and evidence.",
+            criteria=[
+                {
+                    "name": "Clarity",
+                    "weight": 50,
+                    "description": "The answer is easy to follow.",
+                },
+                {
+                    "name": "Evidence",
+                    "weight": 50,
+                    "description": "The answer supports claims with details.",
+                },
+            ],
             student_label="student_001",
             source_label="submission_001",
             mime_type="text/plain",

@@ -25,28 +25,61 @@ def init_db() -> None:
 def ensure_sqlite_dev_migrations(target_engine: Engine) -> None:
     if target_engine.dialect.name != "sqlite":
         return
+    _ensure_grading_job_columns(target_engine)
+    _ensure_grading_criterion_columns(target_engine)
     _ensure_grading_ai_attempt_columns(target_engine)
     _ensure_cache_columns(target_engine)
 
 
+def _ensure_grading_job_columns(target_engine: Engine) -> None:
+    _ensure_columns(
+        target_engine,
+        "gradingjob",
+        {
+            "rubric_text": "VARCHAR",
+        },
+    )
+
+
+def _ensure_grading_criterion_columns(target_engine: Engine) -> None:
+    _ensure_columns(
+        target_engine,
+        "gradingcriterion",
+        {
+            "latest_ai_note": "VARCHAR",
+        },
+    )
+
+
 def _ensure_grading_ai_attempt_columns(target_engine: Engine) -> None:
+    _ensure_columns(
+        target_engine,
+        "gradingaiattempt",
+        {
+            "prompt_tokens": "INTEGER",
+            "completion_tokens": "INTEGER",
+            "latency_ms": "INTEGER",
+        },
+    )
+
+
+def _ensure_columns(
+    target_engine: Engine,
+    table_name: str,
+    required_columns: dict[str, str],
+) -> None:
     inspector = inspect(target_engine)
-    if "gradingaiattempt" not in inspector.get_table_names():
+    if table_name not in inspector.get_table_names():
         return
     existing_columns = {
-        column["name"] for column in inspector.get_columns("gradingaiattempt")
-    }
-    required_columns = {
-        "prompt_tokens": "INTEGER",
-        "completion_tokens": "INTEGER",
-        "latency_ms": "INTEGER",
+        column["name"] for column in inspector.get_columns(table_name)
     }
     with target_engine.begin() as connection:
         for column_name, column_type in required_columns.items():
             if column_name not in existing_columns:
                 connection.execute(
                     text(
-                        f"ALTER TABLE gradingaiattempt "
+                        f"ALTER TABLE {table_name} "
                         f"ADD COLUMN {column_name} {column_type}"
                     )
                 )

@@ -86,6 +86,7 @@ class GradingJob(SQLModel, table=True):
     activity_title: str
     rubric_mode: str
     teacher_loop: str
+    rubric_text: str | None = None
     status: GradingStatus = Field(default=GradingStatus.ready)
     total_submissions: int = 0
     reviewed_submissions: int = 0
@@ -101,6 +102,7 @@ class GradingCriterion(SQLModel, table=True):
     name: str
     weight: int
     description: str | None = None
+    latest_ai_note: str | None = None
 
 
 class GradingSubmission(SQLModel, table=True):

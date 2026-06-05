@@ -430,6 +430,7 @@ def test_grading_engine_only_receives_pseudonymized_payload(
                 "activity_id": "activity-3",
                 "rubric_mode": "brief",
                 "teacher_loop": "approve",
+                "rubric_text": "Focus on evidence quality.",
             },
         ).json()
         from classroom_downloader import grading
@@ -457,6 +458,125 @@ def test_grading_engine_only_receives_pseudonymized_payload(
     assert "diego.lima@example.edu" not in payload
     assert "essay draft.docx" not in payload
     assert all(request.student_label.startswith("student_") for request in captured)
+    assert all(request.rubric_text == "Focus on evidence quality." for request in captured)
+
+
+def test_teacher_loop_off_prepares_rows_without_ai_attempts(monkeypatch, tmp_path) -> None:
+    get_settings().grading_cache_path = str(tmp_path / "grading")
+
+    class FailingEngine(GradingEngine):
+        name = "capture"
+        model = None
+
+        def grade(self, request: GradingEngineRequest) -> GradingEngineResult:
+            raise AssertionError("off mode must not call the grading engine")
+
+    with TestClient(app) as client:
+        job = client.post(
+            "/api/grading/jobs",
+            json={
+                "course_id": "course-1",
+                "activity_id": "activity-1",
+                "rubric_mode": "infer",
+                "teacher_loop": "off",
+            },
+        ).json()
+        from classroom_downloader import grading
+
+        monkeypatch.setattr(grading, "get_grading_engine", lambda: FailingEngine())
+        body = client.post(f"/api/grading/jobs/{job['id']}/draft").json()
+
+    assert body["total_submissions"] == 2
+    assert all(row["ai_attempt_status"] is None for row in body["submissions"])
+    assert all(row["ai_score"] is None for row in body["submissions"])
+
+    with Session(engine) as session:
+        attempts = session.exec(
+            select(GradingAiAttempt).where(GradingAiAttempt.job_id == job["id"])
+        ).all()
+
+    assert attempts == []
+
+
+def test_teacher_loop_auto_accepts_clean_high_confidence_drafts(monkeypatch, tmp_path) -> None:
+    settings = get_settings()
+    original_threshold = settings.grading_auto_accept_confidence
+    settings.grading_cache_path = str(tmp_path / "grading")
+    settings.grading_auto_accept_confidence = 0.85
+
+    class HighConfidenceEngine(GradingEngine):
+        name = "capture"
+        model = None
+
+        def grade(self, request: GradingEngineRequest) -> GradingEngineResult:
+            return GradingEngineResult(
+                score=94,
+                confidence=0.91,
+                feedback="Ready to accept.",
+                flags=[],
+            )
+
+    try:
+        with TestClient(app) as client:
+            job = client.post(
+                "/api/grading/jobs",
+                json={
+                    "course_id": "course-2",
+                    "activity_id": "activity-3",
+                    "rubric_mode": "infer",
+                    "teacher_loop": "auto",
+                },
+            ).json()
+            from classroom_downloader import grading
+
+            monkeypatch.setattr(grading, "get_grading_engine", lambda: HighConfidenceEngine())
+            body = client.post(f"/api/grading/jobs/{job['id']}/draft").json()
+    finally:
+        settings.grading_auto_accept_confidence = original_threshold
+
+    assert body["status"] == "completed"
+    assert body["reviewed_submissions"] == body["total_submissions"]
+    assert all(row["reviewed"] is True for row in body["submissions"])
+    assert all(row["final_score"] == 94 for row in body["submissions"])
+
+
+def test_teacher_loop_cowrite_keeps_score_empty_and_feedback_as_reasoning(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    get_settings().grading_cache_path = str(tmp_path / "grading")
+
+    class CowriteEngine(GradingEngine):
+        name = "capture"
+        model = None
+
+        def grade(self, request: GradingEngineRequest) -> GradingEngineResult:
+            return GradingEngineResult(
+                score=88,
+                confidence=0.8,
+                feedback="Reasoning for the teacher to turn into a grade.",
+                flags=[],
+            )
+
+    with TestClient(app) as client:
+        job = client.post(
+            "/api/grading/jobs",
+            json={
+                "course_id": "course-2",
+                "activity_id": "activity-3",
+                "rubric_mode": "infer",
+                "teacher_loop": "cowrite",
+            },
+        ).json()
+        from classroom_downloader import grading
+
+        monkeypatch.setattr(grading, "get_grading_engine", lambda: CowriteEngine())
+        body = client.post(f"/api/grading/jobs/{job['id']}/draft").json()
+
+    assert body["status"] == "reviewing"
+    assert all(row["ai_score"] is None for row in body["submissions"])
+    assert all(row["final_score"] is None for row in body["submissions"])
+    assert all("Reasoning" in row["feedback"] for row in body["submissions"])
 
 
 def test_litellm_engine_attempt_metadata_is_persisted(monkeypatch, tmp_path) -> None:

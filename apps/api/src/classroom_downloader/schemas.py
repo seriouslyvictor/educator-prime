@@ -111,6 +111,7 @@ class GradingCriterionRead(BaseModel):
     name: str
     weight: int
     description: str | None = None
+    latest_ai_note: str | None = None
 
 
 class GradingSubmissionRead(BaseModel):
@@ -191,6 +192,7 @@ class GradingJobRead(BaseModel):
     activity_title: str
     rubric_mode: str
     teacher_loop: str
+    rubric_text: str | None = None
     status: GradingStatus
     total_submissions: int
     reviewed_submissions: int

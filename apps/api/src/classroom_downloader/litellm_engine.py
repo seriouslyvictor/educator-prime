@@ -105,11 +105,14 @@ def parse_litellm_result(content: str) -> GradingEngineResult:
     score = _bounded_number(payload.get("score"), minimum=0, maximum=100)
     confidence = _bounded_number(payload.get("confidence"), minimum=0, maximum=1)
     feedback = payload.get("feedback")
+    criterion_notes = payload.get("criterion_notes", [])
     flags = payload.get("flags", [])
 
-    if score is None or confidence is None:
+    if confidence is None:
         raise ValueError("malformed_llm_response")
     if not isinstance(feedback, str) or not feedback.strip():
+        raise ValueError("malformed_llm_response")
+    if not isinstance(criterion_notes, list):
         raise ValueError("malformed_llm_response")
     if not isinstance(flags, list) or not all(isinstance(flag, str) for flag in flags):
         raise ValueError("malformed_llm_response")
@@ -119,12 +122,20 @@ def parse_litellm_result(content: str) -> GradingEngineResult:
         confidence=confidence,
         feedback=feedback,
         flags=flags,
+        criterion_notes=[
+            note
+            for note in criterion_notes
+            if isinstance(note, dict)
+            and isinstance(note.get("criterion"), str)
+            and isinstance(note.get("note"), str)
+        ],
     )
 
 
 def _build_messages(request: GradingEngineRequest) -> list[dict[str, str]]:
+    cowrite = request.teacher_loop == "cowrite"
     required_json_shape = {
-        "score": "number from 0 to 100",
+        "score": "omit or null in cowrite mode; otherwise number from 0 to 100",
         "confidence": "number from 0 to 1",
         "feedback": "non-empty teacher-facing draft feedback",
         "criterion_notes": [{"criterion": "string", "note": "string"}],
@@ -134,6 +145,8 @@ def _build_messages(request: GradingEngineRequest) -> list[dict[str, str]]:
         "activity_title": request.activity_title,
         "rubric_mode": request.rubric_mode,
         "teacher_loop": request.teacher_loop,
+        "rubric_text": request.rubric_text,
+        "criteria": request.criteria,
         "student_label": request.student_label,
         "source_label": request.source_label,
         "mime_type": request.mime_type,
@@ -145,7 +158,14 @@ def _build_messages(request: GradingEngineRequest) -> list[dict[str, str]]:
             "role": "system",
             "content": (
                 "Draft grades for the teacher to review. Respond with JSON only. "
-                "This is not a final grade; the teacher must review and approve it."
+                "Use the rubric text and criteria when present. "
+                "This is not a final grade; the teacher must review and approve it. "
+                + (
+                    "In cowrite mode, do not assign a numeric score; return reasoning "
+                    "and criterion notes for the teacher to grade."
+                    if cowrite
+                    else "Return a numeric draft score."
+                )
             ),
         },
         {

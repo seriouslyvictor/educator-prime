@@ -130,6 +130,7 @@ def grading_job_snapshot(session: Session, job: GradingJob) -> GradingJobRead:
         activity_title=job.activity_title,
         rubric_mode=job.rubric_mode,
         teacher_loop=job.teacher_loop,
+        rubric_text=job.rubric_text,
         status=job.status,
         total_submissions=job.total_submissions,
         reviewed_submissions=job.reviewed_submissions,
@@ -555,11 +556,34 @@ def _draft_submission(
     cached_scrub = scrub_submission_cached(session, job, submission, cache_file)
     extracted = cached_scrub.extracted
     scrubbed = cached_scrub.scrubbed
+    settings = get_settings()
+    criteria = session.exec(
+        select(GradingCriterion).where(GradingCriterion.job_id == job.id)
+    ).all()
     retry_count = len(
         session.exec(
             select(GradingAiAttempt).where(GradingAiAttempt.submission_id == submission.id)
         ).all()
     )
+
+    if job.teacher_loop == "off":
+        log_event(
+            logger,
+            "grading.submission.engine_call.skipped",
+            job_id=job.id,
+            submission_id=submission.id,
+            teacher_loop=job.teacher_loop,
+        )
+        submission.ai_score = None
+        submission.confidence = None
+        submission.final_score = None if reset_review else submission.final_score
+        submission.feedback = None if reset_review else submission.feedback
+        submission.reviewed = False if reset_review else submission.reviewed
+        submission.flag = None
+        submission.error = None
+        submission.updated_at = datetime.now(UTC)
+        session.add(submission)
+        return cached_scrub
 
     if scrubbed.report.status in {"failed", "high_reidentification_risk"}:
         log_event(
@@ -612,6 +636,15 @@ def _draft_submission(
                 activity_title=job.activity_title,
                 rubric_mode=job.rubric_mode,
                 teacher_loop=job.teacher_loop,
+                rubric_text=job.rubric_text,
+                criteria=[
+                    {
+                        "name": criterion.name,
+                        "weight": criterion.weight,
+                        "description": criterion.description,
+                    }
+                    for criterion in criteria
+                ],
                 student_label=scrubbed.student_label,
                 source_label=scrubbed.source_label,
                 mime_type=submission.mime_type,
@@ -675,12 +708,23 @@ def _draft_submission(
         cost_cents=attempt_metadata["cost_cents"],
         latency_ms=attempt_metadata["latency_ms"],
     )
-    submission.ai_score = result.score
+    _apply_criterion_notes(session, criteria, result.criterion_notes or [])
+    cowrite = job.teacher_loop == "cowrite"
+    auto_accept = (
+        job.teacher_loop == "auto"
+        and result.confidence >= settings.grading_auto_accept_confidence
+        and not result.flags
+        and result.score is not None
+    )
+    submission.ai_score = None if cowrite else result.score
     submission.confidence = result.confidence
-    submission.final_score = result.score if reset_review else submission.final_score or result.score
+    if cowrite:
+        submission.final_score = None if reset_review else submission.final_score
+    else:
+        submission.final_score = result.score if reset_review else submission.final_score or result.score
     submission.feedback = result.feedback if reset_review else submission.feedback or result.feedback
-    submission.reviewed = False if reset_review else submission.reviewed
-    submission.flag = flags[0] if flags else None
+    submission.reviewed = auto_accept if reset_review else submission.reviewed or auto_accept
+    submission.flag = None if auto_accept else flags[0] if flags else None
     submission.error = None
     submission.updated_at = datetime.now(UTC)
     session.add(submission)
@@ -698,6 +742,25 @@ def _draft_submission(
         error=submission.error,
     )
     return cached_scrub
+
+
+def _apply_criterion_notes(
+    session: Session,
+    criteria: list[GradingCriterion],
+    criterion_notes: list[dict[str, str]],
+) -> None:
+    notes_by_name = {
+        note["criterion"].strip().lower(): note["note"].strip()
+        for note in criterion_notes
+        if note.get("criterion") and note.get("note")
+    }
+    if not notes_by_name:
+        return
+    for criterion in criteria:
+        note = notes_by_name.get(criterion.name.strip().lower())
+        if note:
+            criterion.latest_ai_note = note
+            session.add(criterion)
 
 
 def _record_attempt(

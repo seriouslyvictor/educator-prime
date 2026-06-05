@@ -100,6 +100,14 @@ def test_engine_calls_litellm_with_scrubbed_payload(monkeypatch) -> None:
             activity_title="Essay Draft",
             rubric_mode="brief",
             teacher_loop="approve",
+            rubric_text="Focus on evidence quality.",
+            criteria=[
+                {
+                    "name": "Evidence",
+                    "weight": 100,
+                    "description": "Uses relevant examples.",
+                }
+            ],
             student_label="student_001",
             source_label="submission_001",
             mime_type="text/plain",
