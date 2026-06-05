@@ -1,6 +1,6 @@
 # Implementation Plan: LiteLLM AI grading — intervention levels, batch mode & cost observability
 
-> Status: **Planned — not yet started.**
+> Status: **Partially implemented — phases 1-3 complete.**
 > Scope: `apps/api` grading engine + orchestration. Builds on the shipped LiteLLM
 > wiring (`docs/superpowers/plans/2026-05-27-litellm-grading-wiring.md`,
 > `docs/ai-grading-layer.md`).
@@ -8,6 +8,22 @@
 > intervention** (fully automated → co-pilot only); add an **env-selectable batch
 > mode** (whole class in one XML-delimited prompt) with a **context-size guard**;
 > and make **cost, token usage, and time-to-complete** first-class in observability.
+
+## 0. Implementation ledger
+
+- **Phase 1 complete:** intervention levels now affect orchestration. `off` prepares
+  rows without engine calls or AI attempts, `auto` auto-accepts clean high-confidence
+  drafts, `cowrite` keeps numeric scores empty, and `rubric_text`/criteria are
+  persisted and passed into the engine request.
+- **Phase 2 complete:** LiteLLM uses strict JSON schema output when the selected
+  catalog model supports response schemas, falls back to JSON object mode otherwise,
+  and captures cache read/write token usage on AI attempts.
+- **Phase 3 complete:** LiteLLM cost now prefers authoritative
+  `completion_cost(...)` with catalog estimate fallback, and grading jobs expose
+  prompt/completion/cached token totals, total cost, wall-clock time, graded count,
+  engine, mode, and model rollups.
+- **Phases 4-5 remain planned:** `class_batch` execution and the final docs/smoke
+  pass are intentionally not implemented in this slice.
 
 ---
 
@@ -215,19 +231,19 @@ settings.
 
 ## 10. Phased delivery
 
-1. **Phase 1 — Intervention levels (no batch).** `GradingPolicy`, per-level prompts,
+1. **Phase 1 — Intervention levels (no batch) — implemented.** `GradingPolicy`, per-level prompts,
    `off` skips the call, `auto` auto-accept, `cowrite` no-score, persist+use
    `rubric_text`/criteria. Highest user value; unblocks the UI promises.
-2. **Phase 2 — Structured output + caching.** Pydantic schemas, schema-gated
+2. **Phase 2 — Structured output + caching — implemented.** Pydantic schemas, schema-gated
    `response_format`, cache-friendly layout, capture cached tokens. Reliability + cost
    visibility groundwork.
-3. **Phase 3 — Cost/time observability.** `completion_cost`, per-job rollups,
+3. **Phase 3 — Cost/time observability — implemented.** `completion_cost`, per-job rollups,
    `grading.job.cost.summary`, expose on wrap API. Answers the cost/token/time ask
    independently of batch.
-4. **Phase 4 — `class_batch` mode.** XML assembly, batch schema + parser, context
+4. **Phase 4 — `class_batch` mode — planned.** XML assembly, batch schema + parser, context
    guard (§5), quality-guard fallback, per-item cost attribution. Gated behind the env
    flag and the context calculation.
-5. **Phase 5 — Docs + smoke.** Extend `ai-grading-layer.md`, add a `class_batch`
+5. **Phase 5 — Docs + smoke — planned.** Extend `ai-grading-layer.md`, add a `class_batch`
    smoke script, document the cost/quality tradeoff and the safe-tweak checklist.
 
 Each phase: TDD against mocked `litellm.completion` (the repo already mocks it in
