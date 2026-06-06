@@ -183,6 +183,8 @@ export const api = {
     `${API_BASE}/api/grading/jobs/${jobId}/privacy-audit/export.json`,
   privacyAuditStreamUrl: (jobId: string) =>
     `${API_BASE}/api/grading/jobs/${jobId}/privacy-audit/stream`,
+  criteriaStreamUrl: (jobId: string) =>
+    `${API_BASE}/api/grading/jobs/${jobId}/criteria/stream`,
   draftGradingJob: async (jobId: string) => {
     const response = await request<GradingJob>(`/api/grading/jobs/${jobId}/draft`, {
       method: "POST",

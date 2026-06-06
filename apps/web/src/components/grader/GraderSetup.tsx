@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { GradingCriterionInput, GradingQueueItem, PrivacyAudit, RubricMode, TeacherLoopMode } from "../../types";
+import type { GradingCriterionInput, GradingJob, GradingQueueItem, PrivacyAudit, RubricMode, TeacherLoopMode } from "../../types";
 import { api } from "../../lib/api";
 import { AppIcon } from "../icons";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, RadioGroup, RadioItem, Tabs, TabsList, TabsTrigger } from "../ui";
@@ -34,16 +34,27 @@ const loopModes: Array<{
 
 export function GraderSetup({
   item,
+  job,
   busy,
   audit,
+  progress,
   onBack,
   onStart,
   onContinue,
   onRerun,
 }: {
   item: GradingQueueItem;
+  job: GradingJob | null;
   busy: boolean;
   audit: PrivacyAudit | null;
+  progress: {
+    phase: "audit" | "criteria" | "draft";
+    processed: number;
+    total: number;
+    current: string;
+    done: boolean;
+    error: string | null;
+  } | null;
   onBack: () => void;
   onStart: (payload: {
     rubricMode: RubricMode;
@@ -62,11 +73,20 @@ export function GraderSetup({
     { name: "Clareza", weight: 40, description: "Organização, leitura e justificativa." },
   ]);
   const selectedRubric = rubricModes.find((mode) => mode.id === rubricMode) ?? rubricModes[0];
+  const inferredCriteria = job?.criteria.length
+    ? job.criteria.map((criterion) => ({
+        name: criterion.name,
+        weight: criterion.weight,
+        description: criterion.description,
+      }))
+    : criteria;
 
   // Once the audit has run we lock the rubric controls (the choice is baked into the
   // created job) and hand off to the inline preparation panel.
   const prepared = audit !== null;
-  const preparing = busy && !prepared;
+  const inferring = progress?.phase === "criteria" && !progress.done;
+  const auditing = progress?.phase === "audit" && !progress.done;
+  const preparing = (busy && !prepared) || inferring || auditing;
   const criteriaTotal = criteria.reduce((sum, criterion) => sum + (Number(criterion.weight) || 0), 0);
   const criteriaValid =
     rubricMode !== "structured" ||
@@ -117,8 +137,18 @@ export function GraderSetup({
                   Isto cria uma nova rodada; a anterior fica no histórico.
                 </div>
               ) : null}
-              {rubricMode !== "saved" ? <p className="rubric-mode-copy">{selectedRubric.copy}</p> : null}
-              {rubricMode === "structured" ? (
+              {inferring ? (
+                <CriteriaRunningPanel progress={progress} />
+              ) : auditing ? (
+                <AuditRunningPanel progress={progress} total={job?.total_submissions || item.submission_count} />
+              ) : rubricMode === "infer" ? (
+                <InferCriteriaPanel
+                  criteria={inferredCriteria}
+                  disabled={prepared || preparing}
+                  onChange={setCriteria}
+                  submissionCount={job?.total_submissions || item.submission_count}
+                />
+              ) : rubricMode === "structured" ? (
                 <StructuredCriteriaEditor
                   criteria={criteria}
                   total={criteriaTotal}
@@ -145,7 +175,7 @@ export function GraderSetup({
                 </div>
               ) : (
                 <label className="rubric-input">
-                  <span>{rubricMode === "infer" ? "Notas opcionais" : "Notas da rubrica"}</span>
+                  <span>Notas da rubrica</span>
                   <textarea
                     value={rubricText}
                     onChange={(event) => setRubricText(event.target.value)}
@@ -204,9 +234,9 @@ export function GraderSetup({
                 </div>
               ))}
               <div className="context-row muted">
-                <AppIcon name="x" />
-                <span>Lista da turma (nomes ocultos para a IA)</span>
-                <em>privacidade</em>
+                <AppIcon name="eyeOff" />
+                <span>Nomes e e-mails dos alunos</span>
+                <em>ocultados</em>
               </div>
             </CardContent>
           </Card>
@@ -314,6 +344,136 @@ function StructuredCriteriaEditor({
         {total !== 100 ? <span>Os pesos precisam somar 100.</span> : null}
       </div>
     </div>
+  );
+}
+
+function CriteriaRunningPanel({
+  progress,
+}: {
+  progress: {
+    processed: number;
+    total: number;
+    current: string;
+  };
+}) {
+  return (
+    <div className="criteria-running">
+      <div className="audit-run-eyebrow">
+        <AppIcon name="sparkle" /> Definindo critérios
+      </div>
+      <div className="audit-run-title">
+        <AppIcon name="loader" className="ico spin" />
+        <h2>Inferindo rubrica</h2>
+      </div>
+      <p className="audit-run-current">
+        {progress.current || "Lendo a descrição da atividade e sinais estruturais."}
+      </p>
+      <div className="audit-run-meter-row">
+        <strong>{progress.processed}/{Math.max(progress.total, 1)}</strong>
+        <span>{Math.round((progress.processed / Math.max(progress.total, 1)) * 100)}%</span>
+      </div>
+      <div className="audit-run-meter">
+        <span style={{ width: `${(progress.processed / Math.max(progress.total, 1)) * 100}%` }} />
+      </div>
+      <div className="audit-run-note">A professora verá e poderá editar os critérios antes da auditoria.</div>
+    </div>
+  );
+}
+
+function AuditRunningPanel({
+  progress,
+  total,
+}: {
+  progress: {
+    processed: number;
+    total: number;
+    current: string;
+  };
+  total: number;
+}) {
+  const progressTotal = progress.total || total || 1;
+  const pct = Math.round((progress.processed / progressTotal) * 100);
+  return (
+    <div className="audit-run">
+      <div className="audit-run-eyebrow">
+        <AppIcon name="shield" /> Preparando entregas · a IA ainda não viu nada
+      </div>
+      <div className="audit-run-title">
+        <AppIcon name="loader" className="ico spin" />
+        <h2>Auditoria de privacidade</h2>
+      </div>
+      <div className="audit-run-current">
+        Verificando <strong>{progress.current || "entregas"}</strong> — mascarando nomes, e-mails e identificadores.
+      </div>
+      <div className="audit-run-meter-row">
+        <strong>{progress.processed}/{progressTotal}</strong>
+        <span>{pct}%</span>
+      </div>
+      <div className="audit-run-meter"><span style={{ width: `${pct}%` }} /></div>
+      <div className="audit-run-note">
+        Esta etapa é obrigatória. Nenhum dado vai para a IA antes da auditoria concluir.
+      </div>
+    </div>
+  );
+}
+
+function InferCriteriaPanel({
+  criteria,
+  disabled,
+  submissionCount,
+  onChange,
+}: {
+  criteria: GradingCriterionInput[];
+  disabled: boolean;
+  submissionCount: number;
+  onChange: (criteria: GradingCriterionInput[]) => void;
+}) {
+  const toggle = (index: number) => {
+    if (disabled) return;
+    const next = criteria.filter((_, rowIndex) => rowIndex !== index);
+    onChange(next.length ? next : criteria);
+  };
+  const updateWeight = (index: number, weight: number) => {
+    onChange(criteria.map((criterion, rowIndex) => (rowIndex === index ? { ...criterion, weight } : criterion)));
+  };
+  const activeTotal = criteria.reduce((sum, criterion) => sum + (Number(criterion.weight) || 0), 0);
+  return (
+    <>
+      <div className="panel-hint">
+        A IA analisou a descrição da atividade e sinais seguros. Rubrica proposta para{" "}
+        <strong>{submissionCount || "as"} entregas</strong> — edite ou remova o que quiser:
+      </div>
+      <div className="criteria-list">
+        {criteria.map((criterion, index) => (
+          <div className="criterion-row ai-proposed" key={`${criterion.name}-${index}`}>
+            <button className="sk-cb on" onClick={() => toggle(index)} disabled={disabled} aria-label="Remover critério">
+              <AppIcon name="check" />
+            </button>
+            <div>
+              <div className="crit-name">{criterion.name}</div>
+              <div className="crit-hint">{criterion.description ?? "Critério inferido pela IA."}</div>
+            </div>
+            <input
+              className="crit-weight"
+              value={criterion.weight}
+              disabled={disabled}
+              type="number"
+              min={1}
+              max={100}
+              onChange={(event) => updateWeight(index, Number(event.target.value) || 0)}
+              aria-label={`Peso de ${criterion.name}`}
+            />
+            <button className="icon-btn" disabled={disabled} title="Editar">
+              <AppIcon name="moreHorizontal" />
+            </button>
+          </div>
+        ))}
+      </div>
+      <div className="suggestion-strip">
+        <span className={`qc-pill ${activeTotal === 100 ? "posted" : "reviewing"}`}>Pesos somam {activeTotal}%</span>
+        <span className="qc-pill ai"><AppIcon name="sparkle" /> Rubrica inferida antes da auditoria</span>
+      </div>
+    </>
   );
 }
 

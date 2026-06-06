@@ -1,13 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../../lib/api";
-import type { GradingJob, GradingSubmission } from "../../types";
+import type { GradingJob, GradingSubmission, PrivacyAudit } from "../../types";
 import { AppIcon } from "../icons";
 import { GraderTopbar } from "./GraderTopbar";
 import {
-  attemptLabel,
-  attemptTone,
-  extractionLabel,
-  extractionTone,
   privacyLabel,
   privacyTone,
   safeStatusLabel,
@@ -42,6 +38,8 @@ function hasDefaultCriteria(job: GradingJob): boolean {
 export function GraderReview({
   job,
   busy,
+  audit,
+  progress,
   activeSubmissionId,
   onActiveSubmission,
   onBack,
@@ -51,6 +49,15 @@ export function GraderReview({
 }: {
   job: GradingJob;
   busy: boolean;
+  audit: PrivacyAudit | null;
+  progress: {
+    phase: "audit" | "criteria" | "draft";
+    processed: number;
+    total: number;
+    current: string;
+    done: boolean;
+    error: string | null;
+  } | null;
   activeSubmissionId: string | null;
   onActiveSubmission: (id: string) => void;
   onBack: () => void;
@@ -59,6 +66,7 @@ export function GraderReview({
   onRetry: (submission: GradingSubmission) => void;
 }) {
   const [filter, setFilter] = useState<ReviewFilter>("all");
+  const [reportOpen, setReportOpen] = useState(false);
   const active = useMemo(
     () => job.submissions.find((submission) => submission.id === activeSubmissionId) ?? job.submissions[0],
     [activeSubmissionId, job.submissions],
@@ -96,6 +104,7 @@ export function GraderReview({
 
   const total = job.submissions.length || 1;
   const blockedActive = isBlocked(active);
+  const activeDrafting = Boolean(progress?.phase === "draft" && active && active.ai_score == null && !active.error);
   const score = Number(scoreText);
   const hasValidScore = scoreText.trim() !== "" && Number.isFinite(score);
 
@@ -151,6 +160,17 @@ export function GraderReview({
           </>
         }
       />
+      {audit ? <AuditStrip audit={audit} onOpen={() => setReportOpen(true)} /> : null}
+      {progress?.phase === "draft" && !progress.done ? (
+        <div className="stream-strip">
+          <AppIcon name="sparkle" />
+          <span>Gerando rascunhos da IA</span>
+          <div className="stream-bar">
+            <span style={{ width: `${(progress.processed / Math.max(progress.total, 1)) * 100}%` }} />
+          </div>
+          <strong>{progress.processed}/{Math.max(progress.total, 1)}</strong>
+        </div>
+      ) : null}
       <div className="review-grid">
         <aside className="student-list">
           <div className="student-list-head">
@@ -195,6 +215,7 @@ export function GraderReview({
                 key={submission.id}
                 submission={submission}
                 active={submission.id === active?.id}
+                drafting={Boolean(progress?.phase === "draft" && submission.ai_score == null && !submission.error)}
                 onPick={() => onActiveSubmission(submission.id)}
               />
             ))}
@@ -243,7 +264,13 @@ export function GraderReview({
           )}
         </section>
 
-        {active ? (
+        {active ? activeDrafting ? (
+          <aside className="suggestion-panel aside-drafting" aria-live="polite">
+            <AppIcon name="loader" className="ico spin" />
+            <h3>Gerando rascunho...</h3>
+            <p>A IA está avaliando esta entrega com a rubrica. O resultado aparece aqui em instantes.</p>
+          </aside>
+        ) : (
           <aside className="suggestion-panel" aria-live="polite">
             <div className="aside-head">
               <div className="aside-eyebrow">
@@ -269,11 +296,7 @@ export function GraderReview({
               {active.feedback && !blockedActive ? <div className="aside-summary">{active.feedback}</div> : null}
             </div>
 
-            <div className="privacy-status-grid">
-              <StatusPill label="Privacidade" value={privacyLabel(active.privacy_status)} tone={privacyTone(active)} />
-              <StatusPill label="Entrada" value={extractionLabel(active.extraction_status)} tone={extractionTone(active)} />
-              <StatusPill label="Motor" value={attemptLabel(active.ai_attempt_status)} tone={attemptTone(active)} />
-            </div>
+            <PrivacyBlock submission={active} />
 
             {blockedActive ? (
               <div className="flag-banner danger">
@@ -343,6 +366,109 @@ export function GraderReview({
           </aside>
         ) : null}
       </div>
+      {reportOpen && audit ? <AuditReport audit={audit} onClose={() => setReportOpen(false)} /> : null}
+    </div>
+  );
+}
+
+function AuditStrip({ audit, onOpen }: { audit: PrivacyAudit; onOpen: () => void }) {
+  return (
+    <div className="audit-strip">
+      <div className="as-lead">
+        <span className="as-shield"><AppIcon name="shield" /></span>
+        <div className="as-text">
+          <strong>Auditoria de privacidade aprovada</strong>
+          <span>{audit.total_files} verificadas · nomes e e-mails ocultados da IA</span>
+        </div>
+      </div>
+      <div className="as-counts">
+        <span className="as-count ok"><b>{audit.passed_files}</b> limpas</span>
+        <span className="as-count warn"><b>{audit.redacted_files}</b> redigidas</span>
+        <span className="as-count danger"><b>{audit.blocked_files + audit.high_risk_files}</b> retidas</span>
+      </div>
+      <button className="as-report" onClick={onOpen}>
+        <AppIcon name="fileText" /> Ver relatório
+      </button>
+    </div>
+  );
+}
+
+function AuditReport({ audit, onClose }: { audit: PrivacyAudit; onClose: () => void }) {
+  return (
+    <>
+      <div className="drawer-scrim" onClick={onClose} />
+      <div className="drawer audit-drawer">
+        <div className="drawer-head">
+          <div>
+            <div className="drawer-title"><AppIcon name="shield" /> Relatório de privacidade</div>
+            <div className="drawer-sub">
+              {audit.total_files} entregas · {audit.passed_files} limpas · {audit.redacted_files} redigidas ·{" "}
+              {audit.blocked_files + audit.high_risk_files} retidas
+            </div>
+          </div>
+          <button className="icon-btn" onClick={onClose}><AppIcon name="x" /></button>
+        </div>
+        <div className="drawer-body audit-drawer-body">
+          <div className="audit-reassure in-drawer">
+            <AppIcon name="eyeOff" />
+            Antes de qualquer correção, nomes e e-mails foram substituídos por rótulos anônimos.
+          </div>
+          <section className="audit-table" aria-label="Linhas da auditoria de privacidade">
+            <div className="audit-row audit-row-head">
+              <span>Aluno</span>
+              <span>Arquivo</span>
+              <span>Privacidade</span>
+              <span>Sinais</span>
+            </div>
+            {audit.rows.map((row) => (
+              <div className="audit-row" key={row.id}>
+                <span className="ar-name">{row.student_label}</span>
+                <span className="ar-file">{row.redacted_source_name}</span>
+                <span className={`student-state ${row.privacy_status === "clean" ? "ok" : row.audit_pass ? "warn" : "danger"}`}>
+                  {safeStatusLabel(row.blocked_reason) || privacyLabel(row.privacy_status)}
+                </span>
+                <span className="ar-flags">{row.privacy_flags.length ? row.privacy_flags.map(safeStatusLabel).join(", ") : "Nenhum"}</span>
+              </div>
+            ))}
+          </section>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function PrivacyBlock({ submission }: { submission: GradingSubmission }) {
+  const tone = privacyTone(submission);
+  const label = privacyLabel(submission.privacy_status);
+  const flags = [...submission.ai_flags];
+  if (submission.flag) flags.push(submission.flag);
+  return (
+    <div className={`privacy-block ${tone}`}>
+      <div className="pb-row">
+        <span className="pb-ic">
+          <AppIcon name={tone === "danger" ? "lock" : tone === "warn" ? "eyeOff" : "shield"} />
+        </span>
+        <div className="pb-main">
+          <div className="pb-head">
+            <span className="pb-label">Privacidade</span>
+            <span className={`pb-tag ${tone}`}>{label}</span>
+          </div>
+          <div className="pb-desc">
+            {tone === "danger"
+              ? "Retida da IA ou sem rascunho seguro; corrija manualmente."
+              : tone === "warn"
+                ? "Identificadores foram ocultados antes de a IA ler."
+                : "Nenhum dado pessoal direto encontrado no corpo da entrega."}
+          </div>
+          {flags.length ? (
+            <div className="pb-flags">
+              {flags.map((flag) => (
+                <span className="pb-flag" key={flag}><AppIcon name="eyeOff" /> {safeStatusLabel(flag)}</span>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      </div>
     </div>
   );
 }
@@ -350,10 +476,12 @@ export function GraderReview({
 function StudentRow({
   submission,
   active,
+  drafting,
   onPick,
 }: {
   submission: GradingSubmission;
   active: boolean;
+  drafting: boolean;
   onPick: () => void;
 }) {
   const blocked = isBlocked(submission);
@@ -366,17 +494,19 @@ function StudentRow({
         : { icon: "sparkle" as const, tone: "ai", label: "rascunho da IA" };
 
   return (
-    <button className={`student-row ${active ? "active" : ""}`} onClick={onPick}>
+    <button className={`student-row ${active ? "active" : ""} ${drafting ? "drafting" : ""}`} onClick={onPick}>
       <div className="student-avatar small">{initials(submission.student_name, "AL")}</div>
       <div className="student-row-copy">
         <div className="student-name">{studentLabel(submission)}</div>
         <div className={`student-meta ${meta.tone}`}>
-          <AppIcon name={meta.icon} />
-          {meta.label}
+          {drafting ? <span className="dot-spin" /> : <AppIcon name={meta.icon} />}
+          {drafting ? "gerando rascunho..." : meta.label}
         </div>
       </div>
       <div className="student-score">
-        {submission.final_score != null ? (
+        {drafting ? (
+          <span className="skeleton score-skeleton" />
+        ) : submission.final_score != null ? (
           <span className="final">{submission.final_score}</span>
         ) : submission.ai_score != null ? (
           <span className="ai-suggest">✦ {submission.ai_score}</span>
@@ -594,15 +724,6 @@ function BlockedEvidence({
           Tentar extrair novamente
         </button>
       </div>
-    </div>
-  );
-}
-
-function StatusPill({ label, value, tone }: { label: string; value: string; tone: string }) {
-  return (
-    <div className={`status-pill ${tone}`}>
-      <span>{label}</span>
-      <strong>{value}</strong>
     </div>
   );
 }

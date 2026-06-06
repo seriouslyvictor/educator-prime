@@ -8,14 +8,10 @@ import {
   GraderSetup,
   GraderWrap,
 } from "./components/grader";
-import {
-  GradingProgressModal,
-  type GradingProgressState,
-} from "./components/grader/GradingProgressModal";
 import { HistoryView } from "./components/HistoryView";
 import { ProgressView, type ProgressLogItem } from "./components/ProgressView";
 import { Rail } from "./components/Rail";
-import { ActivityList, ClassroomList } from "./components/workspace";
+import { TurmasView } from "./components/workspace";
 import { api } from "./lib/api";
 import appStyles from "./components/App.module.css";
 void appStyles;
@@ -72,6 +68,16 @@ type GradingStreamPayload = {
   error?: string;
   summary?: PrivacyAudit;
   job?: GradingJob;
+  submission?: GradingSubmission;
+};
+
+type GradingInlineProgress = {
+  phase: "audit" | "criteria" | "draft";
+  processed: number;
+  total: number;
+  current: string;
+  done: boolean;
+  error: string | null;
 };
 
 function readStoredJobId(): string | null {
@@ -139,7 +145,7 @@ export function App() {
   const [privacyAudit, setPrivacyAudit] = useState<PrivacyAudit | null>(null);
   const [activeGradingSubmissionId, setActiveGradingSubmissionId] = useState<string | null>(null);
   const [graderBusy, setGraderBusy] = useState(false);
-  const [gradingProgress, setGradingProgress] = useState<GradingProgressState | null>(null);
+  const [gradingProgress, setGradingProgress] = useState<GradingInlineProgress | null>(null);
 
   const connected = Boolean(auth?.signed_in && auth.classroom_scopes && auth.drive_scopes);
   const selectedCourse = useMemo(
@@ -407,13 +413,28 @@ export function App() {
       reviewed_submissions: 0,
       total_submissions: 0,
     };
+    setGraderBusy(true);
+    setError(null);
+    setPrivacyAudit(null);
     setSelectedGradingItem(item);
     setView("graderSetup");
-    void startGradingAuditForItem(item, {
-      rubricMode: "infer",
-      teacherLoop: "approve",
-      rubricText: "",
-    });
+    try {
+      const created = await api.createGradingJob({
+        course_id: item.course_id,
+        activity_id: item.activity_id,
+        rubric_mode: "infer",
+        teacher_loop: "approve",
+        rubric_text: "",
+      });
+      setGradingJob(created);
+      setSelectedGradingItem(gradingItemFromJob(created));
+      await runCriteriaStream(created);
+      setGradingProgress(null);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Falha ao preparar a correção.");
+    } finally {
+      setGraderBusy(false);
+    }
   }
 
   async function regradeActivity(activity: Activity) {
@@ -490,23 +511,13 @@ export function App() {
       setGradingJob(nextJob);
       setActiveGradingSubmissionId(nextJob.submissions[0]?.id ?? null);
       if (nextJob.status === "ready") {
-        let audit: PrivacyAudit;
         try {
-          audit = await api.privacyAudit(nextJob.id);
+          const audit = await api.privacyAudit(nextJob.id);
+          setPrivacyAudit(audit);
         } catch {
-          setGradingJob(nextJob);
-          setSelectedGradingItem(gradingItemFromJob(nextJob));
-          setView("graderSetup");
-          const payload = await streamGradingProgress(
-            api.privacyAuditStreamUrl(nextJob.id),
-            "audit",
-            "Falha ao executar a auditoria de privacidade.",
-          );
-          if (!payload.summary) throw new Error("A auditoria terminou sem resumo.");
-          audit = payload.summary;
-          setGradingProgress(null);
+          setPrivacyAudit(null);
+          await runCriteriaStream(nextJob);
         }
-        setPrivacyAudit(audit);
         setSelectedGradingItem(gradingItemFromJob(nextJob));
         setView("graderSetup");
         return;
@@ -521,8 +532,9 @@ export function App() {
 
   function streamGradingProgress(
     url: string,
-    phase: "audit" | "draft",
+    phase: "audit" | "criteria" | "draft",
     fallbackError: string,
+    onPayload?: (payload: GradingStreamPayload) => void,
   ): Promise<GradingStreamPayload> {
     setGradingProgress({
       phase,
@@ -567,6 +579,7 @@ export function App() {
           return;
         }
 
+        onPayload?.(payload);
         setGradingProgress((currentState) => ({
           phase: payload.phase ?? currentState?.phase ?? phase,
           processed: payload.processed ?? currentState?.processed ?? 0,
@@ -595,6 +608,40 @@ export function App() {
     });
   }
 
+  function applyDraftSubmission(submission: GradingSubmission) {
+    setGradingJob((current) => {
+      if (!current) return current;
+      const submissions = current.submissions.map((row) =>
+        row.id === submission.id ? submission : row,
+      );
+      if (!submissions.some((row) => row.id === submission.id)) {
+        submissions.push(submission);
+      }
+      return {
+        ...current,
+        submissions,
+        reviewed_submissions: submissions.filter((row) => row.reviewed).length,
+        flagged_submissions: submissions.filter((row) => row.flag || row.error || row.ai_attempt_status === "blocked").length,
+      };
+    });
+  }
+
+  async function runCriteriaStream(job: GradingJob) {
+    if (job.rubric_mode !== "infer") return job;
+    const streamed = await streamGradingProgress(
+      api.criteriaStreamUrl(job.id),
+      "criteria",
+      "Falha ao inferir critérios da rubrica.",
+      (payload) => {
+        if (payload.job) setGradingJob(payload.job);
+      },
+    );
+    if (!streamed.job) throw new Error("A inferência terminou sem resultado.");
+    setGradingJob(streamed.job);
+    setSelectedGradingItem(gradingItemFromJob(streamed.job));
+    return streamed.job;
+  }
+
   async function startGradingAuditForItem(
     item: GradingQueueItem,
     payload: {
@@ -610,7 +657,7 @@ export function App() {
     setSelectedGradingItem(item);
     setView("graderSetup");
     setGradingProgress({
-      phase: "audit",
+      phase: payload.rubricMode === "infer" ? "criteria" : "audit",
       processed: 0,
       total: item.submission_count,
       current: "Criando rodada de correção...",
@@ -618,24 +665,33 @@ export function App() {
       error: null,
     });
     try {
-      const created = await api.createGradingJob({
-        course_id: item.course_id,
-        activity_id: item.activity_id,
-        rubric_mode: payload.rubricMode,
-        teacher_loop: payload.teacherLoop,
-        rubric_text: payload.rubricText,
-        criteria: payload.criteria,
-      });
-      setGradingJob(created);
-      setSelectedGradingItem(gradingItemFromJob(created));
+      let target =
+        gradingJob?.activity_id === item.activity_id && gradingJob.status === "ready"
+          ? gradingJob
+          : null;
+      if (!target) {
+        target = await api.createGradingJob({
+          course_id: item.course_id,
+          activity_id: item.activity_id,
+          rubric_mode: payload.rubricMode,
+          teacher_loop: payload.teacherLoop,
+          rubric_text: payload.rubricText,
+          criteria: payload.criteria,
+        });
+        setGradingJob(target);
+        setSelectedGradingItem(gradingItemFromJob(target));
+      }
+      if (target.rubric_mode === "infer") {
+        target = await runCriteriaStream(target);
+      }
       const streamed = await streamGradingProgress(
-        api.privacyAuditStreamUrl(created.id),
+        api.privacyAuditStreamUrl(target.id),
         "audit",
         "Falha ao executar a auditoria de privacidade.",
       );
       if (!streamed.summary) throw new Error("A auditoria terminou sem resumo.");
       setPrivacyAudit(streamed.summary);
-      api.clearGradingCache(created.id);
+      api.clearGradingCache(target.id);
       void loadGradingQueue();
       setGradingProgress(null);
     } catch (caught) {
@@ -691,16 +747,23 @@ export function App() {
     setGraderBusy(true);
     setError(null);
     try {
+      setView("graderReview");
       const streamed = await streamGradingProgress(
         api.draftStreamUrl(gradingJob.id),
         "draft",
         "Falha ao gerar rascunhos de notas.",
+        (payload) => {
+          if (payload.submission) {
+            applyDraftSubmission(payload.submission);
+            setActiveGradingSubmissionId((current) => current ?? payload.submission?.id ?? null);
+          }
+          if (payload.job) setGradingJob(payload.job);
+        },
       );
       if (!streamed.job) throw new Error("A avaliação terminou sem resultado.");
       const drafted = streamed.job;
       setGradingJob(drafted);
       setActiveGradingSubmissionId(drafted.submissions[0]?.id ?? null);
-      setView("graderReview");
       api.clearGradingCache(drafted.id);
       setGradingProgress(null);
       void loadGradingQueue();
@@ -795,30 +858,26 @@ export function App() {
             {gradingHealth && !gradingHealth.ready ? (
               <GradingHealthBanner health={gradingHealth} />
             ) : null}
-            <div className="workspace">
-              <ClassroomList
+            <TurmasView
                 courses={courses}
-                activeId={selectedCourseId}
-                query={classQuery}
-                loading={loading}
-                onPick={pickCourse}
-                onQuery={setClassQuery}
-              />
-              <ActivityList
-                course={selectedCourse}
+                activeCourseId={selectedCourseId}
                 activities={activities}
-                query={activityQuery}
-                loading={activitiesLoading}
-                onQuery={setActivityQuery}
+                classQuery={classQuery}
+                activityQuery={activityQuery}
+                loadingCourses={loading}
+                loadingActivities={activitiesLoading}
+                busy={busy}
+                deliveryMode={deliveryMode}
+                gradingByActivity={gradingByActivity}
+                onPickCourse={pickCourse}
+                onClassQuery={setClassQuery}
+                onActivityQuery={setActivityQuery}
                 onGrade={gradeActivity}
                 onRegrade={regradeActivity}
                 onPreview={previewActivity}
                 onDownload={(activity) => void startExport([activity.id])}
-                busy={busy}
-                deliveryMode={deliveryMode}
-                gradingByActivity={gradingByActivity}
+                onOpenQueue={() => navigate("graderQueue")}
               />
-            </div>
             {error ? <InlineError message={error} /> : null}
             {dryRunOpen && previewTree ? (
               <DryRunDrawer
@@ -879,8 +938,10 @@ export function App() {
           <>
             <GraderSetup
               item={selectedGradingItem}
+              job={gradingJob}
               busy={graderBusy}
               audit={privacyAudit}
+              progress={gradingProgress}
               onBack={() => setView("workspace")}
               onStart={(payload) => void runGradingPrivacyAudit(payload)}
               onContinue={() => void continueToGradingDraft()}
@@ -895,6 +956,8 @@ export function App() {
             <GraderReview
               job={gradingJob}
               busy={graderBusy}
+              audit={privacyAudit}
+              progress={gradingProgress}
               activeSubmissionId={activeGradingSubmissionId}
               onActiveSubmission={setActiveGradingSubmissionId}
               onBack={() => setView("workspace")}
@@ -921,9 +984,6 @@ export function App() {
           </>
         ) : null}
       </main>
-      {gradingProgress ? (
-        <GradingProgressModal state={gradingProgress} onClose={() => setGradingProgress(null)} />
-      ) : null}
     </div>
   );
 }

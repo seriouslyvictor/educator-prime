@@ -161,3 +161,10 @@ render in `App.tsx:793`.
     `uv run --extra dev pytest tests/test_grading.py -k "criteria_stream_infers_before_audit or draft_no_longer_infers_criteria_inline or draft_stream_emits_incremental_submissions_without_criteria_phase"`.
 - [x] Draft endpoints no longer run criteria inference inline.
 - [x] Draft SSE now emits per-submission `submission` payloads before the terminal job snapshot.
+- [x] App-wide primary token moved to indigo `#2a2fe0`; AI accent remains `#6b3fe0`.
+- [x] Required lucide icon mappings added.
+- [x] `GradingProgressModal` retired from the flow and deleted; criteria, audit, and draft progress render inline.
+- [x] Setup now opens/creates a ready job, auto-runs criteria streaming for infer mode, shows real inferred criteria, and runs privacy audit only from the inline CTA.
+- [x] Review now navigates immediately for draft streaming, patches per-submission SSE payloads into the job, shows skeleton/drafting states, persistent audit strip, report drawer, and a trimmed `PrivacyBlock` without `pb-foot` chips.
+- [x] Turmas view replaced the old two-pane workspace with the grouped `Tela de Atividades` layout, class sidebar, overflow actions, and bulk queue bar.
+- [x] Frontend build verified after the flow/UI rewrite: `pnpm run build`.
