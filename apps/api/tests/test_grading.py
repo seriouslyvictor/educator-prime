@@ -18,6 +18,7 @@ from classroom_downloader.main import app, provider_dependency
 from classroom_downloader.grading_engine import GradingEngine, GradingEngineRequest, GradingEngineResult
 from classroom_downloader.models import (
     GradingAiAttempt,
+    GradingCriterion,
     GradingFileCache,
     GradingJob,
     GradingPseudonym,
@@ -340,6 +341,216 @@ def test_job_without_activity_description_is_none(tmp_path) -> None:
         assert row.activity_description is None
 
 
+def _text_submission_file(idx: int, activity_id: str, content: str):
+    from classroom_downloader.google_provider import SubmissionFile
+
+    return SubmissionFile(
+        f"file-{idx}",
+        "course-infer",
+        activity_id,
+        None,
+        f"Student {idx}",
+        f"drive-{idx}",
+        f"submission-{idx}.txt",
+        "text/plain",
+        content.encode("utf-8"),
+    )
+
+
+def _infer_provider(files):
+    from classroom_downloader.google_provider import MockGoogleProvider
+
+    provider = MockGoogleProvider()
+    provider.files = files
+    return provider
+
+
+class _CapturingEngine:
+    name = "capture"
+    model = None
+
+    def __init__(self, criteria):
+        self.criteria = criteria
+        self.last_request = None
+
+    def grade(self, request):  # pragma: no cover - not used in inference tests
+        raise NotImplementedError
+
+    def infer_rubric(self, request):
+        self.last_request = request
+        return self.criteria
+
+
+def _seed_infer_job(session, *, description, activity_id="activity-infer"):
+    from classroom_downloader.database import init_db
+    from classroom_downloader.grading import ensure_default_criteria
+
+    init_db()
+    job = GradingJob(
+        id=str(uuid4()),
+        course_id="course-infer",
+        course_name="Infer Course",
+        activity_id=activity_id,
+        activity_title="Infer Activity",
+        activity_description=description,
+        rubric_mode="infer",
+        teacher_loop="approve",
+        status=GradingStatus.ready,
+    )
+    session.add(job)
+    ensure_default_criteria(session, job.id, None)
+    session.commit()
+    session.refresh(job)
+    return job
+
+
+def test_infer_uses_description_only_when_substantial(tmp_path) -> None:
+    from classroom_downloader.grading import infer_job_criteria
+
+    get_settings().grading_cache_path = str(tmp_path / "grading")
+    long_desc = (
+        "Write a persuasive essay of at least three paragraphs that opens with a clear "
+        "thesis, supports the argument with at least two pieces of textual evidence, "
+        "explains how each piece backs the claim, and ends with a conclusion that "
+        "restates the central argument and explains why it matters to the reader."
+    )
+    fake = _CapturingEngine(
+        [
+            {"name": "Thesis", "weight": 60, "description": None},
+            {"name": "Evidence", "weight": 40, "description": None},
+        ]
+    )
+    provider = _infer_provider([_text_submission_file(1, "activity-infer", "some work")])
+    with Session(engine) as session:
+        job = _seed_infer_job(session, description=long_desc)
+        created = infer_job_criteria(session, job, provider, fake)
+    assert fake.last_request.description_only is True
+    assert fake.last_request.samples == []
+    assert {row.name for row in created} == {"Thesis", "Evidence"}
+
+
+def test_infer_uses_sample_when_description_thin(tmp_path) -> None:
+    from classroom_downloader.grading import infer_job_criteria
+
+    get_settings().grading_cache_path = str(tmp_path / "grading")
+    fake = _CapturingEngine(
+        [
+            {"name": "Logic", "weight": 50, "description": None},
+            {"name": "Style", "weight": 50, "description": None},
+        ]
+    )
+    files = [
+        _text_submission_file(1, "activity-infer", "def add(a, b):\n    return a + b\n"),
+        _text_submission_file(2, "activity-infer", "result = 6 * 7\nprint(result)\n"),
+    ]
+    provider = _infer_provider(files)
+    with Session(engine) as session:
+        job = _seed_infer_job(session, description="Short.")
+        created = infer_job_criteria(session, job, provider, fake)
+    assert fake.last_request.description_only is False
+    assert len(fake.last_request.samples) == 2
+    assert {row.name for row in created} == {"Logic", "Style"}
+
+
+def test_infer_caps_sample_at_configured_size(tmp_path) -> None:
+    from classroom_downloader.grading import infer_job_criteria
+
+    get_settings().grading_cache_path = str(tmp_path / "grading")
+    get_settings().rubric_infer_sample_size = 2
+    fake = _CapturingEngine([{"name": "A", "weight": 100, "description": None}])
+    files = [
+        _text_submission_file(i, "activity-infer", f"line {i}\nvalue = {i}\n")
+        for i in range(5)
+    ]
+    provider = _infer_provider(files)
+    with Session(engine) as session:
+        job = _seed_infer_job(session, description=None)
+        infer_job_criteria(session, job, provider, fake)
+    assert len(fake.last_request.samples) == 2
+
+
+def test_infer_falls_back_to_defaults_when_no_signal(tmp_path) -> None:
+    from classroom_downloader.grading import DEFAULT_CRITERIA, infer_job_criteria
+
+    get_settings().grading_cache_path = str(tmp_path / "grading")
+    fake = _CapturingEngine([{"name": "ShouldNotUse", "weight": 100, "description": None}])
+    provider = _infer_provider([])  # no submissions at all
+    with Session(engine) as session:
+        job = _seed_infer_job(session, description=None)
+        created = infer_job_criteria(session, job, provider, fake)
+    assert fake.last_request is None  # engine never called
+    assert [row.name for row in created] == [c.name for c in DEFAULT_CRITERIA]
+
+
+def test_inferred_weights_sum_to_100(tmp_path) -> None:
+    from classroom_downloader.grading import infer_job_criteria
+
+    get_settings().grading_cache_path = str(tmp_path / "grading")
+    long_desc = (
+        "Design and document a small program. Explain your approach, justify the data "
+        "structures you chose, describe how you tested it, and reflect on what you would "
+        "improve next time around if you had more time to keep iterating on the work."
+    )
+    fake = _CapturingEngine(
+        [
+            {"name": "Design", "weight": 3, "description": None},
+            {"name": "Testing", "weight": 3, "description": None},
+            {"name": "Reflection", "weight": 4, "description": None},
+        ]
+    )
+    provider = _infer_provider([])
+    with Session(engine) as session:
+        job = _seed_infer_job(session, description=long_desc)
+        created = infer_job_criteria(session, job, provider, fake)
+    assert sum(row.weight for row in created) == 100
+
+
+def test_grade_loop_no_longer_swaps_criteria(tmp_path) -> None:
+    from classroom_downloader.grading import _draft_submission, ensure_default_criteria
+
+    get_settings().grading_cache_path = str(tmp_path / "grading")
+
+    class _InferReturningEngine:
+        name = "infer-return"
+        model = None
+
+        def grade(self, request):
+            return GradingEngineResult(
+                score=90.0,
+                confidence=0.9,
+                feedback="ok",
+                flags=[],
+                criterion_notes=[],
+                inferred_criteria=[{"name": "Sneaky", "weight": 100, "description": None}],
+            )
+
+        def infer_rubric(self, request):  # pragma: no cover
+            return []
+
+    provider = _infer_provider(
+        [_text_submission_file(1, "activity-infer", "print('hi')\n")]
+    )
+    with Session(engine) as session:
+        job = _seed_infer_job(session, description=None)
+        files = provider.list_submission_files("course-infer", ["activity-infer"])
+        from classroom_downloader.grading import (
+            _submission_for_file,
+            cache_submission_file,
+        )
+
+        submission = _submission_for_file(session, job, files[0])
+        cache_file = cache_submission_file(session, job, submission, files[0], provider)
+        _draft_submission(session, job, submission, cache_file, _InferReturningEngine())
+        session.commit()
+        names = {
+            row.name
+            for row in session.exec(
+                select(GradingCriterion).where(GradingCriterion.job_id == job.id)
+            ).all()
+        }
+    assert "Sneaky" not in names
+
+
 def test_mock_infer_rubric_returns_weighted_criteria() -> None:
     from classroom_downloader.grading_engine import (
         DEFAULT_GRADING_ENGINE,
@@ -624,65 +835,28 @@ def test_create_job_persists_teacher_criteria(tmp_path) -> None:
     ] == criteria
 
 
-def test_infer_mode_replaces_defaults_with_ai_criteria(monkeypatch, tmp_path) -> None:
+def test_infer_mode_replaces_defaults_with_ai_criteria(tmp_path) -> None:
+    from classroom_downloader.grading import infer_job_criteria
+
     get_settings().grading_cache_path = str(tmp_path / "grading")
-
-    class InferredCriteriaEngine(GradingEngine):
-        name = "capture"
-        model = None
-
-        def grade(self, request: GradingEngineRequest) -> GradingEngineResult:
-            return GradingEngineResult(
-                score=87,
-                confidence=0.86,
-                feedback="Draft with inferred criteria.",
-                flags=[],
-                criterion_notes=[
-                    {"criterion": "Correção", "note": "Resolve a lógica principal."},
-                    {"criterion": "Organização", "note": "Estrutura legível."},
-                ],
-                inferred_criteria=[
-                    {"name": "Correção", "weight": 70, "description": "Resultado correto."},
-                    {"name": "Organização", "weight": 30, "description": "Código organizado."},
-                ],
-            )
-
-    with TestClient(app) as client:
-        job = client.post(
-            "/api/grading/jobs",
-            json={
-                "course_id": "course-2",
-                "activity_id": "activity-3",
-                "rubric_mode": "infer",
-                "teacher_loop": "approve",
-            },
-        ).json()
-        from classroom_downloader import grading
-
-        monkeypatch.setattr(grading, "get_grading_engine", lambda: InferredCriteriaEngine())
-        body = client.post(f"/api/grading/jobs/{job['id']}/draft").json()
-
-    assert [
-        {
-            "name": row["name"],
-            "weight": row["weight"],
-            "description": row["description"],
-            "latest_ai_note": row["latest_ai_note"],
-        }
-        for row in body["criteria"]
-    ] == [
-        {
-            "name": "Correção",
-            "weight": 70,
-            "description": "Resultado correto.",
-            "latest_ai_note": "Resolve a lógica principal.",
-        },
-        {
-            "name": "Organização",
-            "weight": 30,
-            "description": "Código organizado.",
-            "latest_ai_note": "Estrutura legível.",
-        },
+    fake = _CapturingEngine(
+        [
+            {"name": "Correção", "weight": 70, "description": "Resultado correto."},
+            {"name": "Organização", "weight": 30, "description": "Código organizado."},
+        ]
+    )
+    long_desc = (
+        "Implemente um programa que resolva a lógica principal proposta e organize o "
+        "código em funções claras. Explique brevemente sua abordagem e garanta que a "
+        "saída atenda exatamente ao formato pedido no enunciado da atividade entregue."
+    )
+    provider = _infer_provider([])
+    with Session(engine) as session:
+        job = _seed_infer_job(session, description=long_desc)
+        created = infer_job_criteria(session, job, provider, fake)
+    assert [(row.name, row.weight, row.description) for row in created] == [
+        ("Correção", 70, "Resultado correto."),
+        ("Organização", 30, "Código organizado."),
     ]
 
 
