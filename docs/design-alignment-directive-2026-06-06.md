@@ -168,3 +168,5 @@ render in `App.tsx:793`.
 - [x] Review now navigates immediately for draft streaming, patches per-submission SSE payloads into the job, shows skeleton/drafting states, persistent audit strip, report drawer, and a trimmed `PrivacyBlock` without `pb-foot` chips.
 - [x] Turmas view replaced the old two-pane workspace with the grouped `Tela de Atividades` layout, class sidebar, overflow actions, and bulk queue bar.
 - [x] Frontend build verified after the flow/UI rewrite: `pnpm run build`.
+- [x] Final backend verification passed: `uv run --extra dev pytest tests/test_grading.py` (`54 passed`).
+- [x] Final frontend verification passed after the second commit: `pnpm run build`.
