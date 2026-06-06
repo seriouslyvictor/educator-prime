@@ -1084,6 +1084,169 @@ def retry_grading_submission(
     return grading_job_snapshot(session, job)
 
 
+# Student-uploaded files are served back to the teacher. Only render types that
+# cannot execute script on the app origin inline; everything else (HTML, SVG,
+# Office docs, unknown binaries) is forced to download. Paired with nosniff so the
+# browser cannot re-interpret a "safe" type as active content.
+SAFE_INLINE_MIME_TYPES = frozenset(
+    {
+        "image/jpeg",
+        "image/png",
+        "image/gif",
+        "image/webp",
+        "application/pdf",
+    }
+)
+SAFE_TEXT_MIME_TYPES = frozenset(
+    {
+        "text/plain",
+        "application/json",
+        "application/ld+json",
+        "application/xml",
+        "application/xhtml+xml",
+        "application/javascript",
+        "application/typescript",
+        "application/x-yaml",
+        "application/yaml",
+        "text/csv",
+        "text/markdown",
+        "text/x-python",
+        "text/x-java-source",
+        "text/x-c",
+        "text/x-c++",
+        "text/x-csharp",
+        "text/x-go",
+        "text/x-rust",
+        "text/x-php",
+        "text/x-ruby",
+        "text/x-sql",
+    }
+)
+SAFE_TEXT_EXTENSIONS = frozenset(
+    {
+        ".txt",
+        ".md",
+        ".markdown",
+        ".csv",
+        ".tsv",
+        ".json",
+        ".jsonl",
+        ".xml",
+        ".yaml",
+        ".yml",
+        ".py",
+        ".js",
+        ".jsx",
+        ".ts",
+        ".tsx",
+        ".css",
+        ".scss",
+        ".html",
+        ".htm",
+        ".java",
+        ".c",
+        ".h",
+        ".cpp",
+        ".hpp",
+        ".cs",
+        ".go",
+        ".rs",
+        ".php",
+        ".rb",
+        ".sql",
+        ".sh",
+        ".ps1",
+        ".bat",
+        ".ini",
+        ".toml",
+        ".lock",
+    }
+)
+
+
+def _is_utf8_text(content: bytes) -> bool:
+    try:
+        content.decode("utf-8")
+    except UnicodeDecodeError:
+        return False
+    return True
+
+
+def _preview_response_mode(mime_type: str, source_name: str, content: bytes) -> tuple[bool, str]:
+    if mime_type in SAFE_INLINE_MIME_TYPES:
+        return True, mime_type
+    if mime_type.startswith("text/") or mime_type in SAFE_TEXT_MIME_TYPES:
+        return True, "text/plain; charset=utf-8"
+    if mime_type == "application/octet-stream" and Path(source_name).suffix.lower() in SAFE_TEXT_EXTENSIONS:
+        if _is_utf8_text(content):
+            return True, "text/plain; charset=utf-8"
+    return False, mime_type or "application/octet-stream"
+
+
+@app.get("/api/grading/jobs/{job_id}/submissions/{submission_id}/preview")
+def preview_grading_submission(
+    job_id: str,
+    submission_id: str,
+    request: Request,
+    session: Session = Depends(get_session),
+) -> Response:
+    """Stream the teacher's own copy of a submission so they can read the real work
+    next to the AI draft. This serves the *original* cached file (not the LLM-scrubbed
+    text): the teacher already has read access to these submissions, and only the
+    redacted text is ever sent to the model. Served from the per-job cache, so it
+    disappears when the cache TTL lapses or the teacher clears the cache."""
+    job = session.get(GradingJob, job_id)
+    submission = session.get(GradingSubmission, submission_id)
+    if job is None or submission is None or submission.job_id != job.id:
+        raise HTTPException(status_code=404, detail="Grading submission not found.")
+    cache = session.exec(
+        select(GradingFileCache)
+        .where(GradingFileCache.job_id == job.id)
+        .where(GradingFileCache.submission_id == submission.id)
+        .where(GradingFileCache.deleted_at.is_(None))
+        .order_by(GradingFileCache.created_at.desc())
+    ).first()
+    if cache is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Submission preview is not available (cache cleared or not drafted yet).",
+        )
+    path = Path(cache.cached_path)
+    if not path.exists() or not path.is_file():
+        raise HTTPException(
+            status_code=404,
+            detail="Cached submission file is no longer available.",
+        )
+    normalized_mime = (cache.mime_type or submission.mime_type or "").split(";")[0].strip().lower()
+    content = path.read_bytes()
+    inline_ok, response_media_type = _preview_response_mode(
+        normalized_mime,
+        cache.source_name or submission.source_name,
+        content,
+    )
+    log_event(
+        logger,
+        "grading.submission.preview",
+        job_id=job_id,
+        submission_id=submission_id,
+        cache_id=cache.id,
+        mime_type=normalized_mime,
+        inline=inline_ok,
+        byte_size=cache.byte_size,
+    )
+    return _conditional_response(
+        request=request,
+        content=content,
+        media_type=response_media_type,
+        headers={
+            "Content-Disposition": "inline" if inline_ok else 'attachment; filename="submission"',
+            # Prevent MIME sniffing turning an allowlisted type into active content.
+            "X-Content-Type-Options": "nosniff",
+        },
+        max_age_seconds=300,
+    )
+
+
 @app.delete("/api/grading/jobs/{job_id}/cache", response_model=GradingJobRead)
 def delete_grading_cache(
     job_id: str,

@@ -2,6 +2,7 @@ import os
 import logging
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from uuid import uuid4
 
 os.environ["CD_DATABASE_URL"] = "sqlite:///:memory:"
 os.environ["CD_GOOGLE_PROVIDER"] = "mock"
@@ -17,8 +18,10 @@ from classroom_downloader.grading_engine import GradingEngine, GradingEngineRequ
 from classroom_downloader.models import (
     GradingAiAttempt,
     GradingFileCache,
+    GradingJob,
     GradingPseudonym,
     GradingScrubCache,
+    GradingSubmission,
     PrivacyAudit,
     PrivacyAuditRow,
 )
@@ -1119,3 +1122,91 @@ def test_grading_csv_includes_teacher_edits(tmp_path) -> None:
     assert response.status_code == 200
     assert "Teacher-edited feedback" in response.text
     assert "88" in response.text
+
+
+def _seed_preview_cache(
+    tmp_path: Path,
+    *,
+    mime_type: str,
+    source_name: str,
+    content: bytes,
+) -> tuple[str, str]:
+    job_id = f"preview-job-{uuid4()}"
+    submission_id = f"preview-submission-{uuid4()}"
+    cache_dir = tmp_path / job_id
+    cache_dir.mkdir(parents=True)
+    cached_path = cache_dir / source_name
+    cached_path.write_bytes(content)
+    with Session(engine) as session:
+        session.add(
+            GradingJob(
+                id=job_id,
+                course_id="course-preview",
+                course_name="Preview Course",
+                activity_id="activity-preview",
+                activity_title="Preview Activity",
+                rubric_mode="infer",
+                teacher_loop="approve",
+                total_submissions=1,
+            )
+        )
+        session.add(
+            GradingSubmission(
+                id=submission_id,
+                job_id=job_id,
+                source_file_id=f"file-{uuid4()}",
+                source_name=source_name,
+                mime_type=mime_type,
+            )
+        )
+        session.add(
+            GradingFileCache(
+                id=f"cache-{uuid4()}",
+                job_id=job_id,
+                submission_id=submission_id,
+                source_file_id=f"file-{uuid4()}",
+                source_name=source_name,
+                mime_type=mime_type,
+                cached_path=str(cached_path),
+                content_hash="preview-hash",
+                byte_size=len(content),
+                expires_at=datetime.now(UTC) + timedelta(minutes=5),
+            )
+        )
+        session.commit()
+    return job_id, submission_id
+
+
+def test_preview_code_file_served_inline_as_text_plain(tmp_path) -> None:
+    content = b"def soma(a, b):\n    return a + b\n"
+    with TestClient(app) as client:
+        job_id, submission_id = _seed_preview_cache(
+            tmp_path,
+            mime_type="text/x-python",
+            source_name="desafios_listas.py",
+            content=content,
+        )
+        response = client.get(f"/api/grading/jobs/{job_id}/submissions/{submission_id}/preview")
+
+    assert response.status_code == 200
+    assert response.headers["content-disposition"] == "inline"
+    assert response.headers["content-type"] == "text/plain; charset=utf-8"
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.content == content
+
+
+def test_preview_binary_still_attachment(tmp_path) -> None:
+    content = b"\x00\x01\x02\x03"
+    with TestClient(app) as client:
+        job_id, submission_id = _seed_preview_cache(
+            tmp_path,
+            mime_type="application/octet-stream",
+            source_name="submission.bin",
+            content=content,
+        )
+        response = client.get(f"/api/grading/jobs/{job_id}/submissions/{submission_id}/preview")
+
+    assert response.status_code == 200
+    assert response.headers["content-disposition"].startswith("attachment")
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.content == content
