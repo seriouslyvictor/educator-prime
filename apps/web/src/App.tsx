@@ -140,6 +140,9 @@ export function App() {
   const [progressLog, setProgressLog] = useState<ProgressLogItem[]>([]);
   const [selectedGradingItem, setSelectedGradingItem] = useState<GradingQueueItem | null>(null);
   const [gradingQueue, setGradingQueue] = useState<GradingQueueItem[]>([]);
+  // Activities the teacher sent from Turmas that don't have a server-side job yet.
+  // They surface in the grader queue as "ready" until opened (which creates the job).
+  const [pendingQueue, setPendingQueue] = useState<GradingQueueItem[]>([]);
   const [gradingQueueLoading, setGradingQueueLoading] = useState(false);
   const [gradingJob, setGradingJob] = useState<GradingJob | null>(null);
   const [privacyAudit, setPrivacyAudit] = useState<PrivacyAudit | null>(null);
@@ -168,6 +171,14 @@ export function App() {
     }
     return rows;
   }, [gradingQueue, selectedCourse]);
+
+  // The queue the grader screen renders: server jobs plus any pending activities the
+  // teacher just sent from Turmas (deduped — a real job for the same activity wins).
+  const queueItems = useMemo(() => {
+    const serverActivityIds = new Set(gradingQueue.map((item) => item.activity_id));
+    const pending = pendingQueue.filter((item) => !serverActivityIds.has(item.activity_id));
+    return [...pending, ...gradingQueue];
+  }, [gradingQueue, pendingQueue]);
 
   useEffect(() => {
     void bootstrap();
@@ -413,6 +424,12 @@ export function App() {
       reviewed_submissions: 0,
       total_submissions: 0,
     };
+    await beginGradingSetup(item);
+  }
+
+  // Open the Setup screen for a ready item: create the job, then auto-infer the rubric
+  // (streamed) before any audit. Shared by Turmas and the grader queue.
+  async function beginGradingSetup(item: GradingQueueItem) {
     setGraderBusy(true);
     setError(null);
     setPrivacyAudit(null);
@@ -428,6 +445,8 @@ export function App() {
       });
       setGradingJob(created);
       setSelectedGradingItem(gradingItemFromJob(created));
+      // Once the job exists, drop the pending placeholder for this activity.
+      setPendingQueue((current) => current.filter((row) => row.activity_id !== item.activity_id));
       await runCriteriaStream(created);
       setGradingProgress(null);
     } catch (caught) {
@@ -435,6 +454,31 @@ export function App() {
     } finally {
       setGraderBusy(false);
     }
+  }
+
+  // "Enviar N para a fila" from Turmas: stage the selected activities as pending queue
+  // items and jump to the grader queue so they're visible immediately.
+  function sendActivitiesToQueue(activitiesToSend: Activity[]) {
+    if (!selectedCourse || activitiesToSend.length === 0) return;
+    setPendingQueue((current) => {
+      const seen = new Set(current.map((row) => row.activity_id));
+      const additions = activitiesToSend
+        .filter((activity) => !seen.has(activity.id))
+        .map<GradingQueueItem>((activity) => ({
+          course_id: selectedCourse.id,
+          course_name: selectedCourse.name,
+          activity_id: activity.id,
+          activity_title: activity.title,
+          due_label: activity.due_label,
+          submission_count: 0,
+          status: "ready",
+          latest_job_id: null,
+          reviewed_submissions: 0,
+          total_submissions: 0,
+        }));
+      return [...additions, ...current];
+    });
+    navigate("graderQueue");
   }
 
   async function regradeActivity(activity: Activity) {
@@ -876,7 +920,7 @@ export function App() {
                 onRegrade={regradeActivity}
                 onPreview={previewActivity}
                 onDownload={(activity) => void startExport([activity.id])}
-                onOpenQueue={() => navigate("graderQueue")}
+                onSendToQueue={sendActivitiesToQueue}
               />
             {error ? <InlineError message={error} /> : null}
             {dryRunOpen && previewTree ? (
@@ -918,15 +962,10 @@ export function App() {
         {view === "graderQueue" ? (
           <>
             <GraderQueue
-              items={gradingQueue}
+              items={queueItems}
               loading={gradingQueueLoading}
               onRefresh={() => void loadGradingQueue()}
-              onSetup={(item) => {
-                setPrivacyAudit(null);
-                setGradingJob(null);
-                setSelectedGradingItem(item);
-                setView("graderSetup");
-              }}
+              onSetup={(item) => void beginGradingSetup(item)}
               onOpenJob={(jobId) => void openGradingJob(jobId)}
               onDownloadInstead={() => setView("workspace")}
             />

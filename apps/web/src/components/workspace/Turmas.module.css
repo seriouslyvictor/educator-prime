@@ -230,12 +230,6 @@
   background: var(--surface-2);
 }
 
-.turmas-card.has-selection .turmas-cb,
-.turmas-row:hover .turmas-cb,
-.turmas-cb.on {
-  opacity: 1;
-}
-
 .turmas-cb {
   width: 18px;
   height: 18px;
@@ -245,13 +239,14 @@
   color: white;
   display: grid;
   place-items: center;
-  opacity: 0;
+  opacity: 1;
   cursor: pointer;
 }
 
 .turmas-cb .ico {
   width: 12px;
   height: 12px;
+  display: block;
   opacity: 0;
 }
 

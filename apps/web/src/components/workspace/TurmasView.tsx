@@ -40,7 +40,7 @@ export function TurmasView({
   onRegrade,
   onPreview,
   onDownload,
-  onOpenQueue,
+  onSendToQueue,
 }: {
   courses: Course[];
   activeCourseId: string;
@@ -59,7 +59,7 @@ export function TurmasView({
   onRegrade: (activity: Activity) => void;
   onPreview: (activity: Activity) => void;
   onDownload: (activity: Activity) => void;
-  onOpenQueue: () => void;
+  onSendToQueue: (activities: Activity[]) => void;
 }) {
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [openMenu, setOpenMenu] = useState<string | null>(null);
@@ -136,7 +136,14 @@ export function TurmasView({
                 <b>{selected.size}</b> selecionada{selected.size === 1 ? "" : "s"}
               </span>
               <button onClick={() => setSelected(new Set())}>Limpar</button>
-              <button className="turmas-bulk-send" onClick={onOpenQueue}>
+              <button
+                className="turmas-bulk-send"
+                onClick={() => {
+                  const chosen = activities.filter((activity) => selected.has(activity.id));
+                  onSendToQueue(chosen);
+                  setSelected(new Set());
+                }}
+              >
                 <AppIcon name="send" />
                 Enviar {selected.size} para a fila
               </button>

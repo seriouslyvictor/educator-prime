@@ -101,7 +101,7 @@ export function GraderSetup({
       : undefined;
 
   return (
-    <div className={graderStyles["grader-page"]}>
+    <div className="g-page">
       <GraderTopbar
         title="Preparar correção com IA"
         subtitle={`${item.course_name} · ${item.activity_title}`}

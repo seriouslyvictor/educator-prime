@@ -435,8 +435,12 @@
 .wrap-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 310px;
-  gap: 18px;
-  max-width: 1120px;
+  gap: 24px;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 24px 32px 40px;
+  align-content: start;
 }
 
 .setup-main,
