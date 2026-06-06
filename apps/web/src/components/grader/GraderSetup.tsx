@@ -180,7 +180,6 @@ export function GraderSetup({
             ) : null}
           </Card>
 
-          {preparing ? <PreparingPanel /> : null}
           {prepared && audit ? (
             <PreparedPanel audit={audit} busy={busy} onContinue={onContinue} onRerun={onRerun} />
           ) : null}
@@ -251,12 +250,6 @@ export function GraderSetup({
   );
 }
 
-const PREP_STEPS = [
-  "Lendo as entregas",
-  "Redigindo identificadores",
-  "Verificando bloqueios",
-];
-
 function StructuredCriteriaEditor({
   criteria,
   total,
@@ -321,26 +314,6 @@ function StructuredCriteriaEditor({
         {total !== 100 ? <span>Os pesos precisam somar 100.</span> : null}
       </div>
     </div>
-  );
-}
-
-function PreparingPanel() {
-  return (
-    <section className="prep-panel" aria-live="polite">
-      <div className="prep-panel-head">
-        <AppIcon name="loader" className="ico spin" />
-        <strong>Preparando entregas…</strong>
-      </div>
-      <ol className="prep-progress">
-        {PREP_STEPS.map((step) => (
-          <li key={step} className="prep-step">
-            <AppIcon name="loader" className="ico spin" />
-            {step}
-          </li>
-        ))}
-      </ol>
-      <p className="prep-foot-note">Nenhuma chamada de IA foi feita ainda — isto só prepara os arquivos.</p>
-    </section>
   );
 }
 

@@ -32,6 +32,15 @@
   color: var(--primary-ink);
 }
 
+.btn-ai {
+  background: var(--ai);
+  color: var(--ai-ink);
+}
+
+.btn-ai:hover:not(:disabled) {
+  filter: brightness(1.05);
+}
+
 .btn-secondary {
   border-color: var(--border);
   background: var(--surface);

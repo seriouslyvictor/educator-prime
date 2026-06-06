@@ -2,7 +2,16 @@ import { useEffect, useMemo, useState } from "react";
 import { ConnectView, InlineError } from "./components/ConnectView";
 import { DoneView } from "./components/DoneView";
 import { DryRunDrawer } from "./components/DryRunDrawer";
-import { GraderQueue, GraderReview, GraderSetup, GraderWrap } from "./components/grader";
+import {
+  GraderQueue,
+  GraderReview,
+  GraderSetup,
+  GraderWrap,
+} from "./components/grader";
+import {
+  GradingProgressModal,
+  type GradingProgressState,
+} from "./components/grader/GradingProgressModal";
 import { HistoryView } from "./components/HistoryView";
 import { ProgressView, type ProgressLogItem } from "./components/ProgressView";
 import { Rail } from "./components/Rail";
@@ -53,6 +62,17 @@ const classroomScopes = [
 // the same job instead of an empty workspace — the job itself is already persisted
 // server-side, this is just the pointer to it.
 const ACTIVE_JOB_STORAGE_KEY = "cd.grading.activeJobId";
+
+type GradingStreamPayload = {
+  phase?: "audit" | "draft";
+  processed?: number;
+  total?: number;
+  current?: string;
+  done?: boolean;
+  error?: string;
+  summary?: PrivacyAudit;
+  job?: GradingJob;
+};
 
 function readStoredJobId(): string | null {
   try {
@@ -119,6 +139,7 @@ export function App() {
   const [privacyAudit, setPrivacyAudit] = useState<PrivacyAudit | null>(null);
   const [activeGradingSubmissionId, setActiveGradingSubmissionId] = useState<string | null>(null);
   const [graderBusy, setGraderBusy] = useState(false);
+  const [gradingProgress, setGradingProgress] = useState<GradingProgressState | null>(null);
 
   const connected = Boolean(auth?.signed_in && auth.classroom_scopes && auth.drive_scopes);
   const selectedCourse = useMemo(
@@ -374,10 +395,7 @@ export function App() {
       void openGradingJob(existing.latest_job_id);
       return;
     }
-    // Fresh setup for this activity: clear any prepared state from a previous job.
-    setPrivacyAudit(null);
-    setGradingJob(null);
-    setSelectedGradingItem({
+    const item: GradingQueueItem = {
       course_id: selectedCourse.id,
       course_name: selectedCourse.name,
       activity_id: activity.id,
@@ -388,8 +406,14 @@ export function App() {
       latest_job_id: null,
       reviewed_submissions: 0,
       total_submissions: 0,
-    });
+    };
+    setSelectedGradingItem(item);
     setView("graderSetup");
+    void startGradingAuditForItem(item, {
+      rubricMode: "infer",
+      teacherLoop: "approve",
+      rubricText: "",
+    });
   }
 
   async function regradeActivity(activity: Activity) {
@@ -470,7 +494,17 @@ export function App() {
         try {
           audit = await api.privacyAudit(nextJob.id);
         } catch {
-          audit = await api.runPrivacyAudit(nextJob.id);
+          setGradingJob(nextJob);
+          setSelectedGradingItem(gradingItemFromJob(nextJob));
+          setView("graderSetup");
+          const payload = await streamGradingProgress(
+            api.privacyAuditStreamUrl(nextJob.id),
+            "audit",
+            "Falha ao executar a auditoria de privacidade.",
+          );
+          if (!payload.summary) throw new Error("A auditoria terminou sem resumo.");
+          audit = payload.summary;
+          setGradingProgress(null);
         }
         setPrivacyAudit(audit);
         setSelectedGradingItem(gradingItemFromJob(nextJob));
@@ -485,6 +519,141 @@ export function App() {
     }
   }
 
+  function streamGradingProgress(
+    url: string,
+    phase: "audit" | "draft",
+    fallbackError: string,
+  ): Promise<GradingStreamPayload> {
+    setGradingProgress({
+      phase,
+      processed: 0,
+      total: 0,
+      current: phase === "audit" ? "Preparando auditoria..." : "Preparando avaliação...",
+      done: false,
+      error: null,
+    });
+
+    return new Promise((resolve, reject) => {
+      const source = new EventSource(url);
+      let settled = false;
+
+      const finish = (callback: () => void) => {
+        if (settled) return;
+        settled = true;
+        source.close();
+        callback();
+      };
+
+      source.onmessage = (event) => {
+        let payload: GradingStreamPayload;
+        try {
+          payload = JSON.parse(event.data) as GradingStreamPayload;
+        } catch {
+          finish(() => reject(new Error(fallbackError)));
+          return;
+        }
+
+        if (payload.error) {
+          const errorMessage = payload.error;
+          setGradingProgress((currentState) => ({
+            phase,
+            processed: payload.processed ?? currentState?.processed ?? 0,
+            total: payload.total ?? currentState?.total ?? 0,
+            current: payload.current ?? currentState?.current ?? "",
+            done: true,
+            error: errorMessage,
+          }));
+          finish(() => reject(new Error(errorMessage)));
+          return;
+        }
+
+        setGradingProgress((currentState) => ({
+          phase,
+          processed: payload.processed ?? currentState?.processed ?? 0,
+          total: payload.total ?? currentState?.total ?? 0,
+          current: payload.current ?? currentState?.current ?? "",
+          done: Boolean(payload.done),
+          error: null,
+        }));
+
+        if (payload.done) {
+          finish(() => resolve(payload));
+        }
+      };
+
+      source.onerror = () => {
+        setGradingProgress((current) => ({
+          phase,
+          processed: current?.processed ?? 0,
+          total: current?.total ?? 0,
+          current: current?.current ?? "",
+          done: true,
+          error: fallbackError,
+        }));
+        finish(() => reject(new Error(fallbackError)));
+      };
+    });
+  }
+
+  async function startGradingAuditForItem(
+    item: GradingQueueItem,
+    payload: {
+      rubricMode: RubricMode;
+      teacherLoop: TeacherLoopMode;
+      rubricText: string;
+      criteria?: GradingCriterionInput[];
+    },
+  ) {
+    setGraderBusy(true);
+    setError(null);
+    setPrivacyAudit(null);
+    setSelectedGradingItem(item);
+    setView("graderSetup");
+    setGradingProgress({
+      phase: "audit",
+      processed: 0,
+      total: item.submission_count,
+      current: "Criando rodada de correção...",
+      done: false,
+      error: null,
+    });
+    try {
+      const created = await api.createGradingJob({
+        course_id: item.course_id,
+        activity_id: item.activity_id,
+        rubric_mode: payload.rubricMode,
+        teacher_loop: payload.teacherLoop,
+        rubric_text: payload.rubricText,
+        criteria: payload.criteria,
+      });
+      setGradingJob(created);
+      setSelectedGradingItem(gradingItemFromJob(created));
+      const streamed = await streamGradingProgress(
+        api.privacyAuditStreamUrl(created.id),
+        "audit",
+        "Falha ao executar a auditoria de privacidade.",
+      );
+      if (!streamed.summary) throw new Error("A auditoria terminou sem resumo.");
+      setPrivacyAudit(streamed.summary);
+      api.clearGradingCache(created.id);
+      void loadGradingQueue();
+      setGradingProgress(null);
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : "Falha ao executar a auditoria de privacidade.";
+      setError(message);
+      setGradingProgress((current) => ({
+        phase: "audit",
+        processed: current?.processed ?? 0,
+        total: current?.total ?? item.submission_count,
+        current: current?.current ?? "",
+        done: true,
+        error: message,
+      }));
+    } finally {
+      setGraderBusy(false);
+    }
+  }
+
   async function runGradingPrivacyAudit(payload: {
     rubricMode: RubricMode;
     teacherLoop: TeacherLoopMode;
@@ -492,27 +661,7 @@ export function App() {
     criteria?: GradingCriterionInput[];
   }) {
     if (!selectedGradingItem) return;
-    setGraderBusy(true);
-    setError(null);
-    try {
-      const created = await api.createGradingJob({
-        course_id: selectedGradingItem.course_id,
-        activity_id: selectedGradingItem.activity_id,
-        rubric_mode: payload.rubricMode,
-        teacher_loop: payload.teacherLoop,
-        rubric_text: payload.rubricText,
-        criteria: payload.criteria,
-      });
-      setGradingJob(created);
-      const audit = await api.runPrivacyAudit(created.id);
-      setPrivacyAudit(audit);
-      setSelectedGradingItem(gradingItemFromJob(created));
-      setView("graderSetup");
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Falha ao executar a auditoria de privacidade.");
-    } finally {
-      setGraderBusy(false);
-    }
+    await startGradingAuditForItem(selectedGradingItem, payload);
   }
 
   async function rerunGradingPrivacyAudit() {
@@ -520,9 +669,18 @@ export function App() {
     setGraderBusy(true);
     setError(null);
     try {
-      setPrivacyAudit(await api.runPrivacyAudit(gradingJob.id));
+      const streamed = await streamGradingProgress(
+        api.privacyAuditStreamUrl(gradingJob.id),
+        "audit",
+        "Falha ao executar a auditoria de privacidade.",
+      );
+      if (!streamed.summary) throw new Error("A auditoria terminou sem resumo.");
+      setPrivacyAudit(streamed.summary);
+      api.clearGradingCache(gradingJob.id);
+      setGradingProgress(null);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Falha ao executar a auditoria de privacidade.");
+      const message = caught instanceof Error ? caught.message : "Falha ao executar a auditoria de privacidade.";
+      setError(message);
     } finally {
       setGraderBusy(false);
     }
@@ -533,10 +691,18 @@ export function App() {
     setGraderBusy(true);
     setError(null);
     try {
-      const drafted = await api.draftGradingJob(gradingJob.id);
+      const streamed = await streamGradingProgress(
+        api.draftStreamUrl(gradingJob.id),
+        "draft",
+        "Falha ao gerar rascunhos de notas.",
+      );
+      if (!streamed.job) throw new Error("A avaliação terminou sem resultado.");
+      const drafted = streamed.job;
       setGradingJob(drafted);
       setActiveGradingSubmissionId(drafted.submissions[0]?.id ?? null);
       setView("graderReview");
+      api.clearGradingCache(drafted.id);
+      setGradingProgress(null);
       void loadGradingQueue();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Falha ao gerar rascunhos de notas.");
@@ -755,6 +921,9 @@ export function App() {
           </>
         ) : null}
       </main>
+      {gradingProgress ? (
+        <GradingProgressModal state={gradingProgress} onClose={() => setGradingProgress(null)} />
+      ) : null}
     </div>
   );
 }

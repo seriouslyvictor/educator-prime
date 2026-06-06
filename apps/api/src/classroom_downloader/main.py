@@ -5,16 +5,18 @@ from hashlib import sha256
 import json
 import os
 from pathlib import Path
+from queue import Queue
 import shutil
 from secrets import token_urlsafe
+from threading import Thread
 from uuid import uuid4
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse, Response
+from fastapi.responses import RedirectResponse, Response, StreamingResponse
 from sqlmodel import Session, select
 
-from .database import get_session, init_db
+from .database import engine, get_session, init_db
 from . import grading
 from .grading import (
     default_cache_expiry,
@@ -86,6 +88,10 @@ from .settings import get_settings
 settings = get_settings()
 configure_logging()
 logger = get_logger(__name__)
+
+
+def _sse_event(payload: dict) -> str:
+    return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
@@ -977,6 +983,56 @@ def read_grading_privacy_audit(
     return privacy_audit_snapshot(session, audit)
 
 
+@app.get("/api/grading/jobs/{job_id}/privacy-audit/stream")
+def stream_grading_privacy_audit(
+    job_id: str,
+    provider: GoogleProvider = Depends(provider_dependency),
+) -> StreamingResponse:
+    events: Queue[dict] = Queue()
+
+    def worker() -> None:
+        try:
+            with Session(engine) as stream_session:
+                job = stream_session.get(GradingJob, job_id)
+                if job is None:
+                    events.put({"phase": "audit", "error": "Grading job not found."})
+                    return
+
+                def on_progress(processed: int, total: int, label: str) -> None:
+                    events.put(
+                        {
+                            "phase": "audit",
+                            "processed": processed,
+                            "total": total,
+                            "current": label,
+                        }
+                    )
+
+                audit = run_privacy_audit(stream_session, job, provider, on_progress=on_progress)
+                events.put(
+                    {
+                        "phase": "audit",
+                        "done": True,
+                        "summary": privacy_audit_snapshot(stream_session, audit).model_dump(mode="json"),
+                    }
+                )
+        except Exception:
+            log_error(logger, "grading.privacy_audit.stream.failed", job_id=job_id)
+            events.put({"phase": "audit", "error": "Privacy audit failed."})
+
+    def event_stream():
+        thread = Thread(target=worker, daemon=True)
+        thread.start()
+        while True:
+            payload = events.get()
+            yield _sse_event(payload)
+            if payload.get("done") or payload.get("error"):
+                break
+        thread.join(timeout=1)
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
 @app.get("/api/grading/jobs/{job_id}/privacy-audit/export.csv")
 def export_privacy_audit_csv(
     job_id: str,
@@ -1043,6 +1099,64 @@ def draft_job(
         flagged_submissions=job.flagged_submissions,
     )
     return grading_job_snapshot(session, job)
+
+
+@app.get("/api/grading/jobs/{job_id}/draft/stream")
+def stream_draft_job(
+    job_id: str,
+    provider: GoogleProvider = Depends(provider_dependency),
+) -> StreamingResponse:
+    events: Queue[dict] = Queue()
+
+    def worker() -> None:
+        try:
+            with Session(engine) as stream_session:
+                job = stream_session.get(GradingJob, job_id)
+                if job is None:
+                    events.put({"phase": "draft", "error": "Grading job not found."})
+                    return
+                grading_engine = resolve_grading_engine()
+                ensure_privacy_audit_allows_draft(job, stream_session, provider)
+
+                def on_progress(processed: int, total: int, label: str) -> None:
+                    events.put(
+                        {
+                            "phase": "draft",
+                            "processed": processed,
+                            "total": total,
+                            "current": label,
+                        }
+                    )
+
+                drafted = draft_grading_job(
+                    stream_session,
+                    job,
+                    provider,
+                    grading_engine,
+                    on_progress=on_progress,
+                )
+                events.put(
+                    {
+                        "phase": "draft",
+                        "done": True,
+                        "job": grading_job_snapshot(stream_session, drafted).model_dump(mode="json"),
+                    }
+                )
+        except Exception:
+            log_error(logger, "grading.draft.stream.failed", job_id=job_id)
+            events.put({"phase": "draft", "error": "Drafting failed."})
+
+    def event_stream():
+        thread = Thread(target=worker, daemon=True)
+        thread.start()
+        while True:
+            payload = events.get()
+            yield _sse_event(payload)
+            if payload.get("done") or payload.get("error"):
+                break
+        thread.join(timeout=1)
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
 @app.post(

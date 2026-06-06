@@ -1,4 +1,3 @@
-export { GraderAudit } from "./GraderAudit";
 export { GraderQueue } from "./GraderQueue";
 export { GraderReview } from "./GraderReview";
 export { GraderSetup } from "./GraderSetup";

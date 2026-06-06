@@ -240,6 +240,7 @@ def draft_grading_job(
     job: GradingJob,
     provider: GoogleProvider,
     grading_engine: GradingEngine | None = None,
+    on_progress=None,
 ) -> GradingJob:
     grading_engine = grading_engine or get_grading_engine()
     started = time.monotonic()
@@ -267,7 +268,8 @@ def draft_grading_job(
     file_cache_misses = 0
     scrub_cache_hits = 0
     scrub_cache_misses = 0
-    for file in files:
+    total = len(files)
+    for index, file in enumerate(files, start=1):
         submission = _submission_for_file(session, job, file)
         cache_file = cache_submission_file(session, job, submission, file, provider)
         if getattr(cache_file, "_cache_hit", False):
@@ -279,6 +281,8 @@ def draft_grading_job(
             scrub_cache_hits += 1
         elif cached_scrub:
             scrub_cache_misses += 1
+        if on_progress:
+            on_progress(index, total, file.source_name)
 
     _refresh_counts(session, job)
     _refresh_cost_rollup(session, job, grading_engine, started)

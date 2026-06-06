@@ -181,6 +181,8 @@ export const api = {
     `${API_BASE}/api/grading/jobs/${jobId}/privacy-audit/export.csv`,
   privacyAuditJsonUrl: (jobId: string) =>
     `${API_BASE}/api/grading/jobs/${jobId}/privacy-audit/export.json`,
+  privacyAuditStreamUrl: (jobId: string) =>
+    `${API_BASE}/api/grading/jobs/${jobId}/privacy-audit/stream`,
   draftGradingJob: async (jobId: string) => {
     const response = await request<GradingJob>(`/api/grading/jobs/${jobId}/draft`, {
       method: "POST",
@@ -189,6 +191,12 @@ export const api = {
     clearApiCache("GET /api/grading/jobs");
     clearApiCache("GET /api/grading/queue");
     return response;
+  },
+  draftStreamUrl: (jobId: string) => `${API_BASE}/api/grading/jobs/${jobId}/draft/stream`,
+  clearGradingCache: (jobId?: string) => {
+    if (jobId) clearApiCache(`GET /api/grading/jobs/${jobId}`);
+    clearApiCache("GET /api/grading/jobs");
+    clearApiCache("GET /api/grading/queue");
   },
   reviewGradingSubmission: (
     jobId: string,

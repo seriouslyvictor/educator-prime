@@ -1,9 +1,14 @@
 import { api } from "../../lib/api";
-import type { GradingJob } from "../../types";
+import type { GradingJob, GradingSubmission } from "../../types";
 import { AppIcon } from "../icons";
 import { GraderTopbar } from "./GraderTopbar";
+import { safeStatusLabel } from "./graderStatus";
 import graderStyles from "./Grader.module.css";
 void graderStyles;
+
+function scoreOf(submission: GradingSubmission): number | null {
+  return submission.final_score ?? submission.ai_score ?? null;
+}
 
 export function GraderWrap({
   job,
@@ -18,75 +23,105 @@ export function GraderWrap({
   onQueue: () => void;
   onDeleteCache: () => void;
 }) {
-  const scores = job.submissions.map((submission) => submission.final_score ?? 0);
-  const average = scores.length ? Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length) : 0;
-  const outliers = job.submissions.filter((submission) => (submission.final_score ?? 0) < 70 || submission.flag);
+  const grades = job.submissions
+    .map(scoreOf)
+    .filter((value): value is number => value != null);
+  const mean = grades.length ? Math.round(grades.reduce((sum, value) => sum + value, 0) / grades.length) : 0;
+  const sorted = [...grades].sort((a, b) => a - b);
+  const median = sorted.length ? sorted[Math.floor(sorted.length / 2)] : 0;
+  const min = sorted[0] ?? 0;
+  const max = sorted[sorted.length - 1] ?? 0;
+  const timeSaved = ((job.submissions.length * 8) / 60).toFixed(1);
+
+  const buckets = Array.from({ length: 10 }, () => 0);
+  for (const grade of grades) {
+    buckets[Math.min(9, Math.max(0, Math.floor(grade / 10)))] += 1;
+  }
+  const peak = Math.max(1, ...buckets);
+
+  const outliers = job.submissions.filter(
+    (submission) => submission.flag || submission.error || (scoreOf(submission) ?? 100) < 70,
+  );
 
   return (
     <div className={graderStyles["grader-page"]}>
       <GraderTopbar
-        title="Fechamento dos rascunhos"
-        subtitle={`${job.activity_title} · ${job.course_name}`}
+        title={`Pronto para fechar · ${job.activity_title}`}
+        subtitle={`${grades.length} de ${job.total_submissions} com nota · ${job.flagged_submissions} para uma segunda olhada`}
         action={
           <>
             <button className="btn btn-secondary" onClick={onBack}>
+              <AppIcon name="chevronRight" className="ico flip" />
               Revisar rascunhos
             </button>
             <button className="btn btn-primary" onClick={onQueue}>
-              Salvar conjunto
+              Salvar e voltar à fila
             </button>
           </>
         }
       />
       <div className="wrap-grid">
         <section className="wrap-main">
-          <div className="wrap-stats">
-            <div className="wrap-stat">
-              <span>Revisados</span>
-              <strong>
-                {job.reviewed_submissions}/{job.total_submissions}
-              </strong>
-            </div>
-            <div className="wrap-stat">
-              <span>Média</span>
-              <strong>{average}</strong>
-            </div>
-            <div className="wrap-stat">
-              <span>Precisa revisar</span>
-              <strong>{outliers.length}</strong>
-            </div>
+          <div className="summary-row">
+            <SummaryStat label="Média" value={`${mean}`} sub="/100" />
+            <SummaryStat label="Mediana" value={`${median}`} sub="/100" />
+            <SummaryStat label="Amplitude" value={`${min}–${max}`} />
+            <SummaryStat label="Tempo economizado" value={`~${timeSaved}h`} sub="vs. manual" />
           </div>
-          <div className="distribution">
-            {job.submissions.map((submission) => (
-              <div key={submission.id} className="dist-row">
-                <span>{submission.student_name ?? "Desconhecido"}</span>
-                <div>
-                  <i style={{ width: `${Math.min(100, submission.final_score ?? 0)}%` }} />
+
+          <div className="distribution-card">
+            <div className="dist-head">
+              <h3>Distribuição de notas</h3>
+              <span>faixas de 10</span>
+            </div>
+            <div className="histogram">
+              {buckets.map((count, index) => (
+                <div key={index} className={`hb ${index < 3 ? "dim" : index < 6 ? "warn" : ""}`}>
+                  {count > 0 ? <span className="hb-count">{count}</span> : null}
+                  <div className="hb-bar" style={{ height: `${(count / peak) * 100}%` }} />
                 </div>
-                <strong>{submission.final_score ?? "-"}</strong>
-              </div>
-            ))}
+              ))}
+            </div>
+            <div className="histogram-axis">
+              {["0", "10", "20", "30", "40", "50", "60", "70", "80", "90"].map((x) => (
+                <div key={x} className="ax">
+                  {x}
+                </div>
+              ))}
+            </div>
           </div>
-          <section className="grader-section outliers">
+
+          <div className="outlier-card">
             <div className="grader-section-head">
-              <span>Desvios e sinais</span>
+              <span>Vale uma segunda olhada</span>
               <span>{outliers.length}</span>
             </div>
             {outliers.length ? (
               outliers.map((submission) => (
                 <div key={submission.id} className="outlier-row">
-                  <span>{submission.student_name ?? submission.student_email ?? "Aluno desconhecido"}</span>
-                  <small>{submission.flag ?? "Nota baixa"}</small>
+                  <div className="outlier-copy">
+                    <span>{submission.student_name ?? submission.student_email ?? "Aluno desconhecido"}</span>
+                    <small>
+                      {submission.error
+                        ? safeStatusLabel(submission.error)
+                        : submission.flag
+                          ? safeStatusLabel(submission.flag)
+                          : "Nota baixa"}
+                    </small>
+                  </div>
+                  <strong>{scoreOf(submission) ?? "—"}</strong>
                 </div>
               ))
             ) : (
               <div className="grader-empty">Nenhum rascunho sinalizado neste conjunto.</div>
             )}
-          </section>
+          </div>
         </section>
+
         <aside className="wrap-side">
           <div className="mini-note">
-            Estes são apenas rascunhos de correção salvos. Exporte o CSV ou continue revisando; nada é publicado no Classroom na V1.
+            Estes são rascunhos de correção salvos. Exporte o CSV ou continue revisando; nada é publicado no
+            Classroom nesta versão.
           </div>
           <a className="btn btn-primary export-link" href={api.gradingCsvUrl(job.id)}>
             <AppIcon name="fileDown" /> Exportar CSV
@@ -98,7 +133,7 @@ export function GraderWrap({
           <div className="cache-note">
             {job.cache_expires_at
               ? `Arquivos em cache expiram em ${new Date(job.cache_expires_at).toLocaleString("pt-BR")}`
-              : "Arquivos em cache apagados; rascunhos de notas continuam salvos."}
+              : "Arquivos em cache apagados; as notas continuam salvas."}
           </div>
         </aside>
       </div>
@@ -106,4 +141,14 @@ export function GraderWrap({
   );
 }
 
-
+function SummaryStat({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div className="summary-stat">
+      <div className="lbl">{label}</div>
+      <div className="val">
+        {value}
+        {sub ? <span className="sub">{sub}</span> : null}
+      </div>
+    </div>
+  );
+}

@@ -1,5 +1,6 @@
 import os
 import logging
+import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
@@ -27,6 +28,16 @@ from classroom_downloader.models import (
     PrivacyAuditRow,
 )
 from classroom_downloader.settings import get_settings
+
+
+def _sse_payloads(response) -> list[dict]:
+    payloads: list[dict] = []
+    for line in response.iter_lines():
+        if isinstance(line, bytes):
+            line = line.decode("utf-8")
+        if line.startswith("data: "):
+            payloads.append(json.loads(line.removeprefix("data: ")))
+    return payloads
 
 
 def _enable_litellm_engine(tmp_path, settings) -> None:
@@ -267,6 +278,31 @@ def test_privacy_audit_exports_safe_csv_and_json(tmp_path) -> None:
     assert all("student_email" not in row for row in exported["rows"])
 
 
+def test_privacy_audit_stream_emits_progress_and_terminal_event(tmp_path) -> None:
+    get_settings().grading_cache_path = str(tmp_path / "grading")
+    with TestClient(app) as client:
+        job = client.post(
+            "/api/grading/jobs",
+            json={
+                "course_id": "course-1",
+                "activity_id": "activity-1",
+                "rubric_mode": "infer",
+                "teacher_loop": "approve",
+            },
+        ).json()
+        with client.stream("GET", f"/api/grading/jobs/{job['id']}/privacy-audit/stream") as response:
+            assert response.status_code == 200
+            payloads = _sse_payloads(response)
+
+    progress = [payload for payload in payloads if payload.get("processed")]
+    terminal = payloads[-1]
+    assert progress
+    assert terminal["phase"] == "audit"
+    assert terminal["done"] is True
+    assert terminal["summary"]["job_id"] == job["id"]
+    assert terminal["summary"]["total_files"] == progress[-1]["total"]
+
+
 def test_safe_source_label_does_not_preserve_drive_id_suffix(tmp_path) -> None:
     drive_id = "drive.identifier.with.suffix"
     path = tmp_path / drive_id
@@ -333,6 +369,33 @@ def test_draft_auto_runs_privacy_audit_when_missing(tmp_path) -> None:
     assert drafted["total_submissions"] == 2
     assert audit_response.status_code == 200
     assert audit_response.json()["total_files"] == 2
+
+
+def test_draft_stream_emits_per_submission_progress(tmp_path) -> None:
+    get_settings().grading_cache_path = str(tmp_path / "grading")
+    with TestClient(app) as client:
+        job = client.post(
+            "/api/grading/jobs",
+            json={
+                "course_id": "course-2",
+                "activity_id": "activity-3",
+                "rubric_mode": "brief",
+                "teacher_loop": "approve",
+            },
+        ).json()
+        client.post(f"/api/grading/jobs/{job['id']}/privacy-audit")
+        with client.stream("GET", f"/api/grading/jobs/{job['id']}/draft/stream") as response:
+            assert response.status_code == 200
+            payloads = _sse_payloads(response)
+
+    progress = [payload for payload in payloads if payload.get("processed")]
+    terminal = payloads[-1]
+    assert progress
+    assert terminal["phase"] == "draft"
+    assert terminal["done"] is True
+    assert terminal["job"]["id"] == job["id"]
+    assert terminal["job"]["status"] in {"reviewing", "completed"}
+    assert terminal["job"]["total_submissions"] == progress[-1]["total"]
 
 
 def test_draft_reuses_privacy_audit_scrub_cache(tmp_path) -> None:

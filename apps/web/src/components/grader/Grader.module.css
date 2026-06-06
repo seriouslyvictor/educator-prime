@@ -1427,6 +1427,112 @@
   color: var(--ai);
 }
 
+/* ===== Shared grading progress modal ===== */
+.grading-progress-modal {
+  position: fixed;
+  z-index: 80;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: color-mix(in srgb, var(--bg) 86%, transparent);
+  backdrop-filter: blur(10px);
+}
+
+.grading-progress-dialog {
+  display: grid;
+  width: min(620px, 100%);
+  gap: 18px;
+  padding: 26px;
+  border: 1px solid var(--ai-border);
+  border-radius: 8px;
+  background: var(--paper);
+  box-shadow: var(--shadow-lg);
+}
+
+.grading-progress-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.grading-progress-head span {
+  color: var(--muted-2);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.grading-progress-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.grading-progress-title .ico {
+  width: 28px;
+  height: 28px;
+  color: var(--ai);
+}
+
+.grading-progress-title h2 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.grading-progress-current {
+  min-height: 24px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.grading-progress-meter-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.grading-progress-meter-row strong {
+  color: var(--ink);
+  font-size: 18px;
+}
+
+.grading-progress-meter-row span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.grading-progress-meter {
+  overflow: hidden;
+  height: 12px;
+  border-radius: 999px;
+  background: var(--surface-2);
+}
+
+.grading-progress-meter span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--ai);
+  transition: width 180ms ease;
+}
+
+.grading-progress-note {
+  margin: 0;
+  color: var(--muted-2);
+  font-size: 12px;
+}
+
 .prep-panel {
   display: grid;
   gap: 12px;

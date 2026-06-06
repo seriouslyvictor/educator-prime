@@ -20,6 +20,7 @@ def run_privacy_audit(
     session: Session,
     job: GradingJob,
     provider: GoogleProvider,
+    on_progress=None,
 ) -> PrivacyAudit:
     log_event(
         logger,
@@ -52,7 +53,8 @@ def run_privacy_audit(
     file_cache_misses = 0
     scrub_cache_hits = 0
     scrub_cache_misses = 0
-    for file in files:
+    total = len(files)
+    for index, file in enumerate(files, start=1):
         log_debug(logger, "privacy_audit.row.start", audit_id=audit.id, file=safe_fields(file))
         submission = _submission_for_audit(session, job, file)
         cache_file = cache_submission_file(
@@ -122,6 +124,8 @@ def run_privacy_audit(
             audit_pass=audit_pass,
             blocked_reason=blocked_reason,
         )
+        if on_progress:
+            on_progress(index, total, file.source_name)
 
     session.commit()
     _refresh_audit_counts(session, audit)
