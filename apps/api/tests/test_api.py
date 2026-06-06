@@ -7,7 +7,7 @@ os.environ["CD_GOOGLE_PROVIDER"] = "mock"
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
-from classroom_downloader.database import engine
+from classroom_downloader.database import engine, init_db
 from classroom_downloader.main import app, provider_dependency, settings
 from classroom_downloader.models import Activity, Course
 
@@ -83,7 +83,7 @@ def test_file_content_stream_uses_private_etag_cache() -> None:
     assert second.status_code == 304
 
 
-def test_auth_me_does_not_treat_stale_google_token_as_signed_in(
+def test_auth_me_profile_failure_keeps_loadable_google_token_signed_in(
     monkeypatch, tmp_path
 ) -> None:
     token_path = tmp_path / "google-user.json"
@@ -104,6 +104,7 @@ def test_auth_me_does_not_treat_stale_google_token_as_signed_in(
     )
     monkeypatch.setattr(settings, "google_provider", "google")
     monkeypatch.setattr(settings, "google_token_path", str(token_path))
+    init_db()
     with Session(engine) as session:
         session.merge(Course(id="stale-course", name="Stale", course_state="ACTIVE"))
         session.merge(
@@ -127,13 +128,13 @@ def test_auth_me_does_not_treat_stale_google_token_as_signed_in(
         response = client.get("/api/auth/me")
 
     assert response.status_code == 200
-    assert response.json()["signed_in"] is False
-    assert not token_path.exists()
+    assert response.json()["signed_in"] is True
+    assert token_path.exists()
     with Session(engine) as session:
-        assert session.exec(select(Course).where(Course.id == "stale-course")).first() is None
+        assert session.exec(select(Course).where(Course.id == "stale-course")).first() is not None
         assert (
             session.exec(select(Activity).where(Activity.id == "stale-activity")).first()
-            is None
+            is not None
         )
 
 
@@ -142,6 +143,7 @@ def test_logout_deletes_google_token(monkeypatch, tmp_path) -> None:
     token_path.write_text("{}", encoding="utf-8")
     monkeypatch.setattr(settings, "google_provider", "google")
     monkeypatch.setattr(settings, "google_token_path", str(token_path))
+    init_db()
     with Session(engine) as session:
         session.merge(Course(id="logout-course", name="Logout", course_state="ACTIVE"))
         session.merge(
@@ -183,3 +185,67 @@ def test_courses_reports_expired_google_session_as_unauthorized() -> None:
 
     assert response.status_code == 401
     assert "connect your Google account again" in response.json()["detail"]
+
+
+def test_grading_queue_missing_token_returns_401(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(settings, "google_provider", "google")
+    monkeypatch.setattr(settings, "google_token_path", str(tmp_path / "missing-token.json"))
+
+    with TestClient(app) as client:
+        response = client.get(
+            "/api/grading/queue",
+            params={"course_id": "course-1", "activity_id": "activity-1"},
+        )
+
+    assert response.status_code == 401
+    assert "connect your Google account again" in response.json()["detail"]
+
+
+def test_transient_403_keeps_token(monkeypatch, tmp_path) -> None:
+    from googleapiclient.errors import HttpError
+
+    token_path = tmp_path / "google-user.json"
+    token_path.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(settings, "google_provider", "google")
+    monkeypatch.setattr(settings, "google_token_path", str(token_path))
+
+    class Response:
+        status = 403
+        reason = "Forbidden"
+
+    class ForbiddenProvider:
+        def list_courses(self):
+            raise HttpError(resp=Response(), content=b'{"error":"rateLimitExceeded"}')
+
+    app.dependency_overrides[provider_dependency] = lambda: ForbiddenProvider()
+    try:
+        with TestClient(app) as client:
+            response = client.get("/api/courses?refresh=true")
+    finally:
+        app.dependency_overrides.pop(provider_dependency, None)
+
+    assert response.status_code == 401
+    assert token_path.exists()
+
+
+def test_invalid_grant_deletes_token(monkeypatch, tmp_path) -> None:
+    from google.auth.exceptions import RefreshError
+
+    token_path = tmp_path / "google-user.json"
+    token_path.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(settings, "google_provider", "google")
+    monkeypatch.setattr(settings, "google_token_path", str(token_path))
+
+    class InvalidGrantProvider:
+        def list_courses(self):
+            raise RefreshError("invalid_grant: token revoked")
+
+    app.dependency_overrides[provider_dependency] = lambda: InvalidGrantProvider()
+    try:
+        with TestClient(app) as client:
+            response = client.get("/api/courses?refresh=true")
+    finally:
+        app.dependency_overrides.pop(provider_dependency, None)
+
+    assert response.status_code == 401
+    assert not token_path.exists()

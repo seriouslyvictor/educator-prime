@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 import json
@@ -141,11 +142,10 @@ def provider_dependency(session: Session = Depends(get_session)) -> GoogleProvid
     try:
         return get_google_provider()
     except Exception as error:
-        auth_error = google_auth_http_exception(error)
-        if auth_error:
-            TokenStore(settings.google_token_path).delete()
-            purge_cached_classroom_state(session)
-            raise auth_error from error
+        auth_failure = google_auth_http_exception(error)
+        if auth_failure:
+            purge_google_token_if_needed(auth_failure, session)
+            raise auth_failure.http from error
         raise
 
 
@@ -187,7 +187,46 @@ def disconnected_auth_state() -> AuthState:
     )
 
 
-def google_auth_http_exception(error: Exception) -> HTTPException | None:
+@dataclass(frozen=True)
+class AuthFailure:
+    http: HTTPException
+    purge_token: bool = False
+
+
+def _contains_invalid_grant(error: Exception) -> bool:
+    haystack = " ".join(str(part) for part in getattr(error, "args", ()) if part)
+    haystack = f"{haystack} {error}".lower()
+    return "invalid_grant" in haystack
+
+
+def _http_error_content(error: Exception) -> str:
+    content = getattr(error, "content", b"")
+    if isinstance(content, bytes):
+        return content.decode("utf-8", errors="ignore").lower()
+    return str(content).lower()
+
+
+def _http_403_is_hard_auth_failure(error: Exception) -> bool:
+    content = _http_error_content(error)
+    hard_markers = (
+        "invalid_grant",
+        "invalid credentials",
+        "autherror",
+        "unauthorized_client",
+    )
+    return any(marker in content for marker in hard_markers)
+
+
+def google_auth_http_exception(error: Exception) -> AuthFailure | None:
+    if isinstance(error, FileNotFoundError):
+        log_warning(logger, "google.auth.token_missing")
+        return AuthFailure(
+            HTTPException(
+                status_code=401,
+                detail="Google session missing. Please connect your Google account again.",
+            ),
+            purge_token=False,
+        )
     try:
         from google.auth.exceptions import RefreshError
         from googleapiclient.errors import HttpError
@@ -195,19 +234,39 @@ def google_auth_http_exception(error: Exception) -> HTTPException | None:
         return None
 
     if isinstance(error, RefreshError):
-        log_warning(logger, "google.auth.refresh_failed")
-        return HTTPException(
-            status_code=401,
-            detail="Google session expired. Logout and connect your Google account again.",
+        purge_token = _contains_invalid_grant(error)
+        log_warning(logger, "google.auth.refresh_failed", purge_token=purge_token)
+        return AuthFailure(
+            HTTPException(
+                status_code=401,
+                detail="Google session expired. Please connect your Google account again.",
+            ),
+            purge_token=purge_token,
         )
     status_code = getattr(getattr(error, "resp", None), "status", None)
     if isinstance(error, HttpError) and status_code in {401, 403}:
-        log_warning(logger, "google.auth.api_denied", status_code=status_code)
-        return HTTPException(
-            status_code=401,
-            detail="Google authorization failed. Logout and connect your Google account again.",
+        purge_token = status_code == 403 and _http_403_is_hard_auth_failure(error)
+        log_warning(
+            logger,
+            "google.auth.api_denied",
+            status_code=status_code,
+            purge_token=purge_token,
+        )
+        return AuthFailure(
+            HTTPException(
+                status_code=401,
+                detail="Google authorization failed. Please connect your Google account again.",
+            ),
+            purge_token=purge_token,
         )
     return None
+
+
+def purge_google_token_if_needed(auth_failure: AuthFailure, session: Session) -> None:
+    if not auth_failure.purge_token:
+        return
+    TokenStore(settings.google_token_path).delete()
+    purge_cached_classroom_state(session)
 
 
 def ensure_privacy_audit_allows_draft(
@@ -248,11 +307,21 @@ def auth_me(session: Session = Depends(get_session)) -> AuthState:
                 name = profile.name
                 email = profile.email
                 picture = profile.picture
-            except Exception:
-                log_error(logger, "auth.me.profile_failed")
-                TokenStore(settings.google_token_path).delete()
-                purge_cached_classroom_state(session)
-                return disconnected_auth_state()
+            except Exception as error:
+                auth_failure = google_auth_http_exception(error)
+                if auth_failure:
+                    log_warning(
+                        logger,
+                        "auth.me.profile_auth_failed",
+                        purge_token=auth_failure.purge_token,
+                    )
+                    purge_google_token_if_needed(auth_failure, session)
+                    if auth_failure.purge_token or not scopes:
+                        return disconnected_auth_state()
+                else:
+                    log_error(logger, "auth.me.profile_failed")
+                    if not scopes:
+                        return disconnected_auth_state()
         log_event(
             logger,
             "auth.me.google",
@@ -404,11 +473,10 @@ def list_courses(
             course for course in provider.list_courses() if course.course_state != "ARCHIVED"
         ]
     except Exception as error:
-        auth_error = google_auth_http_exception(error)
-        if auth_error:
-            TokenStore(settings.google_token_path).delete()
-            purge_cached_classroom_state(session)
-            raise auth_error from error
+        auth_failure = google_auth_http_exception(error)
+        if auth_failure:
+            purge_google_token_if_needed(auth_failure, session)
+            raise auth_failure.http from error
         if cached_rows:
             log_warning(logger, "classroom.courses.stale_fallback", stored_count=len(cached_rows))
             return cached_rows
@@ -452,11 +520,10 @@ def list_activities(
     try:
         activities = provider.list_activities(course_id)
     except Exception as error:
-        auth_error = google_auth_http_exception(error)
-        if auth_error:
-            TokenStore(settings.google_token_path).delete()
-            purge_cached_classroom_state(session)
-            raise auth_error from error
+        auth_failure = google_auth_http_exception(error)
+        if auth_failure:
+            purge_google_token_if_needed(auth_failure, session)
+            raise auth_failure.http from error
         if cached_rows:
             log_warning(logger, "classroom.activities.stale_fallback", course_id=course_id, stored_count=len(cached_rows))
             return cached_rows
