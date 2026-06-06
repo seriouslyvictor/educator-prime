@@ -73,6 +73,7 @@ class ClassroomActivity:
     work_type: str
     state: str
     due_label: str | None = None
+    description: str | None = None
 
 
 @dataclass(frozen=True)
@@ -379,6 +380,7 @@ class GoogleApiProvider(GoogleProvider):
                         work_type=activity.get("workType", "ASSIGNMENT"),
                         state=activity.get("state", "PUBLISHED"),
                         due_label=_due_label(activity),
+                        description=activity.get("description"),
                     )
                 )
             log_debug(
@@ -415,6 +417,7 @@ class GoogleApiProvider(GoogleProvider):
             work_type=activity.get("workType", "ASSIGNMENT"),
             state=activity.get("state", "PUBLISHED"),
             due_label=_due_label(activity),
+            description=activity.get("description"),
         )
         log_event(logger, "google.activity.get.complete", activity=safe_fields(row))
         return row
@@ -605,8 +608,32 @@ class MockGoogleProvider(GoogleProvider):
 
     activities = [
         ClassroomActivity("activity-1", "course-1", "Cell Diagram", "ASSIGNMENT", "PUBLISHED", "May 24"),
-        ClassroomActivity("activity-2", "course-1", "Lab Notes: Osmosis", "ASSIGNMENT", "PUBLISHED", "May 28"),
-        ClassroomActivity("activity-3", "course-2", "Essay Draft", "ASSIGNMENT", "PUBLISHED", "May 30"),
+        ClassroomActivity(
+            "activity-2",
+            "course-1",
+            "Lab Notes: Osmosis",
+            "ASSIGNMENT",
+            "PUBLISHED",
+            "May 28",
+            description="Record your osmosis observations.",
+        ),
+        ClassroomActivity(
+            "activity-3",
+            "course-2",
+            "Essay Draft",
+            "ASSIGNMENT",
+            "PUBLISHED",
+            "May 30",
+            description=(
+                "Write a persuasive essay of at least three paragraphs. State a clear "
+                "thesis in the introduction, then support your argument with at least "
+                "two pieces of textual evidence and explain how each one backs your "
+                "claim. Close with a conclusion that restates the argument and its "
+                "significance. You will be assessed on the strength of your thesis, the "
+                "quality and integration of evidence, the clarity of your reasoning, and "
+                "the organization and mechanics of your writing."
+            ),
+        ),
     ]
 
     files = [

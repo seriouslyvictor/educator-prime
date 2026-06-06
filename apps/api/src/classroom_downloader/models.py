@@ -34,6 +34,7 @@ class Activity(SQLModel, table=True):
     work_type: str = "ASSIGNMENT"
     state: str = "PUBLISHED"
     due_label: str | None = None
+    description: str | None = None
     fetched_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
@@ -84,6 +85,7 @@ class GradingJob(SQLModel, table=True):
     course_name: str
     activity_id: str = Field(index=True)
     activity_title: str
+    activity_description: str | None = None
     rubric_mode: str
     teacher_loop: str
     rubric_text: str | None = None

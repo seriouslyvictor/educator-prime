@@ -17,6 +17,7 @@ class ActivityRead(BaseModel):
     work_type: str
     state: str
     due_label: str | None = None
+    description: str | None = None
 
 
 class ExportCreate(BaseModel):

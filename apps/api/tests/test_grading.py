@@ -303,6 +303,43 @@ def test_privacy_audit_stream_emits_progress_and_terminal_event(tmp_path) -> Non
     assert terminal["summary"]["total_files"] == progress[-1]["total"]
 
 
+def test_job_persists_activity_description(tmp_path) -> None:
+    get_settings().grading_cache_path = str(tmp_path / "grading")
+    with TestClient(app) as client:
+        job = client.post(
+            "/api/grading/jobs",
+            json={
+                "course_id": "course-2",
+                "activity_id": "activity-3",
+                "rubric_mode": "infer",
+                "teacher_loop": "approve",
+            },
+        ).json()
+    with Session(engine) as session:
+        row = session.get(GradingJob, job["id"])
+        assert row is not None
+        assert row.activity_description
+        assert "argument" in row.activity_description.lower()
+
+
+def test_job_without_activity_description_is_none(tmp_path) -> None:
+    get_settings().grading_cache_path = str(tmp_path / "grading")
+    with TestClient(app) as client:
+        job = client.post(
+            "/api/grading/jobs",
+            json={
+                "course_id": "course-1",
+                "activity_id": "activity-1",
+                "rubric_mode": "infer",
+                "teacher_loop": "approve",
+            },
+        ).json()
+    with Session(engine) as session:
+        row = session.get(GradingJob, job["id"])
+        assert row is not None
+        assert row.activity_description is None
+
+
 def test_safe_source_label_does_not_preserve_drive_id_suffix(tmp_path) -> None:
     drive_id = "drive.identifier.with.suffix"
     path = tmp_path / drive_id

@@ -25,10 +25,21 @@ def init_db() -> None:
 def ensure_sqlite_dev_migrations(target_engine: Engine) -> None:
     if target_engine.dialect.name != "sqlite":
         return
+    _ensure_activity_columns(target_engine)
     _ensure_grading_job_columns(target_engine)
     _ensure_grading_criterion_columns(target_engine)
     _ensure_grading_ai_attempt_columns(target_engine)
     _ensure_cache_columns(target_engine)
+
+
+def _ensure_activity_columns(target_engine: Engine) -> None:
+    _ensure_columns(
+        target_engine,
+        "activity",
+        {
+            "description": "VARCHAR",
+        },
+    )
 
 
 def _ensure_grading_job_columns(target_engine: Engine) -> None:
@@ -37,6 +48,7 @@ def _ensure_grading_job_columns(target_engine: Engine) -> None:
         "gradingjob",
         {
             "rubric_text": "VARCHAR",
+            "activity_description": "VARCHAR",
             "batch_mode": "VARCHAR DEFAULT 'per_submission'",
             "total_prompt_tokens": "INTEGER",
             "total_completion_tokens": "INTEGER",

@@ -552,6 +552,7 @@ def list_activities(
                 work_type=activity.work_type,
                 state=activity.state,
                 due_label=activity.due_label,
+                description=activity.description,
                 fetched_at=datetime.now(UTC),
                 updated_at=datetime.now(UTC),
             )
@@ -895,6 +896,7 @@ def create_grading_job(
             work_type=activity.work_type,
             state=activity.state,
             due_label=activity.due_label,
+            description=activity.description,
         )
     )
 
@@ -904,6 +906,7 @@ def create_grading_job(
         course_name=course.name,
         activity_id=activity.id,
         activity_title=activity.title,
+        activity_description=activity.description,
         rubric_mode=payload.rubric_mode,
         teacher_loop=payload.teacher_loop,
         rubric_text=payload.rubric_text,
