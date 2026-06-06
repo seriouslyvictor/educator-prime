@@ -6,7 +6,13 @@ from typing import Any
 
 import litellm
 
-from .grading_engine import GradingEngineRequest, GradingEngineResult
+from xml.sax.saxutils import escape, quoteattr
+
+from .grading_engine import (
+    GradingEngineRequest,
+    GradingEngineResult,
+    RubricInferenceRequest,
+)
 from .llm_catalog import LlmModelEntry
 from .observability import get_logger, log_event
 from .settings import get_settings
@@ -97,6 +103,157 @@ class LiteLlmGradingEngine:
             latency_ms=self.last_latency_ms,
         )
         return result
+
+    def infer_rubric(
+        self, request: RubricInferenceRequest
+    ) -> list[dict[str, str | int | None]]:
+        messages = _build_rubric_messages(request)
+        log_event(
+            logger,
+            "grading_engine.litellm.infer_rubric.request",
+            job_id=request.job_id,
+            model=self.model,
+            activity_title=request.activity_title,
+            description_only=request.description_only,
+            has_description=bool(request.activity_description),
+            sample_count=len(request.samples),
+        )
+        started = time.monotonic()
+        response = litellm.completion(
+            model=self.model,
+            messages=messages,
+            timeout=self.timeout_seconds,
+            num_retries=self.max_retries,
+            max_tokens=self.max_output_tokens,
+            response_format=_rubric_response_format(self.catalog_model),
+        )
+        self.last_response = response
+        self.last_latency_ms = int((time.monotonic() - started) * 1000)
+        self.last_usage = _usage_dict(getattr(response, "usage", None))
+        criteria = parse_rubric_criteria(_response_content(response))
+        log_event(
+            logger,
+            "grading_engine.litellm.infer_rubric.response",
+            job_id=request.job_id,
+            model=self.model,
+            criteria_count=len(criteria),
+            usage=self.last_usage,
+            latency_ms=self.last_latency_ms,
+        )
+        return criteria
+
+
+def build_sample_xml(samples: list[dict[str, str]]) -> str:
+    """Bundle scrubbed submissions into XML-delimited blocks for the prompt.
+    XML tags separate the samples cleanly with minimal escaping."""
+    blocks: list[str] = []
+    for sample in samples:
+        attrs = (
+            f"label={quoteattr(str(sample.get('label', '')))} "
+            f"source={quoteattr(str(sample.get('source_label', '')))} "
+            f"mime={quoteattr(str(sample.get('mime_type', '')))}"
+        )
+        body = escape(str(sample.get("content", "")))
+        blocks.append(f"<submission {attrs}>\n{body}\n</submission>")
+    return "\n".join(blocks)
+
+
+def _build_rubric_messages(request: RubricInferenceRequest) -> list[dict[str, str]]:
+    sections = [
+        f"Activity title: {request.activity_title}",
+        f"Activity description: {request.activity_description or '(none provided)'}",
+    ]
+    if request.rubric_text:
+        sections.append(f"Teacher rubric notes: {request.rubric_text}")
+    if not request.description_only and request.samples:
+        sections.append(
+            "Sample student submissions (XML-delimited, already redacted):\n"
+            + build_sample_xml(request.samples)
+        )
+    user_content = "\n\n".join(sections)
+    return [
+        {
+            "role": "system",
+            "content": (
+                "Design a grading rubric for this assignment. Infer the criteria a "
+                "teacher would use to evaluate the work, favoring the activity "
+                "description when it is informative and the sample submissions when it "
+                "is thin. Respond with JSON only: an object with a 'criteria' array of "
+                "{name, weight, description}, where weight is an integer percentage and "
+                "all weights sum to 100. Return 3 to 6 criteria."
+            ),
+        },
+        {"role": "user", "content": user_content},
+    ]
+
+
+def _rubric_response_format(model: LlmModelEntry) -> dict[str, Any]:
+    settings = get_settings()
+    if (
+        settings.grading_structured_output == "auto"
+        and model.supports_response_schema
+    ):
+        litellm.enable_json_schema_validation = True
+        return {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "rubric_criteria",
+                "strict": True,
+                "schema": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "criteria": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "additionalProperties": False,
+                                "properties": {
+                                    "name": {"type": "string"},
+                                    "weight": {"type": "integer", "minimum": 1, "maximum": 100},
+                                    "description": {"type": ["string", "null"]},
+                                },
+                                "required": ["name", "weight", "description"],
+                            },
+                        },
+                    },
+                    "required": ["criteria"],
+                },
+            },
+        }
+    return {"type": "json_object"}
+
+
+def parse_rubric_criteria(content: str) -> list[dict[str, str | int | None]]:
+    try:
+        payload = json.loads(content)
+    except json.JSONDecodeError as exc:
+        raise ValueError("malformed_llm_response") from exc
+    if isinstance(payload, list):
+        rows = payload
+    elif isinstance(payload, dict):
+        rows = payload.get("criteria", [])
+    else:
+        raise ValueError("malformed_llm_response")
+    if not isinstance(rows, list):
+        raise ValueError("malformed_llm_response")
+    criteria: list[dict[str, str | int | None]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        name = row.get("name")
+        weight = row.get("weight")
+        if not isinstance(name, str) or not isinstance(weight, int):
+            continue
+        description = row.get("description")
+        criteria.append(
+            {
+                "name": name,
+                "weight": weight,
+                "description": description if isinstance(description, str) else None,
+            }
+        )
+    return criteria
 
 
 def parse_litellm_result(

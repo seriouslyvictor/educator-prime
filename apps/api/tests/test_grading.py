@@ -340,6 +340,41 @@ def test_job_without_activity_description_is_none(tmp_path) -> None:
         assert row.activity_description is None
 
 
+def test_mock_infer_rubric_returns_weighted_criteria() -> None:
+    from classroom_downloader.grading_engine import (
+        DEFAULT_GRADING_ENGINE,
+        RubricInferenceRequest,
+    )
+
+    criteria = DEFAULT_GRADING_ENGINE.infer_rubric(
+        RubricInferenceRequest(
+            job_id="job-1",
+            activity_title="Essay Draft",
+            activity_description="Write a persuasive essay with a clear thesis.",
+            rubric_text=None,
+            samples=[],
+            description_only=True,
+        )
+    )
+    assert len(criteria) >= 3
+    assert sum(int(row["weight"]) for row in criteria) == 100
+    assert all(row.get("name") for row in criteria)
+
+
+def test_build_sample_xml_wraps_and_escapes_samples() -> None:
+    from classroom_downloader.litellm_engine import build_sample_xml
+
+    bundle = build_sample_xml(
+        [
+            {"label": "Aluno A", "source_label": "a.py", "mime_type": "text/x-python", "content": "x < 1 & y"},
+            {"label": "Aluno B", "source_label": "b.txt", "mime_type": "text/plain", "content": "ok"},
+        ]
+    )
+    assert bundle.count("<submission") == 2
+    assert "x &lt; 1 &amp; y" in bundle
+    assert 'label="Aluno A"' in bundle
+
+
 def test_safe_source_label_does_not_preserve_drive_id_suffix(tmp_path) -> None:
     drive_id = "drive.identifier.with.suffix"
     path = tmp_path / drive_id

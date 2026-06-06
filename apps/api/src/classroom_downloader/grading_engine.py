@@ -34,11 +34,26 @@ class GradingEngineResult:
     inferred_criteria: list[dict[str, str | int | None]] | None = None
 
 
+@dataclass(frozen=True)
+class RubricInferenceRequest:
+    job_id: str
+    activity_title: str
+    activity_description: str | None
+    rubric_text: str | None
+    samples: list[dict[str, str]]
+    description_only: bool = False
+
+
 class GradingEngine(Protocol):
     name: str
     model: str | None
 
     def grade(self, request: GradingEngineRequest) -> GradingEngineResult:
+        ...
+
+    def infer_rubric(
+        self, request: RubricInferenceRequest
+    ) -> list[dict[str, str | int | None]]:
         ...
 
 
@@ -99,6 +114,26 @@ class MockGradingEngine:
             feedback=result.feedback,
         )
         return result
+
+    def infer_rubric(
+        self, request: "RubricInferenceRequest"
+    ) -> list[dict[str, str | int | None]]:
+        log_event(
+            logger,
+            "grading_engine.mock.infer_rubric",
+            job_id=request.job_id,
+            activity_title=request.activity_title,
+            description_only=request.description_only,
+            has_description=bool(request.activity_description),
+            sample_count=len(request.samples),
+        )
+        # Deterministic rubric whose weights sum to 100; stable for tests.
+        return [
+            {"name": "Thesis", "weight": 30, "description": "States a clear, arguable claim."},
+            {"name": "Evidence", "weight": 30, "description": "Supports the claim with relevant evidence."},
+            {"name": "Reasoning", "weight": 25, "description": "Explains how evidence backs the claim."},
+            {"name": "Mechanics", "weight": 15, "description": "Organized, readable, and correct."},
+        ]
 
 
 DEFAULT_GRADING_ENGINE: GradingEngine = MockGradingEngine()

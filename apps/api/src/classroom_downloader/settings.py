@@ -53,6 +53,9 @@ class Settings(BaseSettings):
     grading_auto_accept_confidence: float = 0.85
     grading_structured_output: Literal["auto", "json_object"] = "auto"
     grading_batch_mode: Literal["per_submission", "class_batch"] = "class_batch"
+    rubric_infer_sample_size: int = 4
+    rubric_description_min_chars: int = 200
+    rubric_description_min_words: int = 25
     llm_model_catalog_mode: Literal["remote_cached", "local_only", "remote_required"] = "remote_cached"
     llm_model_catalog_url: str = (
         "https://raw.githubusercontent.com/BerriAI/litellm/main/"
