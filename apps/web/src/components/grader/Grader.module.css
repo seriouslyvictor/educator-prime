@@ -1305,6 +1305,7 @@
 
 .criterion-row {
   display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: 8px;
   padding: 8px;
@@ -2413,6 +2414,12 @@
   border-radius: 5px;
   background: var(--ai);
   color: white;
+}
+
+.criterion-left, .criterion-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .sk-cb .ico {

@@ -446,26 +446,30 @@ function InferCriteriaPanel({
       <div className="criteria-list">
         {criteria.map((criterion, index) => (
           <div className="criterion-row ai-proposed" key={`${criterion.name}-${index}`}>
-            <button className="sk-cb on" onClick={() => toggle(index)} disabled={disabled} aria-label="Remover critério">
-              <AppIcon name="check" />
-            </button>
-            <div>
-              <div className="crit-name">{criterion.name}</div>
-              <div className="crit-hint">{criterion.description ?? "Critério inferido pela IA."}</div>
+            <div className="criterion-left">
+              <button className="sk-cb on" onClick={() => toggle(index)} disabled={disabled} aria-label="Remover critério">
+                <AppIcon name="check" />
+              </button>
+              <div>
+                <div className="crit-name">{criterion.name}</div>
+                <div className="crit-hint">{criterion.description ?? "Critério inferido pela IA."}</div>
+              </div>
             </div>
-            <input
-              className="crit-weight"
-              value={criterion.weight}
-              disabled={disabled}
-              type="number"
-              min={1}
-              max={100}
-              onChange={(event) => updateWeight(index, Number(event.target.value) || 0)}
-              aria-label={`Peso de ${criterion.name}`}
-            />
-            <button className="icon-btn" disabled={disabled} title="Editar">
-              <AppIcon name="moreHorizontal" />
-            </button>
+            <div className="criterion-right">
+              <input
+                className="crit-weight"
+                value={criterion.weight}
+                disabled={disabled}
+                type="number"
+                min={1}
+                max={100}
+                onChange={(event) => updateWeight(index, Number(event.target.value) || 0)}
+                aria-label={`Peso de ${criterion.name}`}
+              />
+              <button className="icon-btn" disabled={disabled} title="Editar">
+                <AppIcon name="moreHorizontal" />
+              </button>
+            </div>
           </div>
         ))}
       </div>
