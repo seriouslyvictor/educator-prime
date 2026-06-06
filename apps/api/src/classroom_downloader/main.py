@@ -808,6 +808,49 @@ def grading_queue(
     return [item]
 
 
+@app.get("/api/grading/jobs", response_model=list[GradingQueueItem])
+def list_grading_jobs(
+    session: Session = Depends(get_session),
+) -> list[GradingQueueItem]:
+    """List grading jobs so the teacher can resume in-progress work. Pure DB read:
+    every label needed (course/activity names, counts, status) already lives on the
+    GradingJob row, so this never calls the Google provider. Collapses to the newest
+    job per (course_id, activity_id) and returns them most-recently-updated first."""
+    log_event(logger, "grading.jobs.list.start")
+    jobs = session.exec(
+        select(GradingJob).order_by(GradingJob.updated_at.desc())
+    ).all()
+    newest_by_activity: dict[tuple[str, str], GradingJob] = {}
+    for job in jobs:
+        newest_by_activity.setdefault((job.course_id, job.activity_id), job)
+
+    due_labels: dict[str, str | None] = {}
+    activity_ids = {job.activity_id for job in newest_by_activity.values()}
+    if activity_ids:
+        for activity in session.exec(
+            select(Activity).where(Activity.id.in_(activity_ids))
+        ).all():
+            due_labels[activity.id] = activity.due_label
+
+    items = [
+        GradingQueueItem(
+            course_id=job.course_id,
+            course_name=job.course_name,
+            activity_id=job.activity_id,
+            activity_title=job.activity_title,
+            due_label=due_labels.get(job.activity_id),
+            submission_count=job.total_submissions,
+            status=job.status.value,
+            latest_job_id=job.id,
+            reviewed_submissions=job.reviewed_submissions,
+            total_submissions=job.total_submissions,
+        )
+        for job in newest_by_activity.values()
+    ]
+    log_event(logger, "grading.jobs.list.complete", count=len(items))
+    return items
+
+
 @app.post("/api/grading/jobs", response_model=GradingJobRead)
 def create_grading_job(
     payload: GradingJobCreate,

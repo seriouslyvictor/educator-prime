@@ -736,6 +736,24 @@
   font-size: 13px;
 }
 
+.regrade-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 10px;
+  border: 1px solid var(--ai-border);
+  border-radius: 8px;
+  background: var(--ai-soft);
+  color: var(--ai);
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.regrade-note .ico {
+  flex: none;
+}
+
 .rubric-panel .card-footer {
   border-top: 0;
 }

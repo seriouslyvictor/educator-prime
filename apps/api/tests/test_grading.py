@@ -21,6 +21,7 @@ from classroom_downloader.models import (
     GradingJob,
     GradingPseudonym,
     GradingScrubCache,
+    GradingStatus,
     GradingSubmission,
     PrivacyAudit,
     PrivacyAuditRow,
@@ -1210,3 +1211,50 @@ def test_preview_binary_still_attachment(tmp_path) -> None:
     assert response.headers["content-disposition"].startswith("attachment")
     assert response.headers["x-content-type-options"] == "nosniff"
     assert response.content == content
+
+
+def test_regrade_creates_new_latest_job() -> None:
+    with TestClient(app) as client:
+        first = client.post(
+            "/api/grading/jobs",
+            json={
+                "course_id": "course-1",
+                "activity_id": "activity-1",
+                "rubric_mode": "structured",
+                "teacher_loop": "approve",
+                "criteria": [{"name": "Original", "weight": 100}],
+            },
+        ).json()
+
+        with Session(engine) as session:
+            old_job = session.get(GradingJob, first["id"])
+            assert old_job is not None
+            old_job.status = GradingStatus.completed
+            old_job.reviewed_submissions = old_job.total_submissions
+            session.add(old_job)
+            session.commit()
+
+        second = client.post(
+            "/api/grading/jobs",
+            json={
+                "course_id": "course-1",
+                "activity_id": "activity-1",
+                "rubric_mode": "brief",
+                "teacher_loop": "cowrite",
+                "rubric_text": "Use a stricter pass/fail rubric.",
+            },
+        ).json()
+        queue = client.get(
+            "/api/grading/queue",
+            params={"course_id": "course-1", "activity_id": "activity-1"},
+        ).json()
+        jobs = client.get("/api/grading/jobs").json()
+
+    assert queue[0]["latest_job_id"] == second["id"]
+    latest_activity = next(item for item in jobs if item["activity_id"] == "activity-1")
+    assert latest_activity["latest_job_id"] == second["id"]
+    assert latest_activity["status"] == "ready"
+
+    with Session(engine) as session:
+        assert session.get(GradingJob, first["id"]) is not None
+        assert session.get(GradingJob, second["id"]) is not None

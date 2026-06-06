@@ -209,7 +209,7 @@ function ReferenceQueueCard({
   );
 }
 
-function referenceQueueStatus(item: GradingQueueItem): {
+export function referenceQueueStatus(item: GradingQueueItem): {
   label: string;
   cls: string;
   icon: "sparkle" | "eye" | "settings" | "checkCircle";

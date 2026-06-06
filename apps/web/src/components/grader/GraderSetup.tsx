@@ -1,9 +1,12 @@
 import { useState } from "react";
-import type { GradingQueueItem, RubricMode, TeacherLoopMode } from "../../types";
+import type { GradingQueueItem, PrivacyAudit, RubricMode, TeacherLoopMode } from "../../types";
+import { api } from "../../lib/api";
 import { AppIcon } from "../icons";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, RadioGroup, RadioItem, Tabs, TabsList, TabsTrigger } from "../ui";
 import { GraderTopbar } from "./GraderTopbar";
+import { extractionLabel, privacyLabel, safeStatusLabel } from "./graderStatus";
 import graderStyles from "./Grader.module.css";
+void graderStyles;
 
 const rubricModes: Array<{
   id: RubricMode;
@@ -32,23 +35,34 @@ const loopModes: Array<{
 export function GraderSetup({
   item,
   busy,
+  audit,
   onBack,
   onStart,
+  onContinue,
+  onRerun,
 }: {
   item: GradingQueueItem;
   busy: boolean;
+  audit: PrivacyAudit | null;
   onBack: () => void;
   onStart: (payload: { rubricMode: RubricMode; teacherLoop: TeacherLoopMode; rubricText: string }) => void;
+  onContinue: () => void;
+  onRerun: () => void;
 }) {
   const [rubricMode, setRubricMode] = useState<RubricMode>("infer");
   const [teacherLoop, setTeacherLoop] = useState<TeacherLoopMode>("approve");
   const [rubricText, setRubricText] = useState("");
   const selectedRubric = rubricModes.find((mode) => mode.id === rubricMode) ?? rubricModes[0];
 
+  // Once the audit has run we lock the rubric controls (the choice is baked into the
+  // created job) and hand off to the inline preparation panel.
+  const prepared = audit !== null;
+  const preparing = busy && !prepared;
+
   return (
     <div className={graderStyles["grader-page"]}>
       <GraderTopbar
-        title="Configurar rubrica"
+        title="Preparar correção com IA"
         subtitle={`${item.course_name} · ${item.activity_title}`}
         action={
           <button className="btn btn-secondary" onClick={onBack}>
@@ -64,6 +78,7 @@ export function GraderSetup({
               <TabsTrigger
                 key={mode.id}
                 active={rubricMode === mode.id}
+                disabled={prepared || preparing}
                 onClick={() => setRubricMode(mode.id)}
               >
                 <AppIcon name={mode.icon} />
@@ -75,6 +90,12 @@ export function GraderSetup({
 
           <Card className="rubric-panel">
             <CardContent>
+              {item.latest_job_id ? (
+                <div className="regrade-note">
+                  <AppIcon name="refresh" />
+                  Isto cria uma nova rodada; a anterior fica no histórico.
+                </div>
+              ) : null}
               {rubricMode !== "saved" ? <p className="rubric-mode-copy">{selectedRubric.copy}</p> : null}
               {rubricMode === "saved" ? (
                 <div className="saved-rubric-list">
@@ -83,7 +104,7 @@ export function GraderSetup({
                     ["Literatura · Redação (5 critérios)", "8 vezes", "4 critérios"],
                     ["Álgebra · Lista de problemas", "23 vezes", "4 critérios"],
                   ].map((row, index) => (
-                    <button key={row[0]} className={`saved-rubric-row ${index === 0 ? "active" : ""}`}>
+                    <button key={row[0]} className={`saved-rubric-row ${index === 0 ? "active" : ""}`} disabled={prepared || preparing}>
                       <span className="saved-rubric-dot" />
                       <span>
                         <strong>{row[0]}</strong>
@@ -100,30 +121,41 @@ export function GraderSetup({
                   <textarea
                     value={rubricText}
                     onChange={(event) => setRubricText(event.target.value)}
+                    disabled={prepared || preparing}
                     placeholder="Tom, prioridades, evidências exigidas ou critérios que o rascunho deve respeitar."
                   />
                 </label>
               )}
             </CardContent>
-            <CardFooter>
-              <span>Selecionado: {rubricMode === "saved" ? "AP Bio · Relatório de laboratório (4 partes)" : selectedRubric.title}</span>
-              <div className="setup-footer-actions">
-                <button className="btn btn-ghost" onClick={onBack}>
-                  Cancelar
-                </button>
-                <button
-                  className="btn btn-primary"
-                  onClick={() => onStart({ rubricMode, teacherLoop, rubricText })}
-                  disabled={busy}
-                >
-                  <AppIcon name={busy ? "loader" : "sparkle"} className={busy ? "ico spin" : "ico"} />
-                  {item.submission_count > 0
-                    ? `Auditar privacidade de ${item.submission_count}`
-                    : "Auditar privacidade"}
-                </button>
-              </div>
-            </CardFooter>
+            {!prepared ? (
+              <CardFooter className="setup-prepare-footer">
+                <p className="prep-note">
+                  <AppIcon name="info" /> A auditoria não chama a IA; ela prepara os arquivos e mostra bloqueios
+                  antes dos rascunhos.
+                </p>
+                <div className="setup-footer-actions">
+                  <button className="btn btn-ghost" onClick={onBack} disabled={preparing}>
+                    Cancelar
+                  </button>
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => onStart({ rubricMode, teacherLoop, rubricText })}
+                    disabled={preparing}
+                  >
+                    <AppIcon name={preparing ? "loader" : "sparkle"} className={preparing ? "ico spin" : "ico"} />
+                    {item.submission_count > 0
+                      ? `Auditar e preparar ${item.submission_count}`
+                      : "Auditar e preparar rascunhos"}
+                  </button>
+                </div>
+              </CardFooter>
+            ) : null}
           </Card>
+
+          {preparing ? <PreparingPanel /> : null}
+          {prepared && audit ? (
+            <PreparedPanel audit={audit} busy={busy} onContinue={onContinue} onRerun={onRerun} />
+          ) : null}
         </section>
 
         <aside className="setup-side setup-side-contract">
@@ -146,7 +178,7 @@ export function GraderSetup({
               ))}
               <div className="context-row muted">
                 <AppIcon name="x" />
-                <span>Lista da turma (nomes ocultos)</span>
+                <span>Lista da turma (nomes ocultos para a IA)</span>
                 <em>privacidade</em>
               </div>
             </CardContent>
@@ -175,6 +207,7 @@ export function GraderSetup({
                   <RadioItem
                     key={mode.id}
                     active={teacherLoop === mode.id}
+                    disabled={prepared || preparing}
                     onClick={() => setTeacherLoop(mode.id)}
                   >
                     <strong>{mode.title}</strong>
@@ -190,3 +223,126 @@ export function GraderSetup({
   );
 }
 
+const PREP_STEPS = [
+  "Lendo as entregas",
+  "Redigindo identificadores",
+  "Verificando bloqueios",
+];
+
+function PreparingPanel() {
+  return (
+    <section className="prep-panel" aria-live="polite">
+      <div className="prep-panel-head">
+        <AppIcon name="loader" className="ico spin" />
+        <strong>Preparando entregas…</strong>
+      </div>
+      <ol className="prep-progress">
+        {PREP_STEPS.map((step) => (
+          <li key={step} className="prep-step">
+            <AppIcon name="loader" className="ico spin" />
+            {step}
+          </li>
+        ))}
+      </ol>
+      <p className="prep-foot-note">Nenhuma chamada de IA foi feita ainda — isto só prepara os arquivos.</p>
+    </section>
+  );
+}
+
+function PreparedPanel({
+  audit,
+  busy,
+  onContinue,
+  onRerun,
+}: {
+  audit: PrivacyAudit;
+  busy: boolean;
+  onContinue: () => void;
+  onRerun: () => void;
+}) {
+  const readyForDraft = audit.passed_files + audit.redacted_files;
+  const blocked = audit.blocked_files;
+  const highRisk = audit.high_risk_files > 0;
+
+  return (
+    <section className="prep-panel" aria-live="polite">
+      <div className="prep-panel-head">
+        <AppIcon name="checkCircle" className="ico" />
+        <strong>Preparação concluída</strong>
+      </div>
+
+      <p className="prep-headline">
+        <strong>{readyForDraft}</strong> {readyForDraft === 1 ? "entrega pronta" : "entregas prontas"} para rascunho
+        {blocked > 0 ? (
+          <> · <strong>{blocked}</strong> {blocked === 1 ? "bloqueada fica manual" : "bloqueadas ficam manuais"}</>
+        ) : null}
+        .
+      </p>
+
+      <div className="audit-summary">
+        <AuditStat label="Aprovados" value={audit.passed_files} tone="ok" />
+        <AuditStat label="Redigidos" value={audit.redacted_files} tone="warn" />
+        <AuditStat label="Bloqueados" value={audit.blocked_files} tone="danger" />
+        <AuditStat label="Alto risco" value={audit.high_risk_files} tone="danger" />
+      </div>
+
+      {highRisk ? (
+        <div className="flag-note">
+          A auditoria encontrou linhas de alto risco. O rascunho fica bloqueado até essas entregas serem tratadas.
+        </div>
+      ) : null}
+
+      <details className="prep-details">
+        <summary>Detalhes da auditoria</summary>
+        <div className="audit-actions">
+          <a className="btn btn-secondary" href={api.privacyAuditCsvUrl(audit.job_id)}>
+            <AppIcon name="fileDown" /> Exportar CSV
+          </a>
+          <a className="btn btn-secondary" href={api.privacyAuditJsonUrl(audit.job_id)}>
+            <AppIcon name="fileText" /> Exportar JSON
+          </a>
+        </div>
+        <section className="audit-table" aria-label="Linhas da auditoria de privacidade">
+          <div className="audit-row audit-row-head">
+            <span>Aluno</span>
+            <span>Arquivo</span>
+            <span>Entrada</span>
+            <span>Privacidade</span>
+            <span>Sinais</span>
+          </div>
+          {audit.rows.map((row) => (
+            <div className="audit-row" key={row.id}>
+              <span>{row.student_label}</span>
+              <span>{row.redacted_source_name}</span>
+              <span>{extractionLabel(row.extraction_status)}</span>
+              <span className={`student-state ${row.privacy_status === "clean" ? "ok" : row.audit_pass ? "warn" : "danger"}`}>
+                {safeStatusLabel(row.blocked_reason) || privacyLabel(row.privacy_status)}
+              </span>
+              <span>{row.privacy_flags.length ? row.privacy_flags.map(safeStatusLabel).join(", ") : "Nenhum"}</span>
+            </div>
+          ))}
+        </section>
+      </details>
+
+      <div className="prep-actions">
+        <button className="btn btn-secondary" onClick={onRerun} disabled={busy}>
+          <AppIcon name={busy ? "loader" : "refresh"} className={busy ? "ico spin" : "ico"} />
+          Reexecutar auditoria
+        </button>
+        <button className="btn btn-ai" onClick={onContinue} disabled={busy || highRisk}>
+          <AppIcon name={busy ? "loader" : "sparkle"} className={busy ? "ico spin" : "ico"} />
+          {readyForDraft > 0 ? `Gerar ${readyForDraft} rascunhos e revisar` : "Gerar rascunhos e revisar"}
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function AuditStat({ label, value, tone }: { label: string; value: number; tone: string }) {
+  return (
+    <div className={`audit-stat ${tone}`}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}

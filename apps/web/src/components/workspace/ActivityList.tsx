@@ -1,4 +1,5 @@
-import type { Activity, Course } from "../../types";
+import type { Activity, Course, GradingQueueItem } from "../../types";
+import { referenceQueueStatus } from "../grader/GraderQueue";
 import { AppIcon } from "../icons";
 import { EmptyState, SearchBox, SkeletonRows } from "../ui";
 import workspaceStyles from "./Workspace.module.css";
@@ -11,10 +12,12 @@ export function ActivityList({
   loading,
   onQuery,
   onGrade,
+  onRegrade,
   onPreview,
   onDownload,
   busy,
   deliveryMode,
+  gradingByActivity,
 }: {
   course: Course | undefined;
   activities: Activity[];
@@ -22,10 +25,12 @@ export function ActivityList({
   loading: boolean;
   onQuery: (query: string) => void;
   onGrade: (activity: Activity) => void;
+  onRegrade: (activity: Activity) => void;
   onPreview: (activity: Activity) => void;
   onDownload: (activity: Activity) => void;
   busy: boolean;
   deliveryMode: "folder" | "zip";
+  gradingByActivity: Map<string, GradingQueueItem>;
 }) {
   const filtered = activities.filter((activity) =>
     `${activity.title} ${activity.work_type}`.toLowerCase().includes(query.toLowerCase()),
@@ -51,6 +56,18 @@ export function ActivityList({
         {!loading
           ? filtered.map((activity) => {
               const disabled = busy || !course;
+              const grading = gradingByActivity.get(activity.id);
+              const gradingStatus = grading ? referenceQueueStatus(grading) : null;
+              const primaryLabel = grading?.status === "completed"
+                ? "Abrir revisão"
+                : grading?.latest_job_id
+                  ? "Retomar"
+                  : "Corrigir com IA";
+              const primaryIcon = grading?.status === "completed"
+                ? "checkCircle"
+                : grading?.latest_job_id
+                  ? "eye"
+                  : "sparkle";
               return (
                 <div key={activity.id} className="assign-row">
                   <div className="a-main">
@@ -68,11 +85,23 @@ export function ActivityList({
                     <span className={`badge ${activity.state === "PUBLISHED" ? "badge-pub" : "badge-draft"}`}>
                       {activity.state === "PUBLISHED" ? "Publicado" : activity.state}
                     </span>
+                    {gradingStatus ? (
+                      <span className={`grading-chip ${gradingStatus.cls}`}>
+                        <AppIcon name={gradingStatus.icon} />
+                        {gradingStatus.label}
+                      </span>
+                    ) : null}
                     <div className="assign-actions">
                       <button className="btn btn-primary" onClick={() => onGrade(activity)} disabled={disabled}>
-                        <AppIcon name="sparkle" />
-                        Corrigir com IA
+                        <AppIcon name={primaryIcon} />
+                        {primaryLabel}
                       </button>
+                      {grading?.status === "completed" || grading?.status === "reviewing" ? (
+                        <button className="icon-text-btn" onClick={() => onRegrade(activity)} disabled={disabled}>
+                          <AppIcon name="refresh" />
+                          Reclassificar
+                        </button>
+                      ) : null}
                       <button className="icon-text-btn" onClick={() => onPreview(activity)} disabled={disabled}>
                         <AppIcon name="eye" />
                         Prévia

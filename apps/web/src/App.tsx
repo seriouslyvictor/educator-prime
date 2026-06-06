@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ConnectView, InlineError } from "./components/ConnectView";
 import { DoneView } from "./components/DoneView";
 import { DryRunDrawer } from "./components/DryRunDrawer";
-import { GraderAudit, GraderQueue, GraderReview, GraderSetup, GraderWrap } from "./components/grader";
+import { GraderQueue, GraderReview, GraderSetup, GraderWrap } from "./components/grader";
 import { HistoryView } from "./components/HistoryView";
 import { ProgressView, type ProgressLogItem } from "./components/ProgressView";
 import { Rail } from "./components/Rail";
@@ -48,6 +48,45 @@ const classroomScopes = [
   "https://www.googleapis.com/auth/drive.readonly",
 ];
 
+// Remembering the active grading job lets a page reload drop the teacher back into
+// the same job instead of an empty workspace — the job itself is already persisted
+// server-side, this is just the pointer to it.
+const ACTIVE_JOB_STORAGE_KEY = "cd.grading.activeJobId";
+
+function readStoredJobId(): string | null {
+  try {
+    return localStorage.getItem(ACTIVE_JOB_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredJobId(jobId: string | null): void {
+  try {
+    if (jobId) localStorage.setItem(ACTIVE_JOB_STORAGE_KEY, jobId);
+    else localStorage.removeItem(ACTIVE_JOB_STORAGE_KEY);
+  } catch {
+    /* ignore storage failures (private mode, quota) */
+  }
+}
+
+// Build the lightweight queue item the Setup screen needs from a full job — used
+// when resuming a not-yet-drafted ("ready") job back into the Setup/prepare screen.
+function gradingItemFromJob(job: GradingJob): GradingQueueItem {
+  return {
+    course_id: job.course_id,
+    course_name: job.course_name,
+    activity_id: job.activity_id,
+    activity_title: job.activity_title,
+    due_label: null,
+    submission_count: job.total_submissions,
+    status: job.status,
+    latest_job_id: job.id,
+    reviewed_submissions: job.reviewed_submissions,
+    total_submissions: job.total_submissions,
+  };
+}
+
 export function App() {
   const { mode: themeMode, setMode: setThemeMode } = useThemePreference();
   const { history, addHistoryItem } = useLocalExportHistory();
@@ -73,6 +112,8 @@ export function App() {
   const [progress, setProgress] = useState({ completed: 0, total: 0, currentPath: "" });
   const [progressLog, setProgressLog] = useState<ProgressLogItem[]>([]);
   const [selectedGradingItem, setSelectedGradingItem] = useState<GradingQueueItem | null>(null);
+  const [gradingQueue, setGradingQueue] = useState<GradingQueueItem[]>([]);
+  const [gradingQueueLoading, setGradingQueueLoading] = useState(false);
   const [gradingJob, setGradingJob] = useState<GradingJob | null>(null);
   const [privacyAudit, setPrivacyAudit] = useState<PrivacyAudit | null>(null);
   const [activeGradingSubmissionId, setActiveGradingSubmissionId] = useState<string | null>(null);
@@ -90,6 +131,15 @@ export function App() {
   const previewTree = selectedCourse
     ? buildPreviewTree(selectedCourse, selectedActivities, job)
     : null;
+  const gradingByActivity = useMemo(() => {
+    const rows = new Map<string, GradingQueueItem>();
+    for (const item of gradingQueue) {
+      if (!selectedCourse || item.course_id === selectedCourse.id) {
+        rows.set(item.activity_id, item);
+      }
+    }
+    return rows;
+  }, [gradingQueue, selectedCourse]);
 
   useEffect(() => {
     void bootstrap();
@@ -100,6 +150,11 @@ export function App() {
       setView("workspace");
     }
   }, [connected, view]);
+
+  // Keep the reload pointer in sync with whichever job is open.
+  useEffect(() => {
+    writeStoredJobId(gradingJob?.id ?? null);
+  }, [gradingJob?.id]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -153,6 +208,11 @@ export function App() {
         setView("connect");
         return;
       }
+      await loadGradingQueue();
+      const restoredJobId = readStoredJobId();
+      if (restoredJobId && (await restoreGradingJob(restoredJobId))) {
+        return;
+      }
       setView("workspace");
     } catch {
       setAuth(null);
@@ -180,6 +240,7 @@ export function App() {
       const activityList = await api.activities(courseId);
       setActivities(activityList);
       setSelectedActivityIds([]);
+      await loadGradingQueue();
     } catch (caught) {
       setActivities([]);
       setError(caught instanceof Error ? caught.message : "Falha ao carregar atividades.");
@@ -218,6 +279,8 @@ export function App() {
       setSelectedActivityIds([]);
       setSelectedGradingItem(null);
       setGradingJob(null);
+      setGradingQueue([]);
+      writeStoredJobId(null);
       setPrivacyAudit(null);
       setJob(null);
       setView("connect");
@@ -289,6 +352,7 @@ export function App() {
 
   function navigate(nextView: AppView) {
     if (!connected && nextView !== "connect") return;
+    if (nextView === "graderQueue") void loadGradingQueue();
     setView(nextView);
   }
 
@@ -298,8 +362,20 @@ export function App() {
     setDryRunOpen(true);
   }
 
-  function gradeActivity(activity: Activity) {
+  async function gradeActivity(activity: Activity) {
     if (!selectedCourse) return;
+    // Resume an existing job for this activity rather than always creating a new one.
+    const known = gradingQueue.find(
+      (item) => item.activity_id === activity.id && item.latest_job_id,
+    );
+    const existing = known ?? (await findExistingJob(selectedCourse.id, activity.id));
+    if (existing?.latest_job_id) {
+      void openGradingJob(existing.latest_job_id);
+      return;
+    }
+    // Fresh setup for this activity: clear any prepared state from a previous job.
+    setPrivacyAudit(null);
+    setGradingJob(null);
     setSelectedGradingItem({
       course_id: selectedCourse.id,
       course_name: selectedCourse.name,
@@ -313,6 +389,72 @@ export function App() {
       total_submissions: 0,
     });
     setView("graderSetup");
+  }
+
+  async function regradeActivity(activity: Activity) {
+    if (!selectedCourse) return;
+    const known = gradingQueue.find(
+      (item) => item.activity_id === activity.id && item.latest_job_id,
+    );
+    const existing = known ?? (await findExistingJob(selectedCourse.id, activity.id));
+    setPrivacyAudit(null);
+    setGradingJob(null);
+    setSelectedGradingItem({
+      course_id: selectedCourse.id,
+      course_name: selectedCourse.name,
+      activity_id: activity.id,
+      activity_title: activity.title,
+      due_label: activity.due_label,
+      submission_count: existing?.submission_count ?? 0,
+      status: existing?.status ?? "ready",
+      latest_job_id: existing?.latest_job_id ?? null,
+      reviewed_submissions: existing?.reviewed_submissions ?? 0,
+      total_submissions: existing?.total_submissions ?? 0,
+    });
+    setView("graderSetup");
+  }
+
+  async function findExistingJob(
+    courseId: string,
+    activityId: string,
+  ): Promise<GradingQueueItem | null> {
+    try {
+      const items = await api.gradingQueue(courseId, activityId);
+      return items.find((item) => item.latest_job_id) ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  async function loadGradingQueue() {
+    setGradingQueueLoading(true);
+    try {
+      setGradingQueue(await api.gradingJobs());
+    } catch {
+      setGradingQueue([]);
+    } finally {
+      setGradingQueueLoading(false);
+    }
+  }
+
+  // Quietly restore a job on reload. Unlike openGradingJob this never re-runs a
+  // privacy audit and never surfaces an error banner — a stale/deleted pointer just
+  // falls back to the workspace.
+  async function restoreGradingJob(jobId: string): Promise<boolean> {
+    try {
+      const nextJob = await api.gradingJob(jobId);
+      setGradingJob(nextJob);
+      setActiveGradingSubmissionId(nextJob.submissions[0]?.id ?? null);
+      if (nextJob.status === "ready") {
+        writeStoredJobId(null);
+        return false;
+      }
+      setView(nextJob.status === "completed" ? "graderWrap" : "graderReview");
+      return true;
+    } catch {
+      writeStoredJobId(null);
+      return false;
+    }
   }
 
   async function openGradingJob(jobId: string) {
@@ -330,7 +472,8 @@ export function App() {
           audit = await api.runPrivacyAudit(nextJob.id);
         }
         setPrivacyAudit(audit);
-        setView("graderAudit");
+        setSelectedGradingItem(gradingItemFromJob(nextJob));
+        setView("graderSetup");
         return;
       }
       setView(nextJob.status === "completed" ? "graderWrap" : "graderReview");
@@ -360,7 +503,8 @@ export function App() {
       setGradingJob(created);
       const audit = await api.runPrivacyAudit(created.id);
       setPrivacyAudit(audit);
-      setView("graderAudit");
+      setSelectedGradingItem(gradingItemFromJob(created));
+      setView("graderSetup");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Falha ao executar a auditoria de privacidade.");
     } finally {
@@ -390,6 +534,7 @@ export function App() {
       setGradingJob(drafted);
       setActiveGradingSubmissionId(drafted.submissions[0]?.id ?? null);
       setView("graderReview");
+      void loadGradingQueue();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Falha ao gerar rascunhos de notas.");
     } finally {
@@ -415,6 +560,7 @@ export function App() {
         updated.submissions[index] ??
         updated.submissions[0];
       setActiveGradingSubmissionId(next?.id ?? null);
+      void loadGradingQueue();
       if (updated.reviewed_submissions === updated.total_submissions && updated.total_submissions > 0) {
         setView("graderWrap");
       }
@@ -496,10 +642,12 @@ export function App() {
                 loading={activitiesLoading}
                 onQuery={setActivityQuery}
                 onGrade={gradeActivity}
+                onRegrade={regradeActivity}
                 onPreview={previewActivity}
                 onDownload={(activity) => void startExport([activity.id])}
                 busy={busy}
                 deliveryMode={deliveryMode}
+                gradingByActivity={gradingByActivity}
               />
             </div>
             {error ? <InlineError message={error} /> : null}
@@ -542,9 +690,12 @@ export function App() {
         {view === "graderQueue" ? (
           <>
             <GraderQueue
-              items={[]}
-              loading={false}
+              items={gradingQueue}
+              loading={gradingQueueLoading}
+              onRefresh={() => void loadGradingQueue()}
               onSetup={(item) => {
+                setPrivacyAudit(null);
+                setGradingJob(null);
                 setSelectedGradingItem(item);
                 setView("graderSetup");
               }}
@@ -560,21 +711,11 @@ export function App() {
             <GraderSetup
               item={selectedGradingItem}
               busy={graderBusy}
+              audit={privacyAudit}
               onBack={() => setView("workspace")}
               onStart={(payload) => void runGradingPrivacyAudit(payload)}
-            />
-            {error ? <InlineError message={error} /> : null}
-          </>
-        ) : null}
-
-        {view === "graderAudit" && privacyAudit ? (
-          <>
-            <GraderAudit
-              audit={privacyAudit}
-              busy={graderBusy}
-              onBack={() => setView("graderSetup")}
-              onRerun={() => void rerunGradingPrivacyAudit()}
               onContinue={() => void continueToGradingDraft()}
+              onRerun={() => void rerunGradingPrivacyAudit()}
             />
             {error ? <InlineError message={error} /> : null}
           </>

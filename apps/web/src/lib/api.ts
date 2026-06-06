@@ -146,6 +146,8 @@ export const api = {
       undefined,
       { ttlMs: 30_000 },
     ),
+  gradingJobs: () =>
+    request<GradingQueueItem[]>("/api/grading/jobs", undefined, { ttlMs: 15_000 }),
   createGradingJob: async (payload: {
     course_id: string;
     activity_id: string;
@@ -182,6 +184,7 @@ export const api = {
       method: "POST",
     });
     clearApiCache(`GET /api/grading/jobs/${jobId}`);
+    clearApiCache("GET /api/grading/jobs");
     clearApiCache("GET /api/grading/queue");
     return response;
   },
@@ -194,6 +197,7 @@ export const api = {
       body: JSON.stringify(payload),
     }).then((response) => {
       clearApiCache(`GET /api/grading/jobs/${jobId}`);
+      clearApiCache("GET /api/grading/jobs");
       clearApiCache("GET /api/grading/queue");
       return response;
     }),
@@ -202,6 +206,7 @@ export const api = {
       method: "POST",
     }).then((response) => {
       clearApiCache(`GET /api/grading/jobs/${jobId}`);
+      clearApiCache("GET /api/grading/jobs");
       return response;
     }),
   deleteGradingCache: (jobId: string) =>
