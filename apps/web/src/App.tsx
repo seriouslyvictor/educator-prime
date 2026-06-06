@@ -64,7 +64,7 @@ const classroomScopes = [
 const ACTIVE_JOB_STORAGE_KEY = "cd.grading.activeJobId";
 
 type GradingStreamPayload = {
-  phase?: "audit" | "draft";
+  phase?: "audit" | "criteria" | "draft";
   processed?: number;
   total?: number;
   current?: string;
@@ -556,7 +556,7 @@ export function App() {
         if (payload.error) {
           const errorMessage = payload.error;
           setGradingProgress((currentState) => ({
-            phase,
+            phase: payload.phase ?? currentState?.phase ?? phase,
             processed: payload.processed ?? currentState?.processed ?? 0,
             total: payload.total ?? currentState?.total ?? 0,
             current: payload.current ?? currentState?.current ?? "",
@@ -568,7 +568,7 @@ export function App() {
         }
 
         setGradingProgress((currentState) => ({
-          phase,
+          phase: payload.phase ?? currentState?.phase ?? phase,
           processed: payload.processed ?? currentState?.processed ?? 0,
           total: payload.total ?? currentState?.total ?? 0,
           current: payload.current ?? currentState?.current ?? "",

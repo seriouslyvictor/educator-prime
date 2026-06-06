@@ -1,7 +1,7 @@
 import { AppIcon } from "../icons";
 import graderStyles from "./Grader.module.css";
 
-export type GradingProgressPhase = "audit" | "draft";
+export type GradingProgressPhase = "audit" | "criteria" | "draft";
 
 export type GradingProgressState = {
   phase: GradingProgressPhase;
@@ -16,6 +16,10 @@ const phaseCopy: Record<GradingProgressPhase, { title: string; eyebrow: string }
   audit: {
     title: "Auditoria de privacidade",
     eyebrow: "Preparando entregas",
+  },
+  criteria: {
+    title: "Definindo critérios",
+    eyebrow: "Lendo a descrição e as entregas",
   },
   draft: {
     title: "Avaliação da IA",
