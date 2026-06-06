@@ -31,6 +31,7 @@ class GradingEngineResult:
     feedback: str
     flags: list[str]
     criterion_notes: list[dict[str, str]] | None = None
+    inferred_criteria: list[dict[str, str | int | None]] | None = None
 
 
 class GradingEngine(Protocol):

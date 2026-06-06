@@ -460,6 +460,136 @@ def test_draft_job_creates_submissions_criteria_and_cache(tmp_path) -> None:
     assert all(Path(tmp_path / "grading" / body["id"]).exists() for _ in body["cache_files"])
 
 
+def test_create_job_persists_teacher_criteria(tmp_path) -> None:
+    get_settings().grading_cache_path = str(tmp_path / "grading")
+    criteria = [
+        {"name": "Funcionalidade", "weight": 60, "description": "Resolve o problema proposto."},
+        {"name": "Clareza", "weight": 40, "description": "Código e explicação são legíveis."},
+    ]
+
+    with TestClient(app) as client:
+        body = client.post(
+            "/api/grading/jobs",
+            json={
+                "course_id": "course-1",
+                "activity_id": "activity-1",
+                "rubric_mode": "structured",
+                "teacher_loop": "approve",
+                "criteria": criteria,
+            },
+        ).json()
+
+    assert [
+        {
+            "name": row["name"],
+            "weight": row["weight"],
+            "description": row["description"],
+        }
+        for row in body["criteria"]
+    ] == criteria
+
+
+def test_infer_mode_replaces_defaults_with_ai_criteria(monkeypatch, tmp_path) -> None:
+    get_settings().grading_cache_path = str(tmp_path / "grading")
+
+    class InferredCriteriaEngine(GradingEngine):
+        name = "capture"
+        model = None
+
+        def grade(self, request: GradingEngineRequest) -> GradingEngineResult:
+            return GradingEngineResult(
+                score=87,
+                confidence=0.86,
+                feedback="Draft with inferred criteria.",
+                flags=[],
+                criterion_notes=[
+                    {"criterion": "Correção", "note": "Resolve a lógica principal."},
+                    {"criterion": "Organização", "note": "Estrutura legível."},
+                ],
+                inferred_criteria=[
+                    {"name": "Correção", "weight": 70, "description": "Resultado correto."},
+                    {"name": "Organização", "weight": 30, "description": "Código organizado."},
+                ],
+            )
+
+    with TestClient(app) as client:
+        job = client.post(
+            "/api/grading/jobs",
+            json={
+                "course_id": "course-2",
+                "activity_id": "activity-3",
+                "rubric_mode": "infer",
+                "teacher_loop": "approve",
+            },
+        ).json()
+        from classroom_downloader import grading
+
+        monkeypatch.setattr(grading, "get_grading_engine", lambda: InferredCriteriaEngine())
+        body = client.post(f"/api/grading/jobs/{job['id']}/draft").json()
+
+    assert [
+        {
+            "name": row["name"],
+            "weight": row["weight"],
+            "description": row["description"],
+            "latest_ai_note": row["latest_ai_note"],
+        }
+        for row in body["criteria"]
+    ] == [
+        {
+            "name": "Correção",
+            "weight": 70,
+            "description": "Resultado correto.",
+            "latest_ai_note": "Resolve a lógica principal.",
+        },
+        {
+            "name": "Organização",
+            "weight": 30,
+            "description": "Código organizado.",
+            "latest_ai_note": "Estrutura legível.",
+        },
+    ]
+
+
+def test_defaults_used_when_no_criteria_and_engine_silent(monkeypatch, tmp_path) -> None:
+    get_settings().grading_cache_path = str(tmp_path / "grading")
+
+    class SilentCriteriaEngine(GradingEngine):
+        name = "capture"
+        model = None
+
+        def grade(self, request: GradingEngineRequest) -> GradingEngineResult:
+            return GradingEngineResult(
+                score=82,
+                confidence=0.8,
+                feedback="Draft without inferred criteria.",
+                flags=[],
+                criterion_notes=[],
+            )
+
+    with TestClient(app) as client:
+        job = client.post(
+            "/api/grading/jobs",
+            json={
+                "course_id": "course-2",
+                "activity_id": "activity-3",
+                "rubric_mode": "infer",
+                "teacher_loop": "approve",
+            },
+        ).json()
+        from classroom_downloader import grading
+
+        monkeypatch.setattr(grading, "get_grading_engine", lambda: SilentCriteriaEngine())
+        body = client.post(f"/api/grading/jobs/{job['id']}/draft").json()
+
+    assert [row["name"] for row in body["criteria"]] == [
+        "Understanding",
+        "Evidence",
+        "Reasoning",
+        "Clarity",
+    ]
+
+
 def test_draft_job_records_privacy_attempt_metadata(tmp_path) -> None:
     get_settings().grading_cache_path = str(tmp_path / "grading")
     with TestClient(app) as client:
@@ -830,7 +960,7 @@ def test_litellm_engine_attempt_metadata_is_persisted(monkeypatch, tmp_path) -> 
     assert body["submissions_graded"] == 1
     assert body["ai_engine"] == "litellm"
     assert body["ai_model"] == "openai/gpt-5"
-    assert body["ai_mode"] == "per_submission"
+    assert body["ai_mode"] == settings.grading_batch_mode
     assert body["wall_clock_ms"] is not None
 
 

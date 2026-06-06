@@ -5,6 +5,7 @@ import type {
   ExportJob,
   GradingHealth,
   GradingJob,
+  GradingCriterionInput,
   GradingQueueItem,
   PrivacyAudit,
   RubricMode,
@@ -154,6 +155,7 @@ export const api = {
     rubric_mode: RubricMode;
     teacher_loop: TeacherLoopMode;
     rubric_text?: string;
+    criteria?: GradingCriterionInput[];
   }) => {
     const response = await request<GradingJob>("/api/grading/jobs", {
       method: "POST",

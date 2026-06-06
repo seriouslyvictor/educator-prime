@@ -107,6 +107,67 @@ def ensure_default_criteria(
         )
 
 
+def _criteria_match_defaults(criteria: list[GradingCriterion]) -> bool:
+    if len(criteria) != len(DEFAULT_CRITERIA):
+        return False
+    for row, default in zip(criteria, DEFAULT_CRITERIA, strict=True):
+        if row.name != default.name or row.weight != default.weight or row.description != default.description:
+            return False
+    return True
+
+
+def _normalize_inferred_criteria(
+    rows: list[dict[str, str | int | None]] | None,
+) -> list[GradingCriterionInput]:
+    if not rows:
+        return []
+    criteria: list[GradingCriterionInput] = []
+    for row in rows:
+        name = str(row.get("name") or "").strip()
+        try:
+            weight = int(row.get("weight") or 0)
+        except (TypeError, ValueError):
+            weight = 0
+        description_value = row.get("description")
+        description = str(description_value).strip() if description_value else None
+        if not name or weight <= 0:
+            continue
+        criteria.append(
+            GradingCriterionInput(
+                name=name,
+                weight=weight,
+                description=description,
+            )
+        )
+    return criteria
+
+
+def _replace_job_criteria(
+    session: Session,
+    job_id: str,
+    criteria: list[GradingCriterionInput],
+) -> list[GradingCriterion]:
+    existing = session.exec(
+        select(GradingCriterion).where(GradingCriterion.job_id == job_id)
+    ).all()
+    for row in existing:
+        session.delete(row)
+    session.flush()
+    created: list[GradingCriterion] = []
+    for criterion in criteria:
+        row = GradingCriterion(
+            id=str(uuid4()),
+            job_id=job_id,
+            name=criterion.name,
+            weight=criterion.weight,
+            description=criterion.description,
+        )
+        session.add(row)
+        created.append(row)
+    session.flush()
+    return created
+
+
 def grading_job_snapshot(session: Session, job: GradingJob) -> GradingJobRead:
     submissions = session.exec(
         select(GradingSubmission).where(GradingSubmission.job_id == job.id)
@@ -760,6 +821,9 @@ def _draft_submission(
         cost_cents=attempt_metadata["cost_cents"],
         latency_ms=attempt_metadata["latency_ms"],
     )
+    inferred_criteria = _normalize_inferred_criteria(result.inferred_criteria)
+    if job.rubric_mode == "infer" and inferred_criteria and _criteria_match_defaults(criteria):
+        criteria = _replace_job_criteria(session, job.id, inferred_criteria)
     _apply_criterion_notes(session, criteria, result.criterion_notes or [])
     cowrite = job.teacher_loop == "cowrite"
     auto_accept = (

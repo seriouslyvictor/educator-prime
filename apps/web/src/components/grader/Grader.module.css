@@ -809,6 +809,69 @@
   background: var(--primary);
 }
 
+.criteria-editor {
+  display: grid;
+  gap: 10px;
+}
+
+.criteria-editor-head,
+.criteria-editor-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.criteria-editor-head {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.criteria-editor-head strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.criteria-editor-head strong.ok {
+  color: var(--success);
+}
+
+.criteria-editor-head strong.warn {
+  color: var(--warning);
+}
+
+.criteria-editor-rows {
+  display: grid;
+  gap: 8px;
+}
+
+.criteria-editor-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) 76px minmax(160px, 1.35fr) 34px;
+  gap: 8px;
+  align-items: center;
+}
+
+.criteria-editor-row input {
+  min-width: 0;
+  height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  padding: 0 10px;
+}
+
+.criteria-editor-row input[type="number"] {
+  text-align: right;
+}
+
+.criteria-editor-foot span {
+  color: var(--warning);
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .saved-rubric-row strong,
 .saved-rubric-row small {
   display: block;
@@ -1928,6 +1991,24 @@
 .breakdown {
   display: grid;
   gap: 6px;
+}
+
+.criteria-pending {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--ai-border);
+  border-radius: 8px;
+  background: var(--ai-soft);
+  color: var(--ai);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.criteria-pending .ico {
+  flex: none;
 }
 
 .bd-row {

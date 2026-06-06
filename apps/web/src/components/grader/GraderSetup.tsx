@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { GradingQueueItem, PrivacyAudit, RubricMode, TeacherLoopMode } from "../../types";
+import type { GradingCriterionInput, GradingQueueItem, PrivacyAudit, RubricMode, TeacherLoopMode } from "../../types";
 import { api } from "../../lib/api";
 import { AppIcon } from "../icons";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, RadioGroup, RadioItem, Tabs, TabsList, TabsTrigger } from "../ui";
@@ -45,19 +45,40 @@ export function GraderSetup({
   busy: boolean;
   audit: PrivacyAudit | null;
   onBack: () => void;
-  onStart: (payload: { rubricMode: RubricMode; teacherLoop: TeacherLoopMode; rubricText: string }) => void;
+  onStart: (payload: {
+    rubricMode: RubricMode;
+    teacherLoop: TeacherLoopMode;
+    rubricText: string;
+    criteria?: GradingCriterionInput[];
+  }) => void;
   onContinue: () => void;
   onRerun: () => void;
 }) {
   const [rubricMode, setRubricMode] = useState<RubricMode>("infer");
   const [teacherLoop, setTeacherLoop] = useState<TeacherLoopMode>("approve");
   const [rubricText, setRubricText] = useState("");
+  const [criteria, setCriteria] = useState<GradingCriterionInput[]>([
+    { name: "Funcionalidade", weight: 60, description: "Resolve o que foi pedido." },
+    { name: "Clareza", weight: 40, description: "Organização, leitura e justificativa." },
+  ]);
   const selectedRubric = rubricModes.find((mode) => mode.id === rubricMode) ?? rubricModes[0];
 
   // Once the audit has run we lock the rubric controls (the choice is baked into the
   // created job) and hand off to the inline preparation panel.
   const prepared = audit !== null;
   const preparing = busy && !prepared;
+  const criteriaTotal = criteria.reduce((sum, criterion) => sum + (Number(criterion.weight) || 0), 0);
+  const criteriaValid =
+    rubricMode !== "structured" ||
+    (criteria.length > 0 && criteriaTotal === 100 && criteria.every((criterion) => criterion.name.trim() && criterion.weight > 0));
+  const startCriteria =
+    rubricMode === "structured"
+      ? criteria.map((criterion) => ({
+          name: criterion.name.trim(),
+          weight: Number(criterion.weight) || 0,
+          description: criterion.description?.trim() || null,
+        }))
+      : undefined;
 
   return (
     <div className={graderStyles["grader-page"]}>
@@ -97,7 +118,14 @@ export function GraderSetup({
                 </div>
               ) : null}
               {rubricMode !== "saved" ? <p className="rubric-mode-copy">{selectedRubric.copy}</p> : null}
-              {rubricMode === "saved" ? (
+              {rubricMode === "structured" ? (
+                <StructuredCriteriaEditor
+                  criteria={criteria}
+                  total={criteriaTotal}
+                  disabled={prepared || preparing}
+                  onChange={setCriteria}
+                />
+              ) : rubricMode === "saved" ? (
                 <div className="saved-rubric-list">
                   {[
                     ["AP Bio · Relatório de laboratório (4 partes)", "12 vezes · última em 14 de maio", "4 critérios"],
@@ -139,8 +167,8 @@ export function GraderSetup({
                   </button>
                   <button
                     className="btn btn-primary"
-                    onClick={() => onStart({ rubricMode, teacherLoop, rubricText })}
-                    disabled={preparing}
+                    onClick={() => onStart({ rubricMode, teacherLoop, rubricText, criteria: startCriteria })}
+                    disabled={preparing || !criteriaValid}
                   >
                     <AppIcon name={preparing ? "loader" : "sparkle"} className={preparing ? "ico spin" : "ico"} />
                     {item.submission_count > 0
@@ -228,6 +256,73 @@ const PREP_STEPS = [
   "Redigindo identificadores",
   "Verificando bloqueios",
 ];
+
+function StructuredCriteriaEditor({
+  criteria,
+  total,
+  disabled,
+  onChange,
+}: {
+  criteria: GradingCriterionInput[];
+  total: number;
+  disabled: boolean;
+  onChange: (criteria: GradingCriterionInput[]) => void;
+}) {
+  const update = (index: number, patch: Partial<GradingCriterionInput>) => {
+    onChange(criteria.map((criterion, rowIndex) => (rowIndex === index ? { ...criterion, ...patch } : criterion)));
+  };
+  const remove = (index: number) => {
+    onChange(criteria.filter((_, rowIndex) => rowIndex !== index));
+  };
+  const add = () => {
+    onChange([...criteria, { name: "", weight: 0, description: "" }]);
+  };
+
+  return (
+    <div className="criteria-editor">
+      <div className="criteria-editor-head">
+        <span>Critérios da rubrica</span>
+        <strong className={total === 100 ? "ok" : "warn"}>{total}/100</strong>
+      </div>
+      <div className="criteria-editor-rows">
+        {criteria.map((criterion, index) => (
+          <div className="criteria-editor-row" key={index}>
+            <input
+              value={criterion.name}
+              onChange={(event) => update(index, { name: event.target.value })}
+              disabled={disabled}
+              placeholder="Critério"
+            />
+            <input
+              value={criterion.weight}
+              onChange={(event) => update(index, { weight: Number(event.target.value) || 0 })}
+              disabled={disabled}
+              min={0}
+              max={100}
+              type="number"
+              aria-label="Peso"
+            />
+            <input
+              value={criterion.description ?? ""}
+              onChange={(event) => update(index, { description: event.target.value })}
+              disabled={disabled}
+              placeholder="Descrição opcional"
+            />
+            <button className="icon-text-btn" onClick={() => remove(index)} disabled={disabled || criteria.length <= 1}>
+              <AppIcon name="x" />
+            </button>
+          </div>
+        ))}
+      </div>
+      <div className="criteria-editor-foot">
+        <button className="btn btn-secondary" onClick={add} disabled={disabled}>
+          <AppIcon name="plus" /> Adicionar critério
+        </button>
+        {total !== 100 ? <span>Os pesos precisam somar 100.</span> : null}
+      </div>
+    </div>
+  );
+}
 
 function PreparingPanel() {
   return (

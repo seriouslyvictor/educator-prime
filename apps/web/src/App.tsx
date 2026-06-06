@@ -26,6 +26,7 @@ import type {
   Course,
   ExportJob,
   GradingHealth,
+  GradingCriterionInput,
   GradingJob,
   GradingQueueItem,
   GradingSubmission,
@@ -488,6 +489,7 @@ export function App() {
     rubricMode: RubricMode;
     teacherLoop: TeacherLoopMode;
     rubricText: string;
+    criteria?: GradingCriterionInput[];
   }) {
     if (!selectedGradingItem) return;
     setGraderBusy(true);
@@ -499,6 +501,7 @@ export function App() {
         rubric_mode: payload.rubricMode,
         teacher_loop: payload.teacherLoop,
         rubric_text: payload.rubricText,
+        criteria: payload.criteria,
       });
       setGradingJob(created);
       const audit = await api.runPrivacyAudit(created.id);

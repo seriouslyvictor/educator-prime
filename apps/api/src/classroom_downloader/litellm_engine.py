@@ -115,6 +115,7 @@ def parse_litellm_result(
     confidence = _bounded_number(payload.get("confidence"), minimum=0, maximum=1)
     feedback = payload.get("feedback")
     criterion_notes = payload.get("criterion_notes", [])
+    inferred_criteria = payload.get("inferred_criteria", [])
     flags = payload.get("flags", [])
 
     if request_score:
@@ -132,6 +133,8 @@ def parse_litellm_result(
         raise ValueError("malformed_llm_response")
     if not isinstance(criterion_notes, list):
         raise ValueError("malformed_llm_response")
+    if not isinstance(inferred_criteria, list):
+        raise ValueError("malformed_llm_response")
     if not isinstance(flags, list) or not all(isinstance(flag, str) for flag in flags):
         raise ValueError("malformed_llm_response")
 
@@ -147,6 +150,13 @@ def parse_litellm_result(
             and isinstance(note.get("criterion"), str)
             and isinstance(note.get("note"), str)
         ],
+        inferred_criteria=[
+            criterion
+            for criterion in inferred_criteria
+            if isinstance(criterion, dict)
+            and isinstance(criterion.get("name"), str)
+            and isinstance(criterion.get("weight"), int)
+        ],
     )
 
 
@@ -156,6 +166,11 @@ def _build_messages(request: GradingEngineRequest) -> list[dict[str, str]]:
         "score": "omit or null in cowrite mode; otherwise number from 0 to 100",
         "confidence": "number from 0 to 1",
         "feedback": "non-empty teacher-facing draft feedback",
+        "inferred_criteria": (
+            [{"name": "string", "weight": "integer percentage", "description": "string or null"}]
+            if request.rubric_mode == "infer"
+            else []
+        ),
         "criterion_notes": [{"criterion": "string", "note": "string"}],
         "flags": ["string"],
     }
@@ -212,6 +227,19 @@ def _response_format(model: LlmModelEntry) -> dict[str, Any]:
                         "score": {"type": ["number", "null"], "minimum": 0, "maximum": 100},
                         "confidence": {"type": "number", "minimum": 0, "maximum": 1},
                         "feedback": {"type": "string", "minLength": 1},
+                        "inferred_criteria": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "additionalProperties": False,
+                                "properties": {
+                                    "name": {"type": "string"},
+                                    "weight": {"type": "integer", "minimum": 1, "maximum": 100},
+                                    "description": {"type": ["string", "null"]},
+                                },
+                                "required": ["name", "weight", "description"],
+                            },
+                        },
                         "criterion_notes": {
                             "type": "array",
                             "items": {
@@ -230,6 +258,7 @@ def _response_format(model: LlmModelEntry) -> dict[str, Any]:
                         "score",
                         "confidence",
                         "feedback",
+                        "inferred_criteria",
                         "criterion_notes",
                         "flags",
                     ],

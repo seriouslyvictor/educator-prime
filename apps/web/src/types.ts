@@ -82,6 +82,13 @@ export interface GradingCriterion {
   name: string;
   weight: number;
   description: string | null;
+  latest_ai_note: string | null;
+}
+
+export interface GradingCriterionInput {
+  name: string;
+  weight: number;
+  description?: string | null;
 }
 
 export interface GradingSubmission {
@@ -179,7 +186,6 @@ export type AppView =
   | "history"
   | "graderQueue"
   | "graderSetup"
-  | "graderAudit"
   | "graderReview"
   | "graderWrap";
 
