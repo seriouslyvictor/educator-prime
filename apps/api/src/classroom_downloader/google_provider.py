@@ -90,6 +90,14 @@ class SubmissionFile:
 
 
 @dataclass(frozen=True)
+class SubmissionLink:
+    source_file_id: str
+    classroom_submission_id: str
+    alternate_link: str | None
+    student_email: str | None = None
+
+
+@dataclass(frozen=True)
 class AccountProfile:
     name: str | None
     email: str | None
@@ -115,6 +123,11 @@ class GoogleProvider:
     def list_submission_files(
         self, course_id: str, activity_ids: list[str] | None = None
     ) -> list[SubmissionFile]:
+        raise NotImplementedError
+
+    def list_submission_links(
+        self, course_id: str, activity_id: str
+    ) -> list[SubmissionLink]:
         raise NotImplementedError
 
     def get_file_content(self, file_id: str) -> tuple[bytes, str]:
@@ -199,6 +212,36 @@ def drive_files_from_submission(
         files=[safe_fields(file) for file in files],
     )
     return files
+
+
+def submission_links_from_submission(
+    submission: dict,
+    student_email: str | None,
+) -> list[SubmissionLink]:
+    submission_id = submission.get("id", "")
+    alternate_link = submission.get("alternateLink")
+    attachments = (
+        submission.get("assignmentSubmission", {}).get("attachments", [])
+        if isinstance(submission.get("assignmentSubmission"), dict)
+        else []
+    )
+    links: list[SubmissionLink] = []
+    for attachment in attachments:
+        drive_file = attachment.get("driveFile")
+        if not isinstance(drive_file, dict):
+            continue
+        file_id = drive_file.get("id")
+        if not file_id:
+            continue
+        links.append(
+            SubmissionLink(
+                source_file_id=file_id,
+                classroom_submission_id=submission_id,
+                alternate_link=alternate_link,
+                student_email=student_email,
+            )
+        )
+    return links
 
 
 class TokenStore:
@@ -482,6 +525,61 @@ class GoogleApiProvider(GoogleProvider):
         )
         return files
 
+    def list_submission_links(
+        self, course_id: str, activity_id: str
+    ) -> list[SubmissionLink]:
+        log_debug(
+            logger,
+            "google.submission_links.start",
+            course_id=course_id,
+            activity_id=activity_id,
+        )
+        links: list[SubmissionLink] = []
+        page_token = None
+        page = 0
+        while True:
+            page += 1
+            response = (
+                self.classroom.courses()
+                .courseWork()
+                .studentSubmissions()
+                .list(
+                    courseId=course_id,
+                    courseWorkId=activity_id,
+                    pageSize=100,
+                    pageToken=page_token,
+                )
+                .execute()
+            )
+            for submission in response.get("studentSubmissions", []):
+                email, _ = self._student_identity(
+                    course_id=course_id,
+                    user_id=submission.get("userId", "me"),
+                )
+                links.extend(submission_links_from_submission(submission, email))
+            log_debug(
+                logger,
+                "google.submission_links.page",
+                course_id=course_id,
+                activity_id=activity_id,
+                page=page,
+                submission_count=len(response.get("studentSubmissions", [])),
+                accumulated_link_count=len(links),
+                next_page=bool(response.get("nextPageToken")),
+            )
+            page_token = response.get("nextPageToken")
+            if not page_token:
+                break
+        log_event(
+            logger,
+            "google.submission_links.complete",
+            course_id=course_id,
+            activity_id=activity_id,
+            link_count=len(links),
+            links=[safe_fields(link) for link in links],
+        )
+        return links
+
     def get_file_content(self, file_id: str) -> tuple[bytes, str]:
         from googleapiclient.http import MediaIoBaseDownload
 
@@ -734,6 +832,31 @@ class MockGoogleProvider(GoogleProvider):
             files=[safe_fields(row) for row in rows],
         )
         return rows
+
+    def list_submission_links(
+        self, course_id: str, activity_id: str
+    ) -> list[SubmissionLink]:
+        links = [
+            SubmissionLink(
+                source_file_id=file.source_file_id,
+                classroom_submission_id=file.id,
+                alternate_link=(
+                    f"https://classroom.google.com/c/{course_id}/sm/{file.id}/details"
+                ),
+                student_email=file.student_email,
+            )
+            for file in self.files
+            if file.course_id == course_id and file.activity_id == activity_id
+        ]
+        log_event(
+            logger,
+            "mock.submission_links",
+            course_id=course_id,
+            activity_id=activity_id,
+            count=len(links),
+            links=[safe_fields(link) for link in links],
+        )
+        return links
 
     def get_file_content(self, file_id: str) -> tuple[bytes, str]:
         log_event(logger, "mock.file_content.start", file_id=file_id)

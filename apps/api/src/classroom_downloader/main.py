@@ -82,6 +82,7 @@ from .schemas import (
     GradingHealthRead,
     GradingJobCreate,
     GradingJobRead,
+    GradingPostedUpdate,
     GradingQueueItem,
     GradingReviewUpdate,
     PrivacyAuditRead,
@@ -970,6 +971,61 @@ def read_grading_job(
     return grading_job_snapshot(session, job)
 
 
+@app.post("/api/grading/jobs/{job_id}/classroom-links", response_model=GradingJobRead)
+def prepare_classroom_links(
+    job_id: str,
+    session: Session = Depends(get_session),
+    provider: GoogleProvider = Depends(provider_dependency),
+) -> GradingJobRead:
+    log_event(logger, "grading.classroom_links.start", job_id=job_id)
+    job = session.get(GradingJob, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Grading job not found.")
+    try:
+        links = provider.list_submission_links(job.course_id, job.activity_id)
+    except Exception as error:
+        auth_failure = google_auth_http_exception(error)
+        if auth_failure:
+            log_warning(
+                logger,
+                "grading.classroom_links.auth_failed",
+                job_id=job.id,
+                purge_token=auth_failure.purge_token,
+            )
+            purge_google_token_if_needed(auth_failure, session)
+        else:
+            log_warning(logger, "grading.classroom_links.failed", job_id=job.id)
+        return grading_job_snapshot(session, job)
+
+    links_by_file_id = {link.source_file_id: link for link in links}
+    submissions = session.exec(
+        select(GradingSubmission).where(GradingSubmission.job_id == job.id)
+    ).all()
+    updated_count = 0
+    for submission in submissions:
+        link = links_by_file_id.get(submission.source_file_id)
+        if link is None:
+            continue
+        submission.classroom_submission_id = link.classroom_submission_id
+        submission.alternate_link = link.alternate_link
+        submission.updated_at = datetime.now(UTC)
+        session.add(submission)
+        updated_count += 1
+    if updated_count:
+        job.updated_at = datetime.now(UTC)
+        session.add(job)
+    session.commit()
+    session.refresh(job)
+    log_event(
+        logger,
+        "grading.classroom_links.complete",
+        job_id=job.id,
+        link_count=len(links),
+        updated_count=updated_count,
+    )
+    return grading_job_snapshot(session, job)
+
+
 @app.post("/api/grading/jobs/{job_id}/privacy-audit", response_model=PrivacyAuditRead)
 def run_grading_privacy_audit(
     job_id: str,
@@ -1305,6 +1361,45 @@ def review_submission(
         status=job.status,
         reviewed_submissions=job.reviewed_submissions,
         total_submissions=job.total_submissions,
+    )
+    return grading_job_snapshot(session, job)
+
+
+@app.post(
+    "/api/grading/jobs/{job_id}/submissions/{submission_id}/posted",
+    response_model=GradingJobRead,
+)
+def mark_submission_posted(
+    job_id: str,
+    submission_id: str,
+    payload: GradingPostedUpdate,
+    session: Session = Depends(get_session),
+) -> GradingJobRead:
+    log_event(
+        logger,
+        "grading.posted.start",
+        job_id=job_id,
+        submission_id=submission_id,
+        posted=payload.posted,
+    )
+    job = session.get(GradingJob, job_id)
+    submission = session.get(GradingSubmission, submission_id)
+    if job is None or submission is None or submission.job_id != job.id:
+        raise HTTPException(status_code=404, detail="Grading submission not found.")
+    submission.posted_to_classroom = payload.posted
+    submission.posted_at = datetime.now(UTC) if payload.posted else None
+    submission.updated_at = datetime.now(UTC)
+    job.updated_at = datetime.now(UTC)
+    session.add(submission)
+    session.add(job)
+    session.commit()
+    session.refresh(job)
+    log_event(
+        logger,
+        "grading.posted.complete",
+        job_id=job.id,
+        submission_id=submission_id,
+        posted=submission.posted_to_classroom,
     )
     return grading_job_snapshot(session, job)
 

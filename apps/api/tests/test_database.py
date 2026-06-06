@@ -10,6 +10,30 @@ def test_sqlite_dev_migration_adds_cache_and_grading_metadata_columns(tmp_path) 
         connection.execute(
             text(
                 """
+                CREATE TABLE gradingsubmission (
+                    id VARCHAR PRIMARY KEY,
+                    job_id VARCHAR NOT NULL,
+                    student_email VARCHAR,
+                    student_name VARCHAR,
+                    source_file_id VARCHAR NOT NULL,
+                    source_name VARCHAR NOT NULL,
+                    mime_type VARCHAR NOT NULL,
+                    ai_score FLOAT,
+                    confidence FLOAT,
+                    final_score FLOAT,
+                    feedback VARCHAR,
+                    reviewed BOOLEAN NOT NULL DEFAULT 0,
+                    flag VARCHAR,
+                    error VARCHAR,
+                    created_at DATETIME NOT NULL,
+                    updated_at DATETIME NOT NULL
+                )
+                """
+            )
+        )
+        connection.execute(
+            text(
+                """
                 CREATE TABLE gradingaiattempt (
                     id VARCHAR PRIMARY KEY,
                     job_id VARCHAR NOT NULL,
@@ -87,8 +111,17 @@ def test_sqlite_dev_migration_adds_cache_and_grading_metadata_columns(tmp_path) 
     course_columns = {column["name"] for column in inspect(engine).get_columns("course")}
     activity_columns = {column["name"] for column in inspect(engine).get_columns("activity")}
     export_columns = {column["name"] for column in inspect(engine).get_columns("exportfile")}
+    submission_columns = {
+        column["name"] for column in inspect(engine).get_columns("gradingsubmission")
+    }
     assert "fetched_at" in course_columns
     assert "fetched_at" in activity_columns
     assert {"cached_path", "content_hash", "byte_size", "cache_expires_at"}.issubset(
         export_columns
     )
+    assert {
+        "classroom_submission_id",
+        "alternate_link",
+        "posted_to_classroom",
+        "posted_at",
+    }.issubset(submission_columns)

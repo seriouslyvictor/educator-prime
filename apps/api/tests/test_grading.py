@@ -1642,6 +1642,47 @@ def test_grading_csv_includes_teacher_edits(tmp_path) -> None:
     assert "88" in response.text
 
 
+def test_classroom_links_endpoint_backfills_links_and_posted_state(tmp_path) -> None:
+    get_settings().grading_cache_path = str(tmp_path / "grading")
+    with TestClient(app) as client:
+        job = client.post(
+            "/api/grading/jobs",
+            json={
+                "course_id": "course-2",
+                "activity_id": "activity-3",
+                "rubric_mode": "brief",
+                "teacher_loop": "approve",
+            },
+        ).json()
+        drafted = client.post(f"/api/grading/jobs/{job['id']}/draft").json()
+        submission = drafted["submissions"][0]
+
+        linked = client.post(
+            f"/api/grading/jobs/{job['id']}/classroom-links"
+        ).json()
+        linked_submission = linked["submissions"][0]
+
+        assert linked_submission["classroom_submission_id"] == "export-file-4"
+        assert (
+            linked_submission["alternate_link"]
+            == "https://classroom.google.com/c/course-2/sm/export-file-4/details"
+        )
+        assert linked_submission["posted_to_classroom"] is False
+        assert linked_submission["posted_at"] is None
+
+        posted = client.post(
+            f"/api/grading/jobs/{job['id']}/submissions/{submission['id']}/posted",
+            json={"posted": True},
+        ).json()
+
+        posted_submission = posted["submissions"][0]
+        assert posted_submission["posted_to_classroom"] is True
+        assert posted_submission["posted_at"] is not None
+
+        reread = client.get(f"/api/grading/jobs/{job['id']}").json()
+        assert reread["submissions"][0]["posted_to_classroom"] is True
+
+
 def _seed_preview_cache(
     tmp_path: Path,
     *,

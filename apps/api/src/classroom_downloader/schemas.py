@@ -119,6 +119,10 @@ class GradingReviewUpdate(BaseModel):
     reviewed: bool = True
 
 
+class GradingPostedUpdate(BaseModel):
+    posted: bool
+
+
 class GradingCriterionRead(BaseModel):
     id: str
     name: str
@@ -141,6 +145,10 @@ class GradingSubmissionRead(BaseModel):
     reviewed: bool
     flag: str | None = None
     error: str | None = None
+    classroom_submission_id: str | None = None
+    alternate_link: str | None = None
+    posted_to_classroom: bool = False
+    posted_at: str | None = None
     privacy_status: str | None = None
     extraction_status: str | None = None
     ai_attempt_status: str | None = None

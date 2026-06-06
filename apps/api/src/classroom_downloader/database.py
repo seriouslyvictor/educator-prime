@@ -27,6 +27,7 @@ def ensure_sqlite_dev_migrations(target_engine: Engine) -> None:
         return
     _ensure_activity_columns(target_engine)
     _ensure_grading_job_columns(target_engine)
+    _ensure_grading_submission_columns(target_engine)
     _ensure_grading_criterion_columns(target_engine)
     _ensure_grading_ai_attempt_columns(target_engine)
     _ensure_cache_columns(target_engine)
@@ -59,6 +60,19 @@ def _ensure_grading_job_columns(target_engine: Engine) -> None:
             "ai_engine": "VARCHAR",
             "ai_mode": "VARCHAR",
             "ai_model": "VARCHAR",
+        },
+    )
+
+
+def _ensure_grading_submission_columns(target_engine: Engine) -> None:
+    _ensure_columns(
+        target_engine,
+        "gradingsubmission",
+        {
+            "classroom_submission_id": "VARCHAR",
+            "alternate_link": "VARCHAR",
+            "posted_to_classroom": "BOOLEAN DEFAULT 0",
+            "posted_at": "DATETIME",
         },
     )
 

@@ -132,6 +132,10 @@ class GradingSubmission(SQLModel, table=True):
     reviewed: bool = False
     flag: str | None = None
     error: str | None = None
+    classroom_submission_id: str | None = None
+    alternate_link: str | None = None
+    posted_to_classroom: bool = False
+    posted_at: datetime | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
