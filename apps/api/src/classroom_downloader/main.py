@@ -19,12 +19,14 @@ from sqlmodel import Session, select
 from .database import engine, get_session, init_db
 from . import grading
 from .grading import (
+    _criteria_match_defaults,
     default_cache_expiry,
     delete_job_cache,
     draft_grading_job,
     ensure_default_criteria,
     grading_csv,
     grading_job_snapshot,
+    infer_job_criteria,
     retry_submission,
 )
 from .google_provider import (
@@ -43,6 +45,7 @@ from .models import (
     ExportFile,
     ExportJob,
     ExportStatus,
+    GradingCriterion,
     GradingJob,
     GradingStatus,
     GradingSubmission,
@@ -289,6 +292,27 @@ def ensure_privacy_audit_allows_draft(
             detail="Privacy audit found high-risk rows. Review the audit before drafting.",
         )
     return audit
+
+
+def maybe_infer_job_criteria(
+    job: GradingJob,
+    session: Session,
+    provider: GoogleProvider,
+    grading_engine: GradingEngine,
+    *,
+    on_progress=None,
+) -> None:
+    """Run rubric inference once, before drafting, for infer-mode jobs whose
+    criteria are still the placeholders. No-op otherwise (teacher-set or already
+    inferred), so re-drafts don't re-bill the inference call."""
+    if job.rubric_mode != "infer":
+        return
+    criteria = session.exec(
+        select(GradingCriterion).where(GradingCriterion.job_id == job.id)
+    ).all()
+    if not _criteria_match_defaults(criteria):
+        return
+    infer_job_criteria(session, job, provider, grading_engine, on_progress=on_progress)
 
 
 @app.get("/api/health")
@@ -1091,6 +1115,7 @@ def draft_job(
         raise HTTPException(status_code=404, detail="Grading job not found.")
     grading_engine = resolve_grading_engine()
     ensure_privacy_audit_allows_draft(job, session, provider)
+    maybe_infer_job_criteria(job, session, provider, grading_engine)
     job = draft_grading_job(session, job, provider, grading_engine)
     log_event(
         logger,
@@ -1120,6 +1145,24 @@ def stream_draft_job(
                     return
                 grading_engine = resolve_grading_engine()
                 ensure_privacy_audit_allows_draft(job, stream_session, provider)
+
+                def on_criteria_progress(processed: int, total: int, label: str) -> None:
+                    events.put(
+                        {
+                            "phase": "criteria",
+                            "processed": processed,
+                            "total": total,
+                            "current": label,
+                        }
+                    )
+
+                maybe_infer_job_criteria(
+                    job,
+                    stream_session,
+                    provider,
+                    grading_engine,
+                    on_progress=on_criteria_progress,
+                )
 
                 def on_progress(processed: int, total: int, label: str) -> None:
                     events.put(
