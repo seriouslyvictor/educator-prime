@@ -681,7 +681,7 @@ def test_draft_stream_emits_per_submission_progress(tmp_path) -> None:
     assert terminal["job"]["total_submissions"] == progress[-1]["total"]
 
 
-def test_post_draft_infers_criteria_inline(tmp_path) -> None:
+def test_criteria_stream_infers_before_audit(tmp_path) -> None:
     get_settings().grading_cache_path = str(tmp_path / "grading")
     with TestClient(app) as client:
         # activity-3 carries a substantial description -> description-first inference.
@@ -694,15 +694,42 @@ def test_post_draft_infers_criteria_inline(tmp_path) -> None:
                 "teacher_loop": "approve",
             },
         ).json()
-        body = client.post(f"/api/grading/jobs/{job['id']}/draft").json()
+        with client.stream("GET", f"/api/grading/jobs/{job['id']}/criteria/stream") as response:
+            assert response.status_code == 200
+            payloads = _sse_payloads(response)
 
-    names = [row["name"] for row in body["criteria"]]
-    weights = [row["weight"] for row in body["criteria"]]
+    progress = [payload for payload in payloads if payload.get("phase") == "criteria" and payload.get("processed") is not None]
+    terminal = payloads[-1]
+    assert progress
+    assert terminal["phase"] == "criteria"
+    assert terminal["done"] is True
+    assert terminal["job"]["id"] == job["id"]
+    names = [row["name"] for row in terminal["job"]["criteria"]]
+    weights = [row["weight"] for row in terminal["job"]["criteria"]]
     assert names == ["Thesis", "Evidence", "Reasoning", "Mechanics"]
     assert sum(weights) == 100
 
 
-def test_draft_stream_emits_criteria_then_draft_phase(tmp_path) -> None:
+def test_draft_no_longer_infers_criteria_inline(tmp_path) -> None:
+    get_settings().grading_cache_path = str(tmp_path / "grading")
+    with TestClient(app) as client:
+        job = client.post(
+            "/api/grading/jobs",
+            json={
+                "course_id": "course-2",
+                "activity_id": "activity-3",
+                "rubric_mode": "infer",
+                "teacher_loop": "approve",
+            },
+        ).json()
+        client.post(f"/api/grading/jobs/{job['id']}/privacy-audit")
+        body = client.post(f"/api/grading/jobs/{job['id']}/draft").json()
+
+    names = [row["name"] for row in body["criteria"]]
+    assert names == ["Understanding", "Evidence", "Reasoning", "Clarity"]
+
+
+def test_draft_stream_emits_incremental_submissions_without_criteria_phase(tmp_path) -> None:
     get_settings().grading_cache_path = str(tmp_path / "grading")
     with TestClient(app) as client:
         job = client.post(
@@ -720,14 +747,16 @@ def test_draft_stream_emits_criteria_then_draft_phase(tmp_path) -> None:
             payloads = _sse_payloads(response)
 
     phases = [payload.get("phase") for payload in payloads]
-    assert "criteria" in phases
+    assert "criteria" not in phases
     assert "draft" in phases
-    assert phases.index("criteria") < phases.index("draft")
+    submission_events = [payload for payload in payloads if payload.get("submission")]
+    assert submission_events
+    assert all(payload["submission"]["id"] for payload in submission_events)
+    assert all(payload["submission"]["ai_attempt_status"] for payload in submission_events)
     terminal = [p for p in payloads if p.get("done")]
     assert len(terminal) == 1
     assert terminal[0]["phase"] == "draft"
-    criteria_names = [row["name"] for row in terminal[0]["job"]["criteria"]]
-    assert criteria_names == ["Thesis", "Evidence", "Reasoning", "Mechanics"]
+    assert terminal[0]["job"]["total_submissions"] == len(submission_events)
 
 
 def test_draft_reuses_privacy_audit_scrub_cache(tmp_path) -> None:

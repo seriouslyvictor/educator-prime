@@ -399,12 +399,25 @@ def grading_job_snapshot(session: Session, job: GradingJob) -> GradingJobRead:
     )
 
 
+def grading_submission_snapshot(
+    session: Session,
+    submission: GradingSubmission,
+) -> GradingSubmissionRead:
+    latest_attempt = session.exec(
+        select(GradingAiAttempt)
+        .where(GradingAiAttempt.submission_id == submission.id)
+        .order_by(GradingAiAttempt.created_at.desc())
+    ).first()
+    return _submission_read(submission, latest_attempt)
+
+
 def draft_grading_job(
     session: Session,
     job: GradingJob,
     provider: GoogleProvider,
     grading_engine: GradingEngine | None = None,
     on_progress=None,
+    on_submission=None,
 ) -> GradingJob:
     grading_engine = grading_engine or get_grading_engine()
     started = time.monotonic()
@@ -447,6 +460,8 @@ def draft_grading_job(
             scrub_cache_misses += 1
         if on_progress:
             on_progress(index, total, file.source_name)
+        if on_submission:
+            on_submission(index, total, file.source_name, grading_submission_snapshot(session, submission))
 
     _refresh_counts(session, job)
     _refresh_cost_rollup(session, job, grading_engine, started)

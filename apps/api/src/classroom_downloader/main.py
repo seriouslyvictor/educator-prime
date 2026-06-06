@@ -1060,6 +1060,63 @@ def stream_grading_privacy_audit(
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
+@app.get("/api/grading/jobs/{job_id}/criteria/stream")
+def stream_grading_criteria(
+    job_id: str,
+    provider: GoogleProvider = Depends(provider_dependency),
+) -> StreamingResponse:
+    events: Queue[dict] = Queue()
+
+    def worker() -> None:
+        try:
+            with Session(engine) as stream_session:
+                job = stream_session.get(GradingJob, job_id)
+                if job is None:
+                    events.put({"phase": "criteria", "error": "Grading job not found."})
+                    return
+                grading_engine = resolve_grading_engine()
+
+                def on_progress(processed: int, total: int, label: str) -> None:
+                    events.put(
+                        {
+                            "phase": "criteria",
+                            "processed": processed,
+                            "total": total,
+                            "current": label,
+                        }
+                    )
+
+                maybe_infer_job_criteria(
+                    job,
+                    stream_session,
+                    provider,
+                    grading_engine,
+                    on_progress=on_progress,
+                )
+                events.put(
+                    {
+                        "phase": "criteria",
+                        "done": True,
+                        "job": grading_job_snapshot(stream_session, job).model_dump(mode="json"),
+                    }
+                )
+        except Exception:
+            log_error(logger, "grading.criteria.stream.failed", job_id=job_id)
+            events.put({"phase": "criteria", "error": "Criteria inference failed."})
+
+    def event_stream():
+        thread = Thread(target=worker, daemon=True)
+        thread.start()
+        while True:
+            payload = events.get()
+            yield _sse_event(payload)
+            if payload.get("done") or payload.get("error"):
+                break
+        thread.join(timeout=1)
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
 @app.get("/api/grading/jobs/{job_id}/privacy-audit/export.csv")
 def export_privacy_audit_csv(
     job_id: str,
@@ -1115,7 +1172,6 @@ def draft_job(
         raise HTTPException(status_code=404, detail="Grading job not found.")
     grading_engine = resolve_grading_engine()
     ensure_privacy_audit_allows_draft(job, session, provider)
-    maybe_infer_job_criteria(job, session, provider, grading_engine)
     job = draft_grading_job(session, job, provider, grading_engine)
     log_event(
         logger,
@@ -1146,24 +1202,6 @@ def stream_draft_job(
                 grading_engine = resolve_grading_engine()
                 ensure_privacy_audit_allows_draft(job, stream_session, provider)
 
-                def on_criteria_progress(processed: int, total: int, label: str) -> None:
-                    events.put(
-                        {
-                            "phase": "criteria",
-                            "processed": processed,
-                            "total": total,
-                            "current": label,
-                        }
-                    )
-
-                maybe_infer_job_criteria(
-                    job,
-                    stream_session,
-                    provider,
-                    grading_engine,
-                    on_progress=on_criteria_progress,
-                )
-
                 def on_progress(processed: int, total: int, label: str) -> None:
                     events.put(
                         {
@@ -1174,12 +1212,24 @@ def stream_draft_job(
                         }
                     )
 
+                def on_submission(processed: int, total: int, label: str, submission) -> None:
+                    events.put(
+                        {
+                            "phase": "draft",
+                            "processed": processed,
+                            "total": total,
+                            "current": label,
+                            "submission": submission.model_dump(mode="json"),
+                        }
+                    )
+
                 drafted = draft_grading_job(
                     stream_session,
                     job,
                     provider,
                     grading_engine,
                     on_progress=on_progress,
+                    on_submission=on_submission,
                 )
                 events.put(
                     {
