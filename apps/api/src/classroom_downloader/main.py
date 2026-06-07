@@ -1611,21 +1611,25 @@ def preview_grading_submission(
     job_id: str,
     submission_id: str,
     request: Request,
+    file_id: str | None = None,
     session: Session = Depends(get_session),
 ) -> Response:
     """Stream the teacher's own copy of a submission so they can read the real work
     next to the AI draft. This serves the *original* cached file (not the LLM-scrubbed
     text): the teacher already has read access to these submissions, and only the
     redacted text is ever sent to the model. Served from the per-job cache, so it
-    disappears when the cache TTL lapses or the teacher clears the cache."""
+    disappears when the cache TTL lapses or the teacher clears the cache.
+    `file_id` selects one attachment of a multi-file submission (defaults to the primary)."""
     job = session.get(GradingJob, job_id)
     submission = session.get(GradingSubmission, submission_id)
     if job is None or submission is None or submission.job_id != job.id:
         raise HTTPException(status_code=404, detail="Grading submission not found.")
+    selected_file_id = file_id or submission.source_file_id
     cache = session.exec(
         select(GradingFileCache)
         .where(GradingFileCache.job_id == job.id)
         .where(GradingFileCache.submission_id == submission.id)
+        .where(GradingFileCache.source_file_id == selected_file_id)
         .where(GradingFileCache.deleted_at.is_(None))
         .order_by(GradingFileCache.created_at.desc())
     ).first()
