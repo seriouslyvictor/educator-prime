@@ -21,7 +21,7 @@ Use this path in Coolify:
 6. Domain: `https://classroom.supernovasw.cloud`.
 7. Add persistent storage:
    - Type: `Volume`.
-   - Source/name: `classroom_downloader_data`.
+   - Source/name: leave blank and let Coolify generate it.
    - Destination path: `/data`.
 
 Mount the directory `/data`, not an individual SQLite file. SQLite creates sidecar

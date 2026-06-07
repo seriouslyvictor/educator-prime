@@ -4,7 +4,6 @@ import { referenceQueueStatus } from "../grader/GraderQueue";
 import { AppIcon } from "../icons";
 import { EmptyState, SearchBox, SkeletonRows } from "../ui";
 import turmasStyles from "./Turmas.module.css";
-void turmasStyles;
 
 const palette = ["#2A2FE0", "#1F8A5B", "#B8740B", "#6b3fe0", "#c7421e", "#0e7490"];
 
@@ -90,7 +89,7 @@ export function TurmasView({
   const disabled = busy || !activeCourse;
 
   return (
-    <div className="turmas-screen">
+    <div className={turmasStyles["turmas-screen"]}>
       <aside className="turmas-side">
         <div className="turmas-side-head">Turmas</div>
         <SearchBox value={classQuery} onChange={onClassQuery} placeholder="Filtrar turmas..." />
