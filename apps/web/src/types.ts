@@ -139,6 +139,7 @@ export interface GradingJob {
   activity_title: string;
   rubric_mode: string;
   teacher_loop: string;
+  rubric_text: string | null;
   status: GradingStatus;
   total_submissions: number;
   reviewed_submissions: number;

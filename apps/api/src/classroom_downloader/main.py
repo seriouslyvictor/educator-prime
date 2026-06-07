@@ -883,21 +883,27 @@ def list_grading_jobs(
     return items
 
 
+VALID_RUBRIC_MODES = {"infer", "brief", "structured", "saved", "calibrate"}
+
+
 @app.post("/api/grading/jobs", response_model=GradingJobRead)
 def create_grading_job(
     payload: GradingJobCreate,
     session: Session = Depends(get_session),
     provider: GoogleProvider = Depends(provider_dependency),
 ) -> GradingJobRead:
+    rubric_mode = (payload.rubric_mode or "").strip().lower()
     log_event(
         logger,
         "grading.job.create.start",
         course_id=payload.course_id,
         activity_id=payload.activity_id,
-        rubric_mode=payload.rubric_mode,
+        rubric_mode=rubric_mode,
         teacher_loop=payload.teacher_loop,
         criteria_count=len(payload.criteria or []),
     )
+    if rubric_mode not in VALID_RUBRIC_MODES:
+        raise HTTPException(status_code=422, detail="Unknown rubric mode.")
     try:
         course = provider.get_course(payload.course_id)
         activity = provider.get_activity(payload.course_id, payload.activity_id)
@@ -932,7 +938,7 @@ def create_grading_job(
         activity_id=activity.id,
         activity_title=activity.title,
         activity_description=activity.description,
-        rubric_mode=payload.rubric_mode,
+        rubric_mode=rubric_mode,
         teacher_loop=payload.teacher_loop,
         rubric_text=payload.rubric_text,
         batch_mode=settings.grading_batch_mode,

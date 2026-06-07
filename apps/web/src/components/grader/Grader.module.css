@@ -669,6 +669,48 @@
   content: "";
 }
 
+.tabs-trigger:disabled {
+  cursor: not-allowed;
+}
+
+.tab-soon {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--ink-2);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.file-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.file-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.file-tab.active {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
 .radio-group {
   display: grid;
   gap: 9px;

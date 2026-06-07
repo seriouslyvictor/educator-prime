@@ -13,12 +13,13 @@ const rubricModes: Array<{
   title: string;
   copy: string;
   icon: "sparkle" | "fileText" | "settings" | "archive" | "shield";
+  comingSoon?: boolean;
 }> = [
   { id: "infer", title: "Inferir pelo trabalho", copy: "Deixe o rascunho usar a atividade e os arquivos.", icon: "sparkle" },
   { id: "brief", title: "Orientação simples", copy: "Cole uma nota curta de correção para o rascunho.", icon: "fileText" },
   { id: "structured", title: "Rubrica estruturada", copy: "Use critérios com pesos antes do rascunho.", icon: "settings" },
-  { id: "saved", title: "Salva", copy: "Reutilize uma rubrica de trabalhos recentes.", icon: "archive" },
-  { id: "calibrate", title: "Calibrar primeiro", copy: "Use exemplos para ajustar o rascunho ao seu estilo.", icon: "shield" },
+  { id: "saved", title: "Salva", copy: "Reutilize uma rubrica de trabalhos recentes.", icon: "archive", comingSoon: true },
+  { id: "calibrate", title: "Calibrar primeiro", copy: "Use exemplos para ajustar o rascunho ao seu estilo.", icon: "shield", comingSoon: true },
 ];
 
 const loopModes: Array<{
@@ -119,11 +120,16 @@ export function GraderSetup({
               <TabsTrigger
                 key={mode.id}
                 active={rubricMode === mode.id}
-                disabled={prepared || preparing}
-                onClick={() => setRubricMode(mode.id)}
+                disabled={prepared || preparing || mode.comingSoon}
+                title={mode.comingSoon ? "Em breve" : mode.copy}
+                onClick={() => {
+                  if (mode.comingSoon) return;
+                  setRubricMode(mode.id);
+                }}
               >
                 <AppIcon name={mode.icon} />
                 <span>{mode.title}</span>
+                {mode.comingSoon ? <span className="tab-soon">em breve</span> : null}
               </TabsTrigger>
             ))}
             </TabsList>

@@ -701,7 +701,7 @@ export function App() {
     setSelectedGradingItem(item);
     setView("graderSetup");
     setGradingProgress({
-      phase: payload.rubricMode === "infer" ? "criteria" : "audit",
+      phase: "audit",
       processed: 0,
       total: item.submission_count,
       current: "Criando rodada de correção...",
@@ -709,10 +709,7 @@ export function App() {
       error: null,
     });
     try {
-      let target =
-        gradingJob?.activity_id === item.activity_id && gradingJob.status === "ready"
-          ? gradingJob
-          : null;
+      let target = matchingReadyJob(item, payload);
       if (!target) {
         target = await api.createGradingJob({
           course_id: item.course_id,
