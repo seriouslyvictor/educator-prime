@@ -180,7 +180,7 @@ def _build_rubric_messages(request: RubricInferenceRequest) -> list[dict[str, st
                 "description when it is informative and the sample submissions when it "
                 "is thin. Respond with JSON only: an object with a 'criteria' array of "
                 "{name, weight, description}, where weight is an integer percentage and "
-                "all weights sum to 100. Return 3 to 6 criteria."
+                "all weights sum to 100. return a maximum of 6 criteria."
             ),
         },
         {"role": "user", "content": user_content},
@@ -322,7 +322,7 @@ def _build_messages(request: GradingEngineRequest) -> list[dict[str, str]]:
     required_json_shape = {
         "score": "omit or null in cowrite mode; otherwise number from 0 to 100",
         "confidence": "number from 0 to 1",
-        "feedback": "non-empty teacher-facing draft feedback",
+        "feedback": "Teacher facing feedback, this feedback must be objective, direct and concise, pointing out only what is missing",
         "inferred_criteria": (
             [{"name": "string", "weight": "integer percentage", "description": "string or null"}]
             if request.rubric_mode == "infer"
@@ -350,6 +350,7 @@ def _build_messages(request: GradingEngineRequest) -> list[dict[str, str]]:
                 "Draft grades for the teacher to review. Respond with JSON only. "
                 "Use the rubric text and criteria when present. "
                 "This is not a final grade; the teacher must review and approve it. "
+                "Your response must always be in PT-BR"
                 + (
                     "In cowrite mode, do not assign a numeric score; return reasoning "
                     "and criterion notes for the teacher to grade."
