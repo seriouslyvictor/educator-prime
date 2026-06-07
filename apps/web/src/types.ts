@@ -105,6 +105,10 @@ export interface GradingSubmission {
   reviewed: boolean;
   flag: string | null;
   error: string | null;
+  classroom_submission_id: string | null;
+  alternate_link: string | null;
+  posted_to_classroom: boolean;
+  posted_at: string | null;
   privacy_status: string | null;
   extraction_status: string | null;
   ai_attempt_status: string | null;

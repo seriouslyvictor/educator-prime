@@ -2309,6 +2309,110 @@
   font-variant-numeric: tabular-nums;
 }
 
+.classroom-post-card {
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--paper);
+}
+
+.classroom-post-head {
+  margin-bottom: 10px;
+}
+
+.classroom-post-note,
+.classroom-post-error {
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.classroom-post-note {
+  border: 1px solid color-mix(in oklab, var(--primary) 28%, transparent);
+  background: var(--primary-soft);
+  color: var(--ink-2);
+}
+
+.classroom-post-error {
+  border: 1px solid color-mix(in oklab, var(--danger) 32%, transparent);
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.classroom-post-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 10px;
+}
+
+.classroom-post-list {
+  display: grid;
+  gap: 8px;
+}
+
+.classroom-post-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.classroom-post-copy {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+}
+
+.classroom-post-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.classroom-post-title span {
+  overflow: hidden;
+  color: var(--ink);
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.classroom-post-title strong {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.classroom-post-copy p {
+  display: -webkit-box;
+  overflow: hidden;
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.classroom-post-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.classroom-post-buttons .btn {
+  min-height: 34px;
+  white-space: nowrap;
+}
+
 .criteria-running,
 .audit-run {
   padding: 28px 30px;

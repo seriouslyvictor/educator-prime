@@ -213,6 +213,22 @@ export const api = {
       clearApiCache("GET /api/grading/queue");
       return response;
     }),
+  prepareClassroomLinks: (jobId: string) =>
+    request<GradingJob>(`/api/grading/jobs/${jobId}/classroom-links`, {
+      method: "POST",
+    }).then((response) => {
+      clearApiCache(`GET /api/grading/jobs/${jobId}`);
+      return response;
+    }),
+  markSubmissionPosted: (jobId: string, submissionId: string, posted: boolean) =>
+    request<GradingJob>(`/api/grading/jobs/${jobId}/submissions/${submissionId}/posted`, {
+      method: "POST",
+      body: JSON.stringify({ posted }),
+    }).then((response) => {
+      clearApiCache(`GET /api/grading/jobs/${jobId}`);
+      clearApiCache("GET /api/grading/jobs");
+      return response;
+    }),
   retryGradingSubmission: (jobId: string, submissionId: string) =>
     request<GradingJob>(`/api/grading/jobs/${jobId}/submissions/${submissionId}/retry`, {
       method: "POST",

@@ -1,3 +1,5 @@
+import { useEffect, useMemo, useState } from "react";
+
 import { api } from "../../lib/api";
 import type { GradingJob, GradingSubmission } from "../../types";
 import { AppIcon } from "../icons";
@@ -10,19 +12,38 @@ function scoreOf(submission: GradingSubmission): number | null {
   return submission.final_score ?? submission.ai_score ?? null;
 }
 
+function studentLabel(submission: GradingSubmission): string {
+  return submission.student_name ?? submission.student_email ?? "Aluno desconhecido";
+}
+
+function classroomActivityUrl(job: GradingJob): string {
+  return `https://classroom.google.com/c/${job.course_id}/a/${job.activity_id}/details`;
+}
+
+function postingClipboardText(submission: GradingSubmission): string {
+  return `Nota: ${scoreOf(submission)}/100\n\n${submission.feedback ?? ""}`;
+}
+
 export function GraderWrap({
   job,
   busy,
   onBack,
   onQueue,
   onDeleteCache,
+  onJobUpdate,
 }: {
   job: GradingJob;
   busy: boolean;
   onBack: () => void;
   onQueue: () => void;
   onDeleteCache: () => void;
+  onJobUpdate: (job: GradingJob) => void;
 }) {
+  const [preparingLinks, setPreparingLinks] = useState(false);
+  const [postingBusyId, setPostingBusyId] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [postingError, setPostingError] = useState<string | null>(null);
+
   const grades = job.submissions
     .map(scoreOf)
     .filter((value): value is number => value != null);
@@ -42,6 +63,62 @@ export function GraderWrap({
   const outliers = job.submissions.filter(
     (submission) => submission.flag || submission.error || (scoreOf(submission) ?? 100) < 70,
   );
+  const gradedSubmissions = useMemo(
+    () =>
+      job.submissions
+        .filter((submission) => submission.final_score != null)
+        .sort((a, b) => studentLabel(a).localeCompare(studentLabel(b), "pt-BR")),
+    [job.submissions],
+  );
+  const postedCount = gradedSubmissions.filter((submission) => submission.posted_to_classroom).length;
+  const missingClassroomLinks = gradedSubmissions.some((submission) => !submission.alternate_link);
+
+  async function prepareClassroomLinks() {
+    setPreparingLinks(true);
+    setPostingError(null);
+    try {
+      onJobUpdate(await api.prepareClassroomLinks(job.id));
+    } catch (caught) {
+      setPostingError(caught instanceof Error ? caught.message : "Falha ao preparar links do Classroom.");
+    } finally {
+      setPreparingLinks(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!gradedSubmissions.length || !missingClassroomLinks || preparingLinks) return;
+    void prepareClassroomLinks();
+  }, [gradedSubmissions.length, missingClassroomLinks, job.id]);
+
+  async function copyPostingText(submission: GradingSubmission) {
+    setPostingError(null);
+    try {
+      await navigator.clipboard.writeText(postingClipboardText(submission));
+      setCopiedId(submission.id);
+      window.setTimeout(() => {
+        setCopiedId((current) => (current === submission.id ? null : current));
+      }, 1600);
+    } catch {
+      setPostingError("Não foi possível copiar para a área de transferência.");
+    }
+  }
+
+  async function togglePosted(submission: GradingSubmission) {
+    setPostingBusyId(submission.id);
+    setPostingError(null);
+    try {
+      const updated = await api.markSubmissionPosted(
+        job.id,
+        submission.id,
+        !submission.posted_to_classroom,
+      );
+      onJobUpdate(updated);
+    } catch (caught) {
+      setPostingError(caught instanceof Error ? caught.message : "Falha ao marcar postagem.");
+    } finally {
+      setPostingBusyId(null);
+    }
+  }
 
   return (
     <div className={graderStyles["grader-page"]}>
@@ -100,7 +177,7 @@ export function GraderWrap({
               outliers.map((submission) => (
                 <div key={submission.id} className="outlier-row">
                   <div className="outlier-copy">
-                    <span>{submission.student_name ?? submission.student_email ?? "Aluno desconhecido"}</span>
+                    <span>{studentLabel(submission)}</span>
                     <small>
                       {submission.error
                         ? safeStatusLabel(submission.error)
@@ -116,13 +193,80 @@ export function GraderWrap({
               <div className="grader-empty">Nenhum rascunho sinalizado neste conjunto.</div>
             )}
           </div>
+
+          <div className="classroom-post-card">
+            <div className="grader-section-head classroom-post-head">
+              <span>Postar no Classroom</span>
+              <span>
+                {postedCount} de {gradedSubmissions.length} postados
+              </span>
+            </div>
+            <div className="classroom-post-note">
+              A API do Classroom não permite autopostar notas e feedback em atividades criadas pelo professor; este painel acelera a postagem manual.
+            </div>
+            {postingError ? <div className="classroom-post-error">{postingError}</div> : null}
+            <div className="classroom-post-actions">
+              <button
+                className="btn btn-secondary"
+                onClick={() => void prepareClassroomLinks()}
+                disabled={busy || preparingLinks}
+              >
+                <AppIcon name={preparingLinks ? "loader" : "refresh"} className={preparingLinks ? "ico spin" : "ico"} />
+                Preparar postagem
+              </button>
+            </div>
+            {gradedSubmissions.length ? (
+              <div className="classroom-post-list">
+                {gradedSubmissions.map((submission) => {
+                  const score = scoreOf(submission);
+                  const classroomUrl = submission.alternate_link ?? classroomActivityUrl(job);
+                  const postedBusy = postingBusyId === submission.id;
+                  return (
+                    <div key={submission.id} className="classroom-post-row">
+                      <div className="classroom-post-copy">
+                        <div className="classroom-post-title">
+                          <span>{studentLabel(submission)}</span>
+                          <strong>{score}/100</strong>
+                        </div>
+                        <p>{submission.feedback || "Sem feedback registrado."}</p>
+                      </div>
+                      <div className="classroom-post-buttons">
+                        <button
+                          className="btn btn-secondary"
+                          onClick={() => void copyPostingText(submission)}
+                        >
+                          <AppIcon name={copiedId === submission.id ? "check" : "clipboard"} />
+                          {copiedId === submission.id ? "Copiado!" : "Copiar nota + feedback"}
+                        </button>
+                        <a
+                          className="btn btn-secondary"
+                          href={classroomUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <AppIcon name="externalLink" />
+                          {submission.alternate_link ? "Abrir no Classroom" : "Abrir atividade"}
+                        </a>
+                        <button
+                          className={`btn ${submission.posted_to_classroom ? "btn-primary" : "btn-secondary"}`}
+                          onClick={() => void togglePosted(submission)}
+                          disabled={postedBusy}
+                        >
+                          <AppIcon name={postedBusy ? "loader" : "checkCircle"} className={postedBusy ? "ico spin" : "ico"} />
+                          {submission.posted_to_classroom ? "Postado" : "Marcar como postado"}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="grader-empty">Nenhuma entrega com nota final para postar.</div>
+            )}
+          </div>
         </section>
 
         <aside className="wrap-side">
-          <div className="mini-note">
-            Estes são rascunhos de correção salvos. Exporte o CSV ou continue revisando; nada é publicado no
-            Classroom nesta versão.
-          </div>
           <a className="btn btn-primary export-link" href={api.gradingCsvUrl(job.id)}>
             <AppIcon name="fileDown" /> Exportar CSV
           </a>

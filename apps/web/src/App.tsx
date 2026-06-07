@@ -1018,6 +1018,7 @@ export function App() {
               onBack={() => setView("graderReview")}
               onQueue={() => setView("workspace")}
               onDeleteCache={() => void deleteGradingCache()}
+              onJobUpdate={setGradingJob}
             />
             {error ? <InlineError message={error} /> : null}
           </>

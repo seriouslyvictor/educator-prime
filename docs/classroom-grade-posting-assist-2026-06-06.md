@@ -1,7 +1,7 @@
 # Postar no Classroom — final posting assist on "Pronto para fechar"
 
 **Date:** 2026-06-06
-**Status:** In progress
+**Status:** Implemented
 **Scope:** Add a final action on the grading "Pronto para fechar" screen to push grades + feedback to Google Classroom.
 
 ---
@@ -191,8 +191,17 @@ stylesheet that defines `.wrap-grid`). No new design-system work.
 - [x] `grading.py` — map fields in `_submission_read`
 
 **Frontend**
-- [ ] `types.ts` — 4 new `GradingSubmission` fields
-- [ ] `lib/api.ts` — `prepareClassroomLinks` + `markSubmissionPosted`
-- [ ] `components/grader/GraderWrap.tsx` — panel + `onJobUpdate` wiring
-- [ ] `App.tsx` — pass `onJobUpdate={setGradingJob}`
-- [ ] grader stylesheet — panel row styles
+- [x] `types.ts` — 4 new `GradingSubmission` fields
+- [x] `lib/api.ts` — `prepareClassroomLinks` + `markSubmissionPosted`
+- [x] `components/grader/GraderWrap.tsx` — panel + `onJobUpdate` wiring
+- [x] `App.tsx` — pass `onJobUpdate={setGradingJob}`
+- [x] grader stylesheet — panel row styles
+
+---
+
+## 7. Implementation notes
+
+- Backend targeted verification passed: `uv run pytest tests/test_database.py::test_sqlite_dev_migration_adds_cache_and_grading_metadata_columns tests/test_grading.py::test_classroom_links_endpoint_backfills_links_and_posted_state`.
+- Full backend suite passed: `uv run pytest` (`101 passed`).
+- Frontend build verification passed: `pnpm run build`.
+- Browser verification on `http://localhost:5173` with an existing completed job confirmed the panel renders, Classroom links are present, copy shows `Copiado!`, and mark/unmark updates the counter from `0 de 15 postados` to `1 de 15 postados` and back.
