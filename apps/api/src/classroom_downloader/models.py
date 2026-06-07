@@ -175,6 +175,7 @@ class GradingAiAttempt(SQLModel, table=True):
     privacy_status: str
     safe_error: str | None = None
     flags_json: str = "[]"
+    privacy_flags_json: str = "[]"
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
     token_count: int | None = None

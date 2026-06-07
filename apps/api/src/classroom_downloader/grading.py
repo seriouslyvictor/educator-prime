@@ -1074,6 +1074,7 @@ def _record_attempt(
     privacy_status: str,
     flags: list[str],
     retry_count: int,
+    privacy_flags: list[str] | None = None,
     safe_error: str | None = None,
     prompt_tokens: int | None = None,
     completion_tokens: int | None = None,
@@ -1094,6 +1095,7 @@ def _record_attempt(
         privacy_status=privacy_status,
         safe_error=safe_error,
         flags_json=json.dumps(flags),
+        privacy_flags_json=json.dumps(privacy_flags or []),
         prompt_tokens=prompt_tokens,
         completion_tokens=completion_tokens,
         token_count=token_count,
@@ -1229,6 +1231,11 @@ def _submission_read(
         ai_model=attempt.model if attempt else None,
         ai_safe_error=attempt.safe_error if attempt else None,
         ai_flags=json.loads(attempt.flags_json) if attempt else [],
+        privacy_flags=(
+            json.loads(attempt.privacy_flags_json)
+            if attempt and attempt.privacy_flags_json
+            else []
+        ),
         ai_prompt_tokens=attempt.prompt_tokens if attempt else None,
         ai_completion_tokens=attempt.completion_tokens if attempt else None,
         ai_token_count=attempt.token_count if attempt else None,

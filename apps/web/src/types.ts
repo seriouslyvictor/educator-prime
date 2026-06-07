@@ -116,6 +116,7 @@ export interface GradingSubmission {
   ai_model: string | null;
   ai_safe_error: string | null;
   ai_flags: string[];
+  privacy_flags: string[];
 }
 
 export interface GradingFileCache {

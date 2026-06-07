@@ -156,6 +156,7 @@ class GradingSubmissionRead(BaseModel):
     ai_model: str | None = None
     ai_safe_error: str | None = None
     ai_flags: list[str] = []
+    privacy_flags: list[str] = []
     ai_prompt_tokens: int | None = None
     ai_completion_tokens: int | None = None
     ai_token_count: int | None = None

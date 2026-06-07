@@ -156,7 +156,7 @@ def test_sqlite_dev_migration_adds_cache_and_grading_metadata_columns(tmp_path) 
     ensure_sqlite_dev_migrations(engine)
 
     columns = {column["name"] for column in inspect(engine).get_columns("gradingaiattempt")}
-    assert {"prompt_tokens", "completion_tokens", "latency_ms"}.issubset(columns)
+    assert {"prompt_tokens", "completion_tokens", "latency_ms", "privacy_flags_json"}.issubset(columns)
     course_columns = {column["name"] for column in inspect(engine).get_columns("course")}
     activity_columns = {column["name"] for column in inspect(engine).get_columns("activity")}
     export_columns = {column["name"] for column in inspect(engine).get_columns("exportfile")}

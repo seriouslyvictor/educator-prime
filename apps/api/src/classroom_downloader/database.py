@@ -98,6 +98,7 @@ def _ensure_grading_ai_attempt_columns(target_engine: Engine) -> None:
             "cached_prompt_tokens": "INTEGER",
             "cache_write_tokens": "INTEGER",
             "latency_ms": "INTEGER",
+            "privacy_flags_json": "VARCHAR DEFAULT '[]'",
         },
     )
 
