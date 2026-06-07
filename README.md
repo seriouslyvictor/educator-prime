@@ -66,3 +66,16 @@ $env:CD_GRADING_ENGINE="litellm"
 $env:CD_LITELLM_MODEL="openai/gpt-5"
 uv run python scripts/smoke_litellm_grading.py
 ```
+
+## Docker / Coolify deployment
+
+The root `Dockerfile` builds the Vite frontend and serves it from the FastAPI
+backend on port `8000`, so production can run on one domain.
+
+For Coolify deployment to `https://classroom.supernovasw.cloud`, use the Git
+repository application flow with the Dockerfile build pack, expose port `8000`,
+and mount a persistent volume at `/data`.
+
+See [docs/coolify-deploy.md](docs/coolify-deploy.md) for the exact Coolify
+settings, required environment variables, Google OAuth redirect URI, and smoke
+checks.

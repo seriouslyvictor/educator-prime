@@ -13,7 +13,7 @@ from uuid import uuid4
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse, Response, StreamingResponse
+from fastapi.responses import FileResponse, RedirectResponse, Response, StreamingResponse
 from sqlmodel import Session, select
 
 from .database import engine, get_session, init_db
@@ -1732,3 +1732,29 @@ def _is_future(value: datetime | None) -> bool:
     if value.tzinfo is None:
         value = value.replace(tzinfo=UTC)
     return value > datetime.now(UTC)
+
+
+def _static_frontend_root() -> Path | None:
+    if not settings.static_dir:
+        return None
+    root = Path(settings.static_dir)
+    if not root.exists() or not root.is_dir():
+        return None
+    return root
+
+
+@app.get("/{full_path:path}", include_in_schema=False)
+def serve_static_frontend(full_path: str) -> FileResponse:
+    if full_path.startswith("api/"):
+        raise HTTPException(status_code=404, detail="Not Found")
+    root = _static_frontend_root()
+    if root is None:
+        raise HTTPException(status_code=404, detail="Not Found")
+    candidate = (root / full_path).resolve()
+    root_resolved = root.resolve()
+    if candidate.is_file() and candidate.is_relative_to(root_resolved):
+        return FileResponse(candidate)
+    index = root / "index.html"
+    if index.is_file():
+        return FileResponse(index)
+    raise HTTPException(status_code=404, detail="Not Found")

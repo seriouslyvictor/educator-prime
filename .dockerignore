@@ -1,0 +1,25 @@
+.git
+.cache
+.pytest_cache
+.ruff_cache
+.superpowers
+.venv
+__pycache__
+*.pyc
+
+apps/api/.cache
+apps/api/.pytest_cache
+apps/api/.tokens
+apps/api/.venv
+apps/api/*.db
+apps/api/*.db-*
+apps/api/.env
+
+apps/web/dist
+apps/web/node_modules
+apps/web/*.tsbuildinfo
+apps/web/.env
+
+docs/Reference+Files
+docs/UI Design - Final
+docs/grading-ux-fixes-2026-06-05/assets

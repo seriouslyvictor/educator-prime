@@ -46,6 +46,7 @@ class Settings(BaseSettings):
     google_drive_metadata_cache_ttl_minutes: int = 30
     export_cache_path: str = ".cache/exports"
     export_cache_ttl_hours: int = 24
+    static_dir: str | None = None
     grading_engine: Literal["mock", "litellm"] = "mock"
     litellm_model: str = "openai/gpt-5"
     litellm_timeout_seconds: int = 60
