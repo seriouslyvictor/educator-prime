@@ -73,17 +73,9 @@ def run_privacy_audit(
             scrub_cache_misses += 1
         extracted = cached_scrub.extracted
         scrubbed = cached_scrub.scrubbed
-        remaining_hits: list[str] = []
         blocked = extracted.status in {"unsupported", "failed"}
-        high_risk = scrubbed.report.status == "high_reidentification_risk"
-        audit_pass = bool(not blocked and not remaining_hits and not high_risk)
-        blocked_reason = (
-            extracted.error
-            if blocked
-            else "high_reidentification_risk"
-            if high_risk
-            else None
-        )
+        audit_pass = not blocked
+        blocked_reason = extracted.error if blocked else None
         row = PrivacyAuditRow(
             id=str(uuid4()),
             audit_id=audit.id,
@@ -97,7 +89,8 @@ def run_privacy_audit(
             extraction_error=extracted.error,
             privacy_status=scrubbed.report.status,
             privacy_flags_json=json.dumps(scrubbed.report.flags),
-            remaining_direct_identifier_hits_json=json.dumps(remaining_hits),
+            redaction_counts_json=json.dumps(scrubbed.report.counts),
+            remaining_direct_identifier_hits_json=json.dumps([]),
             audit_pass=audit_pass,
             blocked_reason=blocked_reason,
         )
@@ -119,7 +112,7 @@ def run_privacy_audit(
             extraction_error=extracted.error,
             privacy_status=scrubbed.report.status,
             privacy_flags=scrubbed.report.flags,
-            remaining_direct_identifier_hits=remaining_hits,
+            redaction_counts=scrubbed.report.counts,
             scrub_cache_hit=cached_scrub.cache_hit,
             audit_pass=audit_pass,
             blocked_reason=blocked_reason,
@@ -185,6 +178,7 @@ def privacy_audit_snapshot(session: Session, audit: PrivacyAudit) -> PrivacyAudi
                 extraction_error=row.extraction_error,
                 privacy_status=row.privacy_status,
                 privacy_flags=json.loads(row.privacy_flags_json),
+                redaction_counts=json.loads(row.redaction_counts_json),
                 remaining_direct_identifier_hits=json.loads(
                     row.remaining_direct_identifier_hits_json
                 ),
@@ -210,6 +204,7 @@ def privacy_audit_csv(session: Session, audit: PrivacyAudit) -> str:
             "extraction_error",
             "privacy_status",
             "privacy_flags",
+            "redaction_counts",
             "remaining_direct_identifier_hits",
             "audit_pass",
             "blocked_reason",
@@ -227,6 +222,10 @@ def privacy_audit_csv(session: Session, audit: PrivacyAudit) -> str:
                 "extraction_error": row.extraction_error or "",
                 "privacy_status": row.privacy_status,
                 "privacy_flags": ",".join(row.privacy_flags),
+                "redaction_counts": "; ".join(
+                    f"{category}×{count}"
+                    for category, count in sorted(row.redaction_counts.items())
+                ),
                 "remaining_direct_identifier_hits": ",".join(
                     row.remaining_direct_identifier_hits
                 ),

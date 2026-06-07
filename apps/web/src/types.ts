@@ -159,6 +159,7 @@ export interface PrivacyAuditRow {
   extraction_error: string | null;
   privacy_status: string;
   privacy_flags: string[];
+  redaction_counts: Record<string, number>;
   remaining_direct_identifier_hits: string[];
   audit_pass: boolean;
   blocked_reason: string | null;

@@ -4,7 +4,7 @@ import { api } from "../../lib/api";
 import { AppIcon } from "../icons";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, RadioGroup, RadioItem, Tabs, TabsList, TabsTrigger } from "../ui";
 import { GraderTopbar } from "./GraderTopbar";
-import { extractionLabel, privacyLabel, safeStatusLabel } from "./graderStatus";
+import { extractionLabel, privacyLabel, redactionSummary, safeStatusLabel } from "./graderStatus";
 import graderStyles from "./Grader.module.css";
 void graderStyles;
 
@@ -235,7 +235,7 @@ export function GraderSetup({
               ))}
               <div className="context-row muted">
                 <AppIcon name="eyeOff" />
-                <span>Nomes e e-mails dos alunos</span>
+                <span>Nomes completos, CPF, contatos e redes sociais</span>
                 <em>ocultados</em>
               </div>
             </CardContent>
@@ -550,7 +550,7 @@ function PreparedPanel({
               <span className={`student-state ${row.privacy_status === "clean" ? "ok" : row.audit_pass ? "warn" : "danger"}`}>
                 {safeStatusLabel(row.blocked_reason) || privacyLabel(row.privacy_status)}
               </span>
-              <span>{row.privacy_flags.length ? row.privacy_flags.map(safeStatusLabel).join(", ") : "Nenhum"}</span>
+              <span>{redactionSummary(row.redaction_counts)}</span>
             </div>
           ))}
         </section>

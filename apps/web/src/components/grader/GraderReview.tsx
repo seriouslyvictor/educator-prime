@@ -6,6 +6,7 @@ import { GraderTopbar } from "./GraderTopbar";
 import {
   privacyLabel,
   privacyTone,
+  redactionSummary,
   safeStatusLabel,
 } from "./graderStatus";
 import graderStyles from "./Grader.module.css";
@@ -378,7 +379,7 @@ function AuditStrip({ audit, onOpen }: { audit: PrivacyAudit; onOpen: () => void
         <span className="as-shield"><AppIcon name="shield" /></span>
         <div className="as-text">
           <strong>Auditoria de privacidade aprovada</strong>
-          <span>{audit.total_files} verificadas · nomes e e-mails ocultados da IA</span>
+          <span>{audit.total_files} verificadas · nomes completos, CPF, telefones, e-mails e redes sociais ocultados da IA</span>
         </div>
       </div>
       <div className="as-counts">
@@ -411,7 +412,7 @@ function AuditReport({ audit, onClose }: { audit: PrivacyAudit; onClose: () => v
         <div className="drawer-body audit-drawer-body">
           <div className="audit-reassure in-drawer">
             <AppIcon name="eyeOff" />
-            Antes de qualquer correção, nomes e e-mails foram substituídos por rótulos anônimos.
+            Antes de qualquer correção, nomes completos, CPF, RG, telefones, e-mails e redes sociais foram ocultados da IA (nomes próprios isolados podem permanecer).
           </div>
           <section className="audit-table" aria-label="Linhas da auditoria de privacidade">
             <div className="audit-row audit-row-head">
@@ -427,7 +428,7 @@ function AuditReport({ audit, onClose }: { audit: PrivacyAudit; onClose: () => v
                 <span className={`student-state ${row.privacy_status === "clean" ? "ok" : row.audit_pass ? "warn" : "danger"}`}>
                   {safeStatusLabel(row.blocked_reason) || privacyLabel(row.privacy_status)}
                 </span>
-                <span className="ar-flags">{row.privacy_flags.length ? row.privacy_flags.map(safeStatusLabel).join(", ") : "Nenhum"}</span>
+                <span className="ar-flags">{redactionSummary(row.redaction_counts)}</span>
               </div>
             ))}
           </section>

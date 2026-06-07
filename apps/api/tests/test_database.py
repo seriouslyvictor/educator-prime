@@ -103,6 +103,55 @@ def test_sqlite_dev_migration_adds_cache_and_grading_metadata_columns(tmp_path) 
                 """
             )
         )
+        connection.execute(
+            text(
+                """
+                CREATE TABLE gradingscrubcache (
+                    id VARCHAR PRIMARY KEY,
+                    job_id VARCHAR NOT NULL,
+                    submission_id VARCHAR NOT NULL,
+                    content_hash VARCHAR NOT NULL,
+                    identity_hash VARCHAR NOT NULL,
+                    student_label VARCHAR NOT NULL,
+                    source_label VARCHAR NOT NULL,
+                    safe_source_label VARCHAR NOT NULL,
+                    scrubbed_content VARCHAR NOT NULL,
+                    extraction_status VARCHAR NOT NULL,
+                    extraction_error VARCHAR,
+                    privacy_status VARCHAR NOT NULL,
+                    privacy_flags_json VARCHAR NOT NULL DEFAULT '[]',
+                    byte_size INTEGER NOT NULL,
+                    expires_at DATETIME NOT NULL,
+                    deleted_at DATETIME,
+                    created_at DATETIME NOT NULL
+                )
+                """
+            )
+        )
+        connection.execute(
+            text(
+                """
+                CREATE TABLE privacyauditrow (
+                    id VARCHAR PRIMARY KEY,
+                    audit_id VARCHAR NOT NULL,
+                    job_id VARCHAR NOT NULL,
+                    submission_id VARCHAR NOT NULL,
+                    student_label VARCHAR NOT NULL,
+                    redacted_source_name VARCHAR NOT NULL,
+                    mime_type VARCHAR NOT NULL,
+                    byte_size INTEGER NOT NULL,
+                    extraction_status VARCHAR NOT NULL,
+                    extraction_error VARCHAR,
+                    privacy_status VARCHAR NOT NULL,
+                    privacy_flags_json VARCHAR NOT NULL DEFAULT '[]',
+                    remaining_direct_identifier_hits_json VARCHAR NOT NULL DEFAULT '[]',
+                    audit_pass BOOLEAN NOT NULL DEFAULT 0,
+                    blocked_reason VARCHAR,
+                    created_at DATETIME NOT NULL
+                )
+                """
+            )
+        )
 
     ensure_sqlite_dev_migrations(engine)
 
@@ -125,3 +174,11 @@ def test_sqlite_dev_migration_adds_cache_and_grading_metadata_columns(tmp_path) 
         "posted_to_classroom",
         "posted_at",
     }.issubset(submission_columns)
+    scrub_columns = {
+        column["name"] for column in inspect(engine).get_columns("gradingscrubcache")
+    }
+    audit_row_columns = {
+        column["name"] for column in inspect(engine).get_columns("privacyauditrow")
+    }
+    assert "redaction_counts_json" in scrub_columns
+    assert "redaction_counts_json" in audit_row_columns

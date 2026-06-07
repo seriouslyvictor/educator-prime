@@ -188,6 +188,7 @@ class PrivacyAuditRowRead(BaseModel):
     extraction_error: str | None = None
     privacy_status: str
     privacy_flags: list[str] = []
+    redaction_counts: dict[str, int] = {}
     remaining_direct_identifier_hits: list[str] = []
     audit_pass: bool
     blocked_reason: str | None = None

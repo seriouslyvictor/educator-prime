@@ -34,6 +34,27 @@ export function attemptLabel(status?: string | null) {
   return labels[status] ?? status.replaceAll("_", " ");
 }
 
+export function redactionLabel(category: string) {
+  const labels: Record<string, string> = {
+    name: "Nome",
+    cpf: "CPF",
+    rg: "RG",
+    email: "E-mail",
+    phone: "Telefone",
+    social: "Rede social",
+  };
+  return labels[category] ?? category.replaceAll("_", " ");
+}
+
+export function redactionSummary(counts?: Record<string, number> | null) {
+  const entries = Object.entries(counts ?? {}).filter(([, count]) => count > 0);
+  if (!entries.length) return "Nenhum";
+  return entries
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([category, count]) => `${redactionLabel(category)} ×${count}`)
+    .join(" · ");
+}
+
 export function safeStatusLabel(value?: string | null) {
   if (!value) return "";
   const labels: Record<string, string> = {

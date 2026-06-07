@@ -231,7 +231,7 @@ def _collect_inference_samples(
         )
         if cached.extracted.status in {"unsupported", "failed"}:
             continue
-        if cached.scrubbed.report.status in {"failed", "high_reidentification_risk"}:
+        if cached.scrubbed.report.status == "failed":
             continue
         content = cached.scrubbed.content.strip()
         if not content:
@@ -692,7 +692,7 @@ def scrub_submission_cached(
             content=existing.scrubbed_content,
             report=PrivacyReport(
                 status=existing.privacy_status,
-                flags=json.loads(existing.privacy_flags_json),
+                counts=json.loads(existing.redaction_counts_json),
             ),
         )
         log_cache_hit(
@@ -732,6 +732,7 @@ def scrub_submission_cached(
         extraction_error=extracted.error,
         privacy_status=scrubbed.report.status,
         privacy_flags_json=json.dumps(scrubbed.report.flags),
+        redaction_counts_json=json.dumps(scrubbed.report.counts),
         byte_size=cache_file.byte_size,
         expires_at=min(_aware(cache_file.expires_at), default_cache_expiry()),
     )
@@ -878,7 +879,7 @@ def _draft_submission(
         session.add(submission)
         return cached_scrub
 
-    if scrubbed.report.status in {"failed", "high_reidentification_risk"}:
+    if scrubbed.report.status == "failed":
         log_event(
             logger,
             "grading.submission.blocked_before_engine",
@@ -1020,7 +1021,11 @@ def _draft_submission(
         submission.final_score = result.score if reset_review else submission.final_score or result.score
     submission.feedback = result.feedback if reset_review else submission.feedback or result.feedback
     submission.reviewed = auto_accept if reset_review else submission.reviewed or auto_accept
-    submission.flag = None if auto_accept else flags[0] if flags else None
+    # The single badge prefers the engine's human-review flags; privacy
+    # redaction categories (name/cpf/...) are informational and only used as a
+    # fallback when the engine raised no review flag of its own.
+    badge_flags = result.flags or flags
+    submission.flag = None if auto_accept else badge_flags[0] if badge_flags else None
     submission.error = None
     submission.updated_at = datetime.now(UTC)
     session.add(submission)

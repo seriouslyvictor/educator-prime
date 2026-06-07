@@ -200,6 +200,7 @@ class GradingScrubCache(SQLModel, table=True):
     extraction_error: str | None = None
     privacy_status: str
     privacy_flags_json: str = "[]"
+    redaction_counts_json: str = "{}"
     byte_size: int
     expires_at: datetime
     deleted_at: datetime | None = None
@@ -232,6 +233,7 @@ class PrivacyAuditRow(SQLModel, table=True):
     extraction_error: str | None = None
     privacy_status: str
     privacy_flags_json: str = "[]"
+    redaction_counts_json: str = "{}"
     remaining_direct_identifier_hits_json: str = "[]"
     audit_pass: bool = False
     blocked_reason: str | None = None
