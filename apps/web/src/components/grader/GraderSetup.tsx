@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { GradingCriterionInput, GradingJob, GradingQueueItem, PrivacyAudit, RubricMode, TeacherLoopMode } from "../../types";
 import { api } from "../../lib/api";
 import { AppIcon } from "../icons";
@@ -40,6 +40,7 @@ export function GraderSetup({
   audit,
   progress,
   onBack,
+  onInferCriteria,
   onStart,
   onContinue,
   onRerun,
@@ -57,6 +58,11 @@ export function GraderSetup({
     error: string | null;
   } | null;
   onBack: () => void;
+  onInferCriteria: (payload: {
+    rubricMode: RubricMode;
+    teacherLoop: TeacherLoopMode;
+    rubricText: string;
+  }) => void;
   onStart: (payload: {
     rubricMode: RubricMode;
     teacherLoop: TeacherLoopMode;
@@ -74,13 +80,25 @@ export function GraderSetup({
     { name: "Clareza", weight: 40, description: "Organização, leitura e justificativa." },
   ]);
   const selectedRubric = rubricModes.find((mode) => mode.id === rubricMode) ?? rubricModes[0];
-  const inferredCriteria = job?.criteria.length
-    ? job.criteria.map((criterion) => ({
-        name: criterion.name,
-        weight: criterion.weight,
-        description: criterion.description,
-      }))
-    : criteria;
+  // Infer mode runs in two steps: first produce the rubric, then let the teacher
+  // edit it. Inference has happened once the job carries non-placeholder criteria.
+  const criteriaInferred = rubricMode === "infer" && !!job && job.criteria.length > 0 && !hasDefaultCriteria(job);
+  const jobCriteriaSignature = job?.criteria.map((c) => `${c.name}:${c.weight}`).join("|") ?? "";
+
+  // Load the inferred rubric into the editable state so the teacher edits the real
+  // criteria (not a throwaway copy). Edits don't change the signature, so they survive.
+  useEffect(() => {
+    if (rubricMode === "infer" && job && job.criteria.length > 0 && !hasDefaultCriteria(job)) {
+      setCriteria(
+        job.criteria.map((criterion) => ({
+          name: criterion.name,
+          weight: criterion.weight,
+          description: criterion.description,
+        })),
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rubricMode, jobCriteriaSignature]);
 
   // Once the audit has run we lock the rubric controls (the choice is baked into the
   // created job) and hand off to the inline preparation panel.
@@ -89,17 +107,19 @@ export function GraderSetup({
   const auditing = progress?.phase === "audit" && !progress.done;
   const preparing = (busy && !prepared) || inferring || auditing;
   const criteriaTotal = criteria.reduce((sum, criterion) => sum + (Number(criterion.weight) || 0), 0);
+  // The weighted editor is shown for structured mode and for infer once the rubric
+  // has been inferred; both must sum to 100 with named, positive-weight rows.
+  const needsCriteriaEditor = rubricMode === "structured" || (rubricMode === "infer" && criteriaInferred);
   const criteriaValid =
-    rubricMode !== "structured" ||
+    !needsCriteriaEditor ||
     (criteria.length > 0 && criteriaTotal === 100 && criteria.every((criterion) => criterion.name.trim() && criterion.weight > 0));
-  const startCriteria =
-    rubricMode === "structured"
-      ? criteria.map((criterion) => ({
-          name: criterion.name.trim(),
-          weight: Number(criterion.weight) || 0,
-          description: criterion.description?.trim() || null,
-        }))
-      : undefined;
+  const startCriteria = needsCriteriaEditor
+    ? criteria.map((criterion) => ({
+        name: criterion.name.trim(),
+        weight: Number(criterion.weight) || 0,
+        description: criterion.description?.trim() || null,
+      }))
+    : undefined;
 
   return (
     <div className="g-page">
@@ -148,12 +168,22 @@ export function GraderSetup({
               ) : auditing ? (
                 <AuditRunningPanel progress={progress} total={job?.total_submissions || item.submission_count} />
               ) : rubricMode === "infer" ? (
-                <InferCriteriaPanel
-                  criteria={inferredCriteria}
-                  disabled={prepared || preparing}
-                  onChange={setCriteria}
-                  submissionCount={job?.total_submissions || item.submission_count}
-                />
+                criteriaInferred ? (
+                  <>
+                    <div className="panel-hint">
+                      A IA propôs esta rubrica a partir da atividade e de sinais seguros. Edite os critérios,
+                      ajuste os pesos ou remova o que quiser antes de auditar.
+                    </div>
+                    <StructuredCriteriaEditor
+                      criteria={criteria}
+                      total={criteriaTotal}
+                      disabled={prepared || preparing}
+                      onChange={setCriteria}
+                    />
+                  </>
+                ) : (
+                  <InferIntroPanel submissionCount={job?.total_submissions || item.submission_count} />
+                )
               ) : rubricMode === "structured" ? (
                 <StructuredCriteriaEditor
                   criteria={criteria}
@@ -201,16 +231,27 @@ export function GraderSetup({
                   <button className="btn btn-ghost" onClick={onBack} disabled={preparing}>
                     Cancelar
                   </button>
-                  <button
-                    className="btn btn-primary"
-                    onClick={() => onStart({ rubricMode, teacherLoop, rubricText, criteria: startCriteria })}
-                    disabled={preparing || !criteriaValid}
-                  >
-                    <AppIcon name={preparing ? "loader" : "sparkle"} className={preparing ? "ico spin" : "ico"} />
-                    {item.submission_count > 0
-                      ? `Auditar e preparar ${item.submission_count}`
-                      : "Auditar e preparar rascunhos"}
-                  </button>
+                  {rubricMode === "infer" && !criteriaInferred ? (
+                    <button
+                      className="btn btn-primary"
+                      onClick={() => onInferCriteria({ rubricMode, teacherLoop, rubricText })}
+                      disabled={preparing}
+                    >
+                      <AppIcon name={preparing ? "loader" : "sparkle"} className={preparing ? "ico spin" : "ico"} />
+                      Inferir critérios
+                    </button>
+                  ) : (
+                    <button
+                      className="btn btn-primary"
+                      onClick={() => onStart({ rubricMode, teacherLoop, rubricText, criteria: startCriteria })}
+                      disabled={preparing || !criteriaValid}
+                    >
+                      <AppIcon name={preparing ? "loader" : "sparkle"} className={preparing ? "ico spin" : "ico"} />
+                      {item.submission_count > 0
+                        ? `Auditar e preparar ${item.submission_count}`
+                        : "Auditar e preparar rascunhos"}
+                    </button>
+                  )}
                 </div>
               </CardFooter>
             ) : null}
@@ -423,67 +464,19 @@ function AuditRunningPanel({
   );
 }
 
-function InferCriteriaPanel({
-  criteria,
-  disabled,
-  submissionCount,
-  onChange,
-}: {
-  criteria: GradingCriterionInput[];
-  disabled: boolean;
-  submissionCount: number;
-  onChange: (criteria: GradingCriterionInput[]) => void;
-}) {
-  const toggle = (index: number) => {
-    if (disabled) return;
-    const next = criteria.filter((_, rowIndex) => rowIndex !== index);
-    onChange(next.length ? next : criteria);
-  };
-  const updateWeight = (index: number, weight: number) => {
-    onChange(criteria.map((criterion, rowIndex) => (rowIndex === index ? { ...criterion, weight } : criterion)));
-  };
-  const activeTotal = criteria.reduce((sum, criterion) => sum + (Number(criterion.weight) || 0), 0);
+function hasDefaultCriteria(job: GradingJob): boolean {
+  const names = job.criteria.map((criterion) => criterion.name).join("|");
+  const weights = job.criteria.map((criterion) => criterion.weight).join("|");
+  return names === "Understanding|Evidence|Reasoning|Clarity" && weights === "30|25|30|15";
+}
+
+function InferIntroPanel({ submissionCount }: { submissionCount: number }) {
   return (
-    <>
-      <div className="panel-hint">
-        A IA analisou a descrição da atividade e sinais seguros. Rubrica proposta para{" "}
-        <strong>{submissionCount || "as"} entregas</strong> — edite ou remova o que quiser:
-      </div>
-      <div className="criteria-list">
-        {criteria.map((criterion, index) => (
-          <div className="criterion-row ai-proposed" key={`${criterion.name}-${index}`}>
-            <div className="criterion-left">
-              <button className="sk-cb on" onClick={() => toggle(index)} disabled={disabled} aria-label="Remover critério">
-                <AppIcon name="check" />
-              </button>
-              <div>
-                <div className="crit-name">{criterion.name}</div>
-                <div className="crit-hint">{criterion.description ?? "Critério inferido pela IA."}</div>
-              </div>
-            </div>
-            <div className="criterion-right">
-              <input
-                className="crit-weight"
-                value={criterion.weight}
-                disabled={disabled}
-                type="number"
-                min={1}
-                max={100}
-                onChange={(event) => updateWeight(index, Number(event.target.value) || 0)}
-                aria-label={`Peso de ${criterion.name}`}
-              />
-              <button className="icon-btn" disabled={disabled} title="Editar">
-                <AppIcon name="moreHorizontal" />
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
-      <div className="suggestion-strip">
-        <span className={`qc-pill ${activeTotal === 100 ? "posted" : "reviewing"}`}>Pesos somam {activeTotal}%</span>
-        <span className="qc-pill ai"><AppIcon name="sparkle" /> Rubrica inferida antes da auditoria</span>
-      </div>
-    </>
+    <div className="panel-hint">
+      A IA vai ler a descrição da atividade e uma amostra segura das entregas
+      {submissionCount ? ` (${submissionCount})` : ""} para propor uma rubrica. Clique em
+      “Inferir critérios” — você poderá editar os critérios e pesos antes de auditar.
+    </div>
   );
 }
 

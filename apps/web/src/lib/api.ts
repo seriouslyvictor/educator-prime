@@ -166,6 +166,14 @@ export const api = {
   },
   gradingJob: (jobId: string) =>
     request<GradingJob>(`/api/grading/jobs/${jobId}`, undefined, { ttlMs: 15_000 }),
+  updateGradingCriteria: async (jobId: string, criteria: GradingCriterionInput[]) => {
+    const response = await request<GradingJob>(`/api/grading/jobs/${jobId}/criteria`, {
+      method: "PATCH",
+      body: JSON.stringify({ criteria }),
+    });
+    clearApiCache(`GET /api/grading/jobs/${jobId}`);
+    return response;
+  },
   runPrivacyAudit: async (jobId: string) => {
     const response = await request<PrivacyAudit>(`/api/grading/jobs/${jobId}/privacy-audit`, {
       method: "POST",

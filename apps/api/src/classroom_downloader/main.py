@@ -20,6 +20,7 @@ from .database import engine, get_session, init_db
 from . import grading
 from .grading import (
     _criteria_match_defaults,
+    _replace_job_criteria,
     default_cache_expiry,
     delete_job_cache,
     draft_grading_job,
@@ -80,6 +81,7 @@ from .schemas import (
     ExportFileRead,
     ExportJobRead,
     GradingHealthRead,
+    GradingCriteriaUpdate,
     GradingJobCreate,
     GradingJobRead,
     GradingPostedUpdate,
@@ -974,6 +976,49 @@ def read_grading_job(
     job = session.get(GradingJob, job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Grading job not found.")
+    return grading_job_snapshot(session, job)
+
+
+@app.patch("/api/grading/jobs/{job_id}/criteria", response_model=GradingJobRead)
+def update_grading_criteria(
+    job_id: str,
+    payload: GradingCriteriaUpdate,
+    session: Session = Depends(get_session),
+) -> GradingJobRead:
+    """Replace a job's criteria before drafting. Lets the teacher edit the
+    inferred (or structured) rubric; once saved, the criteria no longer match the
+    placeholders, so inference won't overwrite them on a later prepare."""
+    log_event(
+        logger,
+        "grading.criteria.update.start",
+        job_id=job_id,
+        criteria_count=len(payload.criteria),
+    )
+    job = session.get(GradingJob, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Grading job not found.")
+    if job.status != GradingStatus.ready:
+        raise HTTPException(
+            status_code=409, detail="Criteria can only be edited before drafting."
+        )
+    cleaned = [
+        criterion
+        for criterion in payload.criteria
+        if criterion.name.strip() and criterion.weight > 0
+    ]
+    if not cleaned:
+        raise HTTPException(
+            status_code=422, detail="At least one weighted criterion is required."
+        )
+    _replace_job_criteria(session, job.id, cleaned)
+    session.commit()
+    session.refresh(job)
+    log_event(
+        logger,
+        "grading.criteria.update.complete",
+        job_id=job.id,
+        criteria_count=len(cleaned),
+    )
     return grading_job_snapshot(session, job)
 
 

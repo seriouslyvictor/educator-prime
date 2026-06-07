@@ -686,6 +686,71 @@ export function App() {
     return streamed.job;
   }
 
+  // Reuse a not-yet-prepared job only when it matches the current selection;
+  // otherwise the teacher's mode/rubric change would be silently dropped.
+  function matchingReadyJob(
+    item: GradingQueueItem,
+    payload: { rubricMode: RubricMode; teacherLoop: TeacherLoopMode; rubricText: string },
+  ): GradingJob | null {
+    const reusable =
+      gradingJob?.activity_id === item.activity_id &&
+      gradingJob.status === "ready" &&
+      gradingJob.rubric_mode === payload.rubricMode &&
+      gradingJob.teacher_loop === payload.teacherLoop &&
+      (gradingJob.rubric_text ?? "") === (payload.rubricText ?? "");
+    return reusable ? gradingJob : null;
+  }
+
+  // Step 1 of infer mode: produce the inferred rubric and pause on the setup
+  // screen so the teacher can edit it before the audit runs.
+  async function inferGradingCriteria(
+    item: GradingQueueItem,
+    payload: { rubricMode: RubricMode; teacherLoop: TeacherLoopMode; rubricText: string },
+  ) {
+    setGraderBusy(true);
+    setError(null);
+    setPrivacyAudit(null);
+    setSelectedGradingItem(item);
+    setView("graderSetup");
+    setGradingProgress({
+      phase: "criteria",
+      processed: 0,
+      total: item.submission_count,
+      current: "Criando rodada de correção...",
+      done: false,
+      error: null,
+    });
+    try {
+      let target = matchingReadyJob(item, payload);
+      if (!target) {
+        target = await api.createGradingJob({
+          course_id: item.course_id,
+          activity_id: item.activity_id,
+          rubric_mode: payload.rubricMode,
+          teacher_loop: payload.teacherLoop,
+          rubric_text: payload.rubricText,
+        });
+        setGradingJob(target);
+        setSelectedGradingItem(gradingItemFromJob(target));
+      }
+      await runCriteriaStream(target);
+      setGradingProgress(null);
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : "Falha ao inferir critérios da rubrica.";
+      setError(message);
+      setGradingProgress((current) => ({
+        phase: "criteria",
+        processed: current?.processed ?? 0,
+        total: current?.total ?? item.submission_count,
+        current: current?.current ?? "",
+        done: true,
+        error: message,
+      }));
+    } finally {
+      setGraderBusy(false);
+    }
+  }
+
   async function startGradingAuditForItem(
     item: GradingQueueItem,
     payload: {
@@ -723,7 +788,15 @@ export function App() {
         setSelectedGradingItem(gradingItemFromJob(target));
       }
       if (target.rubric_mode === "infer") {
-        target = await runCriteriaStream(target);
+        if (payload.criteria && payload.criteria.length > 0) {
+          // Teacher already reviewed/edited the inferred rubric — persist it and
+          // skip re-inference (which would overwrite their edits).
+          target = await api.updateGradingCriteria(target.id, payload.criteria);
+          setGradingJob(target);
+          setSelectedGradingItem(gradingItemFromJob(target));
+        } else {
+          target = await runCriteriaStream(target);
+        }
       }
       const streamed = await streamGradingProgress(
         api.privacyAuditStreamUrl(target.id),
@@ -759,6 +832,15 @@ export function App() {
   }) {
     if (!selectedGradingItem) return;
     await startGradingAuditForItem(selectedGradingItem, payload);
+  }
+
+  async function runInferGradingCriteria(payload: {
+    rubricMode: RubricMode;
+    teacherLoop: TeacherLoopMode;
+    rubricText: string;
+  }) {
+    if (!selectedGradingItem) return;
+    await inferGradingCriteria(selectedGradingItem, payload);
   }
 
   async function rerunGradingPrivacyAudit() {
@@ -979,6 +1061,7 @@ export function App() {
               audit={privacyAudit}
               progress={gradingProgress}
               onBack={() => setView("workspace")}
+              onInferCriteria={(payload) => void runInferGradingCriteria(payload)}
               onStart={(payload) => void runGradingPrivacyAudit(payload)}
               onContinue={() => void continueToGradingDraft()}
               onRerun={() => void rerunGradingPrivacyAudit()}

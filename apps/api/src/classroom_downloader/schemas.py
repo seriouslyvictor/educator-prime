@@ -113,6 +113,10 @@ class GradingJobCreate(BaseModel):
     criteria: list[GradingCriterionInput] | None = None
 
 
+class GradingCriteriaUpdate(BaseModel):
+    criteria: list[GradingCriterionInput]
+
+
 class GradingReviewUpdate(BaseModel):
     final_score: float
     feedback: str | None = None
