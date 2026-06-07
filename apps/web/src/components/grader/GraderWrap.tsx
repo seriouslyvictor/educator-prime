@@ -121,7 +121,7 @@ export function GraderWrap({
   }
 
   return (
-    <div className={graderStyles["grader-page"]}>
+    <div className={graderStyles["g-page"]}>
       <GraderTopbar
         title={`Pronto para fechar · ${job.activity_title}`}
         subtitle={`${grades.length} de ${job.total_submissions} com nota · ${job.flagged_submissions} para uma segunda olhada`}

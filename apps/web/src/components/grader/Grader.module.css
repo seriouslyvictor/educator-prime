@@ -450,6 +450,11 @@
   min-width: 0;
 }
 
+.wrap-main {
+  display: flex;
+  flex-direction: column;
+}
+
 .setup-block-title {
   margin: 2px 0 8px;
   color: var(--muted-2);
@@ -2310,6 +2315,8 @@
 }
 
 .classroom-post-card {
+  order: -1;
+  margin-bottom: 14px;
   padding: 14px;
   border: 1px solid var(--border);
   border-radius: 8px;
