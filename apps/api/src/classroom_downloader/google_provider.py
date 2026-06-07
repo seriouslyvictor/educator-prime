@@ -169,6 +169,12 @@ def build_oauth_authorization_url(
     return f"https://accounts.google.com/o/oauth2/auth?{query}"
 
 
+def _looks_like_user_id(value: str | None) -> bool:
+    """A bare numeric Google account id leaking in as a display name (e.g. when a
+    profile lookup failed). Never show these to the teacher."""
+    return bool(value) and value.isdigit() and len(value) >= 10
+
+
 def drive_files_from_submission(
     course_id: str,
     submission: dict,
@@ -626,8 +632,11 @@ class GoogleApiProvider(GoogleProvider):
         try:
             profile = self.classroom.userProfiles().get(userId=user_id).execute()
         except Exception:
+            # No readable profile (stale roster/profile scopes or a restricted user).
+            # Return no name so callers fall back to the Drive display name, then to a
+            # friendly placeholder — never the raw numeric Google user id.
             log_error(logger, "google.profile.failed", user_id=user_id)
-            fallback = (None, user_id)
+            fallback = (None, None)
             _PROFILE_CACHE[user_id] = _TtlCacheEntry(
                 fallback,
                 _ttl(settings.google_profile_cache_ttl_minutes),
@@ -675,15 +684,19 @@ class GoogleApiProvider(GoogleProvider):
             log_error(logger, "google.drive.metadata.failed", file=safe_fields(file))
             return file
         last_modifier = metadata.get("lastModifyingUser", {})
+        student_name = file.student_name or last_modifier.get("displayName")
+        if _looks_like_user_id(student_name):
+            student_name = None
         hydrated = SubmissionFile(
             id=file.id,
             course_id=file.course_id,
             activity_id=file.activity_id,
             student_email=file.student_email or last_modifier.get("emailAddress"),
-            student_name=file.student_name or last_modifier.get("displayName"),
+            student_name=student_name,
             source_file_id=file.source_file_id,
             source_name=metadata.get("name") or file.source_name,
             mime_type=metadata.get("mimeType") or file.mime_type,
+            classroom_submission_id=file.classroom_submission_id,
         )
         log_event(logger, "google.drive.metadata.hydrated", before=safe_fields(file), after=safe_fields(hydrated))
         return hydrated
