@@ -69,6 +69,8 @@ type GradingStreamPayload = {
   summary?: PrivacyAudit;
   job?: GradingJob;
   submission?: GradingSubmission;
+  queued?: GradingSubmission[];
+  drafting_id?: string;
 };
 
 type GradingInlineProgress = {
@@ -147,6 +149,7 @@ export function App() {
   const [gradingJob, setGradingJob] = useState<GradingJob | null>(null);
   const [privacyAudit, setPrivacyAudit] = useState<PrivacyAudit | null>(null);
   const [activeGradingSubmissionId, setActiveGradingSubmissionId] = useState<string | null>(null);
+  const [draftingSubmissionId, setDraftingSubmissionId] = useState<string | null>(null);
   const [graderBusy, setGraderBusy] = useState(false);
   const [gradingProgress, setGradingProgress] = useState<GradingInlineProgress | null>(null);
 
@@ -652,6 +655,14 @@ export function App() {
     });
   }
 
+  // Seed the review list with every submission (alphabetical, all pending) before
+  // drafting starts, so the queue is fully visible instead of filling in one by one.
+  function seedDraftQueue(submissions: GradingSubmission[]) {
+    setGradingJob((current) =>
+      current ? { ...current, submissions, total_submissions: submissions.length } : current,
+    );
+  }
+
   function applyDraftSubmission(submission: GradingSubmission) {
     setGradingJob((current) => {
       if (!current) return current;
@@ -869,6 +880,7 @@ export function App() {
     if (!gradingJob) return;
     setGraderBusy(true);
     setError(null);
+    setDraftingSubmissionId(null);
     try {
       setView("graderReview");
       const streamed = await streamGradingProgress(
@@ -876,6 +888,14 @@ export function App() {
         "draft",
         "Falha ao gerar rascunhos de notas.",
         (payload) => {
+          // Seed the whole queue up front so every student shows as "na fila".
+          if (payload.queued) {
+            seedDraftQueue(payload.queued);
+            setActiveGradingSubmissionId((current) => current ?? payload.queued?.[0]?.id ?? null);
+          }
+          if (payload.drafting_id) {
+            setDraftingSubmissionId(payload.drafting_id);
+          }
           if (payload.submission) {
             applyDraftSubmission(payload.submission);
             setActiveGradingSubmissionId((current) => current ?? payload.submission?.id ?? null);
@@ -886,13 +906,15 @@ export function App() {
       if (!streamed.job) throw new Error("A avaliação terminou sem resultado.");
       const drafted = streamed.job;
       setGradingJob(drafted);
-      setActiveGradingSubmissionId(drafted.submissions[0]?.id ?? null);
+      setActiveGradingSubmissionId((current) => current ?? drafted.submissions[0]?.id ?? null);
       api.clearGradingCache(drafted.id);
       setGradingProgress(null);
+      setDraftingSubmissionId(null);
       void loadGradingQueue();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Falha ao gerar rascunhos de notas.");
     } finally {
+      setDraftingSubmissionId(null);
       setGraderBusy(false);
     }
   }
@@ -1078,6 +1100,7 @@ export function App() {
               audit={privacyAudit}
               progress={gradingProgress}
               activeSubmissionId={activeGradingSubmissionId}
+              draftingSubmissionId={draftingSubmissionId}
               onActiveSubmission={setActiveGradingSubmissionId}
               onBack={() => setView("workspace")}
               onWrap={() => setView("graderWrap")}

@@ -725,6 +725,199 @@ def test_draft_no_longer_infers_criteria_inline(tmp_path) -> None:
     assert names == ["Understanding", "Evidence", "Reasoning", "Clarity"]
 
 
+def test_brief_mode_sends_rubric_text_and_keeps_default_criteria(monkeypatch, tmp_path) -> None:
+    get_settings().grading_cache_path = str(tmp_path / "grading")
+
+    captured: list[GradingEngineRequest] = []
+
+    class CapturingEngine(GradingEngine):
+        name = "capture"
+        model = None
+
+        def grade(self, request: GradingEngineRequest) -> GradingEngineResult:
+            captured.append(request)
+            return GradingEngineResult(score=80, confidence=0.9, feedback="ok", flags=[])
+
+        def infer_rubric(self, request):  # pragma: no cover - brief never infers
+            raise AssertionError("brief mode must not infer a rubric")
+
+    with TestClient(app) as client:
+        # activity-3 has a substantial description that WOULD drive inference in
+        # infer mode; brief must ignore it and keep the default criteria.
+        job = client.post(
+            "/api/grading/jobs",
+            json={
+                "course_id": "course-2",
+                "activity_id": "activity-3",
+                "rubric_mode": "brief",
+                "teacher_loop": "approve",
+                "rubric_text": "Priorize a clareza e exemplos.",
+            },
+        ).json()
+        from classroom_downloader import grading
+
+        monkeypatch.setattr(grading, "get_grading_engine", lambda: CapturingEngine())
+        client.post(f"/api/grading/jobs/{job['id']}/privacy-audit")
+        body = client.post(f"/api/grading/jobs/{job['id']}/draft").json()
+
+    assert body["rubric_mode"] == "brief"
+    assert [row["name"] for row in body["criteria"]] == [
+        "Understanding",
+        "Evidence",
+        "Reasoning",
+        "Clarity",
+    ]
+    assert captured
+    assert all(request.rubric_mode == "brief" for request in captured)
+    assert all(request.rubric_text == "Priorize a clareza e exemplos." for request in captured)
+    assert [c["name"] for c in captured[0].criteria] == [
+        "Understanding",
+        "Evidence",
+        "Reasoning",
+        "Clarity",
+    ]
+
+
+def test_create_job_rejects_unknown_rubric_mode() -> None:
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/grading/jobs",
+            json={
+                "course_id": "course-1",
+                "activity_id": "activity-1",
+                "rubric_mode": "totally-made-up",
+                "teacher_loop": "approve",
+            },
+        )
+
+    assert response.status_code == 422
+    assert "rubric mode" in response.json()["detail"].lower()
+
+
+def test_update_criteria_replaces_and_survives_reinference(tmp_path) -> None:
+    get_settings().grading_cache_path = str(tmp_path / "grading")
+    with TestClient(app) as client:
+        job = client.post(
+            "/api/grading/jobs",
+            json={
+                "course_id": "course-2",
+                "activity_id": "activity-3",
+                "rubric_mode": "infer",
+                "teacher_loop": "approve",
+            },
+        ).json()
+        updated = client.patch(
+            f"/api/grading/jobs/{job['id']}/criteria",
+            json={
+                "criteria": [
+                    {"name": "Lógica", "weight": 70, "description": "Corretude do algoritmo."},
+                    {"name": "Estilo", "weight": 30, "description": "Legibilidade."},
+                ]
+            },
+        )
+        assert updated.status_code == 200
+        assert [c["name"] for c in updated.json()["criteria"]] == ["Lógica", "Estilo"]
+
+        # A later inference pass must keep the teacher's edited rubric, not overwrite it.
+        with client.stream("GET", f"/api/grading/jobs/{job['id']}/criteria/stream") as response:
+            payloads = _sse_payloads(response)
+
+    terminal = payloads[-1]
+    assert [c["name"] for c in terminal["job"]["criteria"]] == ["Lógica", "Estilo"]
+
+
+def test_update_criteria_rejects_empty(tmp_path) -> None:
+    get_settings().grading_cache_path = str(tmp_path / "grading")
+    with TestClient(app) as client:
+        job = client.post(
+            "/api/grading/jobs",
+            json={
+                "course_id": "course-2",
+                "activity_id": "activity-3",
+                "rubric_mode": "infer",
+                "teacher_loop": "approve",
+            },
+        ).json()
+        response = client.patch(
+            f"/api/grading/jobs/{job['id']}/criteria",
+            json={"criteria": [{"name": "   ", "weight": 0}]},
+        )
+
+    assert response.status_code == 422
+
+
+def test_multi_file_submission_collapses_into_one_card(monkeypatch, tmp_path) -> None:
+    get_settings().grading_cache_path = str(tmp_path / "grading")
+
+    captured: list[GradingEngineRequest] = []
+
+    class CapturingEngine(GradingEngine):
+        name = "capture"
+        model = None
+
+        def grade(self, request: GradingEngineRequest) -> GradingEngineResult:
+            captured.append(request)
+            return GradingEngineResult(score=85, confidence=0.9, feedback="ok", flags=[])
+
+        def infer_rubric(self, request):  # pragma: no cover - brief never infers
+            return []
+
+    with TestClient(app) as client:
+        # activity-4 has one student (Júlia) who submitted two attachments.
+        job = client.post(
+            "/api/grading/jobs",
+            json={
+                "course_id": "course-2",
+                "activity_id": "activity-4",
+                "rubric_mode": "brief",
+                "teacher_loop": "approve",
+            },
+        ).json()
+        from classroom_downloader import grading
+
+        monkeypatch.setattr(grading, "get_grading_engine", lambda: CapturingEngine())
+        audit = client.post(f"/api/grading/jobs/{job['id']}/privacy-audit").json()
+        body = client.post(f"/api/grading/jobs/{job['id']}/draft").json()
+
+    # Two attachments, but one card graded as a set.
+    assert audit["total_files"] == 2
+    assert body["total_submissions"] == 1
+    submission = body["submissions"][0]
+    assert submission["student_name"] == "Júlia Rocha"
+    assert sorted(f["source_name"] for f in submission["files"]) == ["parte-1.txt", "parte-2.txt"]
+    # Exactly one combined grade call carrying both files' content.
+    assert len(captured) == 1
+    assert "introducao" in captured[0].content
+    assert "conclusao" in captured[0].content
+
+
+def test_draft_stream_seeds_full_queue_in_stable_order(tmp_path) -> None:
+    get_settings().grading_cache_path = str(tmp_path / "grading")
+    with TestClient(app) as client:
+        job = client.post(
+            "/api/grading/jobs",
+            json={
+                "course_id": "course-1",
+                "activity_id": "activity-1",
+                "rubric_mode": "brief",
+                "teacher_loop": "approve",
+            },
+        ).json()
+        client.post(f"/api/grading/jobs/{job['id']}/privacy-audit")
+        with client.stream("GET", f"/api/grading/jobs/{job['id']}/draft/stream") as response:
+            assert response.status_code == 200
+            payloads = _sse_payloads(response)
+
+    queued_events = [payload for payload in payloads if payload.get("queued")]
+    assert len(queued_events) == 1
+    queued = queued_events[0]["queued"]
+    # Every student is published up front, alphabetical by name (not cache-warmth order).
+    assert [row["student_name"] for row in queued] == ["Ana Silva", "Bruno Costa"]
+    # Each submission is announced when its drafting starts.
+    drafting_ids = [payload["drafting_id"] for payload in payloads if payload.get("drafting_id")]
+    assert set(drafting_ids) == {row["id"] for row in queued}
+
+
 def test_draft_stream_emits_incremental_submissions_without_criteria_phase(tmp_path) -> None:
     get_settings().grading_cache_path = str(tmp_path / "grading")
     with TestClient(app) as client:

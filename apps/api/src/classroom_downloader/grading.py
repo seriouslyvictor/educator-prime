@@ -437,6 +437,8 @@ def draft_grading_job(
     grading_engine: GradingEngine | None = None,
     on_progress=None,
     on_submission=None,
+    on_queued=None,
+    on_submission_start=None,
 ) -> GradingJob:
     grading_engine = grading_engine or get_grading_engine()
     started = time.monotonic()
@@ -464,23 +466,37 @@ def draft_grading_job(
     file_cache_misses = 0
     scrub_cache_hits = 0
     scrub_cache_misses = 0
-    total = len(files)
-    for index, file in enumerate(files, start=1):
-        submission = _submission_for_file(session, job, file)
-        cache_file = cache_submission_file(session, job, submission, file, provider)
-        if getattr(cache_file, "_cache_hit", False):
-            file_cache_hits += 1
-        else:
-            file_cache_misses += 1
-        cached_scrub = _draft_submission(session, job, submission, cache_file, grading_engine)
-        if cached_scrub and cached_scrub.cache_hit:
-            scrub_cache_hits += 1
-        elif cached_scrub:
-            scrub_cache_misses += 1
+    # Group a student's attachments into one submission so they're graded as a set,
+    # in a stable alphabetical order so the queue is predictable (not cache-warmth order).
+    groups = _group_files(files)
+    groups.sort(key=_student_sort_key)
+    total = len(groups)
+
+    # Materialize every submission up front and publish the full queue, so the review
+    # screen shows all students as "na fila" immediately instead of popping in as each
+    # finishes. Each then transitions queued -> drafting -> done honestly.
+    plan: list[tuple[GradingSubmission, list[SubmissionFile]]] = []
+    for group_files in groups:
+        submission = None
+        for file in group_files:
+            submission = _submission_for_file(session, job, file)
+        assert submission is not None
+        plan.append((submission, group_files))
+    if on_queued:
+        on_queued([grading_submission_snapshot(session, submission) for submission, _ in plan])
+
+    for index, (submission, group_files) in enumerate(plan, start=1):
+        if on_submission_start:
+            on_submission_start(index - 1, total, submission.source_name, submission.id)
+        hits = _draft_submission(session, job, submission, group_files, provider, grading_engine)
+        file_cache_hits += hits[0]
+        file_cache_misses += hits[1]
+        scrub_cache_hits += hits[2]
+        scrub_cache_misses += hits[3]
         if on_progress:
-            on_progress(index, total, file.source_name)
+            on_progress(index, total, submission.source_name)
         if on_submission:
-            on_submission(index, total, file.source_name, grading_submission_snapshot(session, submission))
+            on_submission(index, total, submission.source_name, grading_submission_snapshot(session, submission))
 
     _refresh_counts(session, job)
     _refresh_cost_rollup(session, job, grading_engine, started)

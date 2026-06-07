@@ -1330,6 +1330,28 @@ def stream_draft_job(
                         }
                     )
 
+                def on_queued(submissions) -> None:
+                    events.put(
+                        {
+                            "phase": "draft",
+                            "processed": 0,
+                            "total": len(submissions),
+                            "current": "Na fila",
+                            "queued": [row.model_dump(mode="json") for row in submissions],
+                        }
+                    )
+
+                def on_submission_start(processed: int, total: int, label: str, submission_id: str) -> None:
+                    events.put(
+                        {
+                            "phase": "draft",
+                            "processed": processed,
+                            "total": total,
+                            "current": label,
+                            "drafting_id": submission_id,
+                        }
+                    )
+
                 drafted = draft_grading_job(
                     stream_session,
                     job,
@@ -1337,6 +1359,8 @@ def stream_draft_job(
                     grading_engine,
                     on_progress=on_progress,
                     on_submission=on_submission,
+                    on_queued=on_queued,
+                    on_submission_start=on_submission_start,
                 )
                 events.put(
                     {

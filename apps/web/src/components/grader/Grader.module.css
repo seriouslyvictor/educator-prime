@@ -2736,6 +2736,21 @@
   animation: spin 0.7s linear infinite;
 }
 
+.dot-queued {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--ink-3, var(--ink-2));
+  opacity: 0.5;
+}
+
+.student-meta.muted {
+  color: var(--ink-2);
+  opacity: 0.8;
+}
+
 .student-row.drafting {
   opacity: 0.78;
 }

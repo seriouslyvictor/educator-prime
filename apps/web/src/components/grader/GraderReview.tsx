@@ -43,6 +43,7 @@ export function GraderReview({
   audit,
   progress,
   activeSubmissionId,
+  draftingSubmissionId,
   onActiveSubmission,
   onBack,
   onWrap,
@@ -61,6 +62,7 @@ export function GraderReview({
     error: string | null;
   } | null;
   activeSubmissionId: string | null;
+  draftingSubmissionId: string | null;
   onActiveSubmission: (id: string) => void;
   onBack: () => void;
   onWrap: () => void;
@@ -106,7 +108,19 @@ export function GraderReview({
 
   const total = job.submissions.length || 1;
   const blockedActive = isBlocked(active);
-  const activeDrafting = Boolean(progress?.phase === "draft" && active && active.ai_score == null && !active.error);
+  const draftInProgress = Boolean(progress?.phase === "draft" && !progress.done);
+  // A submission is still "pending" while the draft run hasn't produced a result for it.
+  const isPending = (submission: GradingSubmission | undefined): boolean =>
+    Boolean(
+      draftInProgress &&
+        submission &&
+        submission.ai_score == null &&
+        submission.final_score == null &&
+        !submission.error &&
+        !submission.reviewed,
+    );
+  const activePending = isPending(active);
+  const activeDrafting = Boolean(active && active.id === draftingSubmissionId);
   const score = Number(scoreText);
   const hasValidScore = scoreText.trim() !== "" && Number.isFinite(score);
 
@@ -217,7 +231,8 @@ export function GraderReview({
                 key={submission.id}
                 submission={submission}
                 active={submission.id === active?.id}
-                drafting={Boolean(progress?.phase === "draft" && submission.ai_score == null && !submission.error)}
+                drafting={submission.id === draftingSubmissionId}
+                queued={isPending(submission) && submission.id !== draftingSubmissionId}
                 onPick={() => onActiveSubmission(submission.id)}
               />
             ))}
@@ -268,11 +283,15 @@ export function GraderReview({
           )}
         </section>
 
-        {active ? activeDrafting ? (
+        {active ? activePending ? (
           <aside className="suggestion-panel aside-drafting" aria-live="polite">
-            <AppIcon name="loader" className="ico spin" />
-            <h3>Gerando rascunho...</h3>
-            <p>A IA está avaliando esta entrega com a rubrica. O resultado aparece aqui em instantes.</p>
+            <AppIcon name={activeDrafting ? "loader" : "sparkle"} className={activeDrafting ? "ico spin" : "ico"} />
+            <h3>{activeDrafting ? "Gerando rascunho..." : "Na fila"}</h3>
+            <p>
+              {activeDrafting
+                ? "A IA está avaliando esta entrega com a rubrica. O resultado aparece aqui em instantes."
+                : "Esta entrega está na fila e será avaliada em seguida."}
+            </p>
           </aside>
         ) : (
           <aside className="suggestion-panel" aria-live="polite">
@@ -482,11 +501,13 @@ function StudentRow({
   submission,
   active,
   drafting,
+  queued,
   onPick,
 }: {
   submission: GradingSubmission;
   active: boolean;
   drafting: boolean;
+  queued: boolean;
   onPick: () => void;
 }) {
   const blocked = isBlocked(submission);
@@ -503,13 +524,19 @@ function StudentRow({
       <div className="student-avatar small">{initials(submission.student_name, "AL")}</div>
       <div className="student-row-copy">
         <div className="student-name">{studentLabel(submission)}</div>
-        <div className={`student-meta ${meta.tone}`}>
-          {drafting ? <span className="dot-spin" /> : <AppIcon name={meta.icon} />}
-          {drafting ? "gerando rascunho..." : meta.label}
+        <div className={`student-meta ${drafting ? "ai" : queued ? "muted" : meta.tone}`}>
+          {drafting ? (
+            <span className="dot-spin" />
+          ) : queued ? (
+            <span className="dot-queued" />
+          ) : (
+            <AppIcon name={meta.icon} />
+          )}
+          {drafting ? "gerando rascunho..." : queued ? "na fila" : meta.label}
         </div>
       </div>
       <div className="student-score">
-        {drafting ? (
+        {drafting || queued ? (
           <span className="skeleton score-skeleton" />
         ) : submission.final_score != null ? (
           <span className="final">{submission.final_score}</span>
