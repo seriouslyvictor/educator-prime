@@ -135,6 +135,12 @@ class GradingCriterionRead(BaseModel):
     latest_ai_note: str | None = None
 
 
+class GradingSubmissionFileRead(BaseModel):
+    source_file_id: str
+    source_name: str
+    mime_type: str
+
+
 class GradingSubmissionRead(BaseModel):
     id: str
     student_email: str | None = None
@@ -142,6 +148,7 @@ class GradingSubmissionRead(BaseModel):
     source_file_id: str
     source_name: str
     mime_type: str
+    files: list[GradingSubmissionFileRead] = []
     ai_score: float | None = None
     confidence: float | None = None
     final_score: float | None = None

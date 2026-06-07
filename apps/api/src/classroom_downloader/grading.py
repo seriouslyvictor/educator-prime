@@ -31,6 +31,7 @@ from .models import (
     GradingScrubCache,
     GradingStatus,
     GradingSubmission,
+    GradingSubmissionFile,
 )
 from .observability import (
     get_logger,
@@ -48,6 +49,7 @@ from .schemas import (
     GradingCriterionRead,
     GradingFileCacheRead,
     GradingJobRead,
+    GradingSubmissionFileRead,
     GradingSubmissionRead,
 )
 from .settings import get_settings
@@ -350,6 +352,14 @@ def grading_job_snapshot(session: Session, job: GradingJob) -> GradingJobRead:
     latest_attempts: dict[str, GradingAiAttempt] = {}
     for attempt in attempts:
         latest_attempts.setdefault(attempt.submission_id, attempt)
+    file_rows = session.exec(
+        select(GradingSubmissionFile)
+        .where(GradingSubmissionFile.job_id == job.id)
+        .order_by(GradingSubmissionFile.created_at)
+    ).all()
+    files_by_submission: dict[str, list[GradingSubmissionFile]] = {}
+    for row in file_rows:
+        files_by_submission.setdefault(row.submission_id, []).append(row)
     return GradingJobRead(
         id=job.id,
         course_id=job.course_id,
@@ -379,7 +389,11 @@ def grading_job_snapshot(session: Session, job: GradingJob) -> GradingJobRead:
             for row in criteria
         ],
         submissions=[
-            _submission_read(row, latest_attempts.get(row.id))
+            _submission_read(
+                row,
+                latest_attempts.get(row.id),
+                files_by_submission.get(row.id),
+            )
             for row in submissions
         ],
         cache_files=[
@@ -408,7 +422,12 @@ def grading_submission_snapshot(
         .where(GradingAiAttempt.submission_id == submission.id)
         .order_by(GradingAiAttempt.created_at.desc())
     ).first()
-    return _submission_read(submission, latest_attempt)
+    return _submission_read(submission, latest_attempt, submission_files(session, submission))
+
+
+def _student_sort_key(group_files: list[SubmissionFile]) -> str:
+    first = group_files[0]
+    return (first.student_name or first.student_email or "~").casefold()
 
 
 def draft_grading_job(
@@ -538,18 +557,21 @@ def retry_submission(
         student_name=submission.student_name,
         engine=grading_engine.name,
     )
-    file = SubmissionFile(
-        id=submission.id,
-        course_id=job.course_id,
-        activity_id=job.activity_id,
-        student_email=submission.student_email,
-        student_name=submission.student_name,
-        source_file_id=submission.source_file_id,
-        source_name=submission.source_name,
-        mime_type=submission.mime_type,
-    )
-    cache_file = cache_submission_file(session, job, submission, file, provider)
-    _draft_submission(session, job, submission, cache_file, grading_engine, reset_review=True)
+    files = [
+        SubmissionFile(
+            id=row.id,
+            course_id=job.course_id,
+            activity_id=job.activity_id,
+            student_email=submission.student_email,
+            student_name=submission.student_name,
+            source_file_id=row.source_file_id,
+            source_name=row.source_name,
+            mime_type=row.mime_type,
+            classroom_submission_id=submission.group_key,
+        )
+        for row in submission_files(session, submission)
+    ]
+    _draft_submission(session, job, submission, files, provider, grading_engine, reset_review=True)
     _refresh_counts(session, job)
     job.status = GradingStatus.reviewing
     job.updated_at = datetime.now(UTC)
@@ -580,6 +602,7 @@ def cache_submission_file(
         select(GradingFileCache)
         .where(GradingFileCache.job_id == job.id)
         .where(GradingFileCache.submission_id == submission.id)
+        .where(GradingFileCache.source_file_id == file.source_file_id)
         .where(GradingFileCache.deleted_at.is_(None))
         .order_by(GradingFileCache.created_at.desc())
     ).first()
@@ -826,14 +849,51 @@ def grading_csv(session: Session, job: GradingJob) -> str:
     return buffer.getvalue()
 
 
+_PRIVACY_STATUS_RANK = {
+    "clean": 0,
+    "partial_redaction": 1,
+    "redacted": 2,
+    "high_reidentification_risk": 3,
+    "failed": 4,
+}
+_EXTRACTION_STATUS_RANK = {"supported": 0, "degraded": 1, "unsupported": 2, "failed": 3}
+
+
+def _worst_status(statuses: list[str], ranks: dict[str, int], default: str) -> str:
+    present = [status for status in statuses if status]
+    if not present:
+        return default
+    return max(present, key=lambda status: ranks.get(status, 0))
+
+
+def _combine_submission_content(
+    parts: list[tuple[SubmissionFile, ExtractedSubmissionContent, ScrubbedSubmission]],
+) -> str:
+    """Join the scrubbed text of each attachment into one prompt body, labelled per
+    file, so a multi-file submission is graded as a single set."""
+    if len(parts) == 1:
+        return parts[0][2].content
+    # Generic per-file labels keep attachments distinguishable without leaking the
+    # real filenames into the model prompt.
+    sections = [
+        f"=== Arquivo {index} ===\n{scrubbed.content.strip()}"
+        for index, (_, _, scrubbed) in enumerate(parts, start=1)
+    ]
+    return "\n\n".join(sections)
+
+
 def _draft_submission(
     session: Session,
     job: GradingJob,
     submission: GradingSubmission,
-    cache_file: GradingFileCache,
+    files: list[SubmissionFile],
+    provider: GoogleProvider,
     grading_engine: GradingEngine,
     reset_review: bool = False,
-) -> CachedScrubbedSubmission:
+) -> tuple[int, int, int, int]:
+    """Draft one submission (a student's whole Classroom submission). Caches and
+    scrubs every attachment, then sends their combined scrubbed text to the engine in
+    a single grade call. Returns (file_hits, file_misses, scrub_hits, scrub_misses)."""
     log_debug(
         logger,
         "grading.submission.draft.start",
@@ -841,15 +901,11 @@ def _draft_submission(
         submission_id=submission.id,
         student_email=submission.student_email,
         student_name=submission.student_name,
-        source_file_id=submission.source_file_id,
-        source_name=submission.source_name,
-        cache_file_id=cache_file.id,
+        file_count=len(files),
+        source_names=[file.source_name for file in files],
         engine=grading_engine.name,
         reset_review=reset_review,
     )
-    cached_scrub = scrub_submission_cached(session, job, submission, cache_file)
-    extracted = cached_scrub.extracted
-    scrubbed = cached_scrub.scrubbed
     settings = get_settings()
     criteria = session.exec(
         select(GradingCriterion).where(GradingCriterion.job_id == job.id)
@@ -859,6 +915,23 @@ def _draft_submission(
             select(GradingAiAttempt).where(GradingAiAttempt.submission_id == submission.id)
         ).all()
     )
+
+    file_cache_hits = file_cache_misses = scrub_cache_hits = scrub_cache_misses = 0
+    parts: list[tuple[SubmissionFile, ExtractedSubmissionContent, ScrubbedSubmission]] = []
+    for file in files:
+        cache_file = cache_submission_file(session, job, submission, file, provider)
+        if getattr(cache_file, "_cache_hit", False):
+            file_cache_hits += 1
+        else:
+            file_cache_misses += 1
+        cached = scrub_submission_cached(session, job, submission, cache_file)
+        if cached.cache_hit:
+            scrub_cache_hits += 1
+        else:
+            scrub_cache_misses += 1
+        parts.append((file, cached.extracted, cached.scrubbed))
+
+    stats = (file_cache_hits, file_cache_misses, scrub_cache_hits, scrub_cache_misses)
 
     if job.teacher_loop == "off":
         log_event(
@@ -877,19 +950,36 @@ def _draft_submission(
         submission.error = None
         submission.updated_at = datetime.now(UTC)
         session.add(submission)
-        return cached_scrub
+        return stats
 
-    if scrubbed.report.status == "failed":
+    # Only files we could read and safely scrub are sent to the model.
+    usable = [
+        (file, extracted, scrubbed)
+        for (file, extracted, scrubbed) in parts
+        if extracted.status not in {"unsupported", "failed"}
+        and scrubbed.report.status != "failed"
+        and scrubbed.content.strip()
+    ]
+
+    if not usable:
+        privacy_flags = sorted({flag for _, _, scrubbed in parts for flag in scrubbed.report.flags})
+        privacy_status = _worst_status(
+            [scrubbed.report.status for _, _, scrubbed in parts], _PRIVACY_STATUS_RANK, "failed"
+        )
+        extraction_status = _worst_status(
+            [extracted.status for _, extracted, _ in parts], _EXTRACTION_STATUS_RANK, "failed"
+        )
+        first_error = next((extracted.error for _, extracted, _ in parts if extracted.error), None)
+        safe_error = first_error or (privacy_status if privacy_status == "failed" else None) or "unsupported_file_type"
         log_event(
             logger,
             "grading.submission.blocked_before_engine",
             job_id=job.id,
             submission_id=submission.id,
-            extraction_status=extracted.status,
-            extraction_error=extracted.error,
-            privacy_status=scrubbed.report.status,
-            privacy_flags=scrubbed.report.flags,
-            scrubbed_preview=text_preview(scrubbed.content),
+            extraction_status=extraction_status,
+            privacy_status=privacy_status,
+            privacy_flags=privacy_flags,
+            file_count=len(parts),
         )
         attempt = _record_attempt(
             session=session,
@@ -897,17 +987,30 @@ def _draft_submission(
             submission=submission,
             engine=grading_engine,
             status="blocked",
-            extraction_status=extracted.status,
-            privacy_status=scrubbed.report.status,
-            flags=scrubbed.report.flags,
+            extraction_status=extraction_status,
+            privacy_status=privacy_status,
+            flags=[],
+            privacy_flags=privacy_flags,
             retry_count=retry_count,
-            safe_error=extracted.error or scrubbed.report.status,
+            safe_error=safe_error,
         )
         submission.flag = attempt.safe_error
         submission.error = attempt.safe_error
         submission.updated_at = datetime.now(UTC)
         session.add(submission)
-        return cached_scrub
+        return stats
+
+    privacy_flags = sorted({flag for _, _, scrubbed in usable for flag in scrubbed.report.flags})
+    privacy_status = _worst_status(
+        [scrubbed.report.status for _, _, scrubbed in usable], _PRIVACY_STATUS_RANK, "clean"
+    )
+    extraction_status = _worst_status(
+        [extracted.status for _, extracted, _ in usable], _EXTRACTION_STATUS_RANK, "supported"
+    )
+    student_label = usable[0][2].student_label
+    source_label = usable[0][2].source_label
+    combined_content = _combine_submission_content(usable)
+    mime_type = usable[0][0].mime_type if len(usable) == 1 else "multipart/mixed"
 
     try:
         log_debug(
@@ -917,11 +1020,11 @@ def _draft_submission(
             submission_id=submission.id,
             engine=grading_engine.name,
             model=getattr(grading_engine, "model", None),
-            student_label=scrubbed.student_label,
-            source_label=scrubbed.source_label,
-            mime_type=submission.mime_type,
-            content_chars=len(scrubbed.content),
-            content_preview=text_preview(scrubbed.content),
+            student_label=student_label,
+            source_label=source_label,
+            file_count=len(usable),
+            content_chars=len(combined_content),
+            content_preview=text_preview(combined_content),
         )
         result = grading_engine.grade(
             GradingEngineRequest(
@@ -940,10 +1043,10 @@ def _draft_submission(
                     }
                     for criterion in criteria
                 ],
-                student_label=scrubbed.student_label,
-                source_label=scrubbed.source_label,
-                mime_type=submission.mime_type,
-                content=scrubbed.content,
+                student_label=student_label,
+                source_label=source_label,
+                mime_type=mime_type,
+                content=combined_content,
             )
         )
     except Exception:
@@ -960,9 +1063,10 @@ def _draft_submission(
             submission=submission,
             engine=grading_engine,
             status="failed",
-            extraction_status=extracted.status,
-            privacy_status=scrubbed.report.status,
-            flags=scrubbed.report.flags,
+            extraction_status=extraction_status,
+            privacy_status=privacy_status,
+            flags=[],
+            privacy_flags=privacy_flags,
             retry_count=retry_count,
             safe_error="grading_engine_failed",
         )
@@ -970,9 +1074,9 @@ def _draft_submission(
         submission.error = attempt.safe_error
         submission.updated_at = datetime.now(UTC)
         session.add(submission)
-        return cached_scrub
+        return stats
 
-    flags = sorted(set([*scrubbed.report.flags, *result.flags]))
+    grading_flags = sorted(set(result.flags))
     attempt_metadata = _attempt_metadata(grading_engine)
     log_event(
         logger,
@@ -985,7 +1089,7 @@ def _draft_submission(
         confidence=result.confidence,
         feedback=result.feedback,
         result_flags=result.flags,
-        combined_flags=flags,
+        privacy_flags=privacy_flags,
     )
     _record_attempt(
         session=session,
@@ -993,9 +1097,10 @@ def _draft_submission(
         submission=submission,
         engine=grading_engine,
         status="completed",
-        extraction_status=extracted.status,
-        privacy_status=scrubbed.report.status,
-        flags=flags,
+        extraction_status=extraction_status,
+        privacy_status=privacy_status,
+        flags=grading_flags,
+        privacy_flags=privacy_flags,
         retry_count=retry_count,
         prompt_tokens=attempt_metadata["prompt_tokens"],
         completion_tokens=attempt_metadata["completion_tokens"],
@@ -1024,7 +1129,7 @@ def _draft_submission(
     # The single badge prefers the engine's human-review flags; privacy
     # redaction categories (name/cpf/...) are informational and only used as a
     # fallback when the engine raised no review flag of its own.
-    badge_flags = result.flags or flags
+    badge_flags = grading_flags or privacy_flags
     submission.flag = None if auto_accept else badge_flags[0] if badge_flags else None
     submission.error = None
     submission.updated_at = datetime.now(UTC)
@@ -1042,7 +1147,7 @@ def _draft_submission(
         flag=submission.flag,
         error=submission.error,
     )
-    return cached_scrub
+    return stats
 
 
 def _apply_criterion_notes(
@@ -1205,7 +1310,18 @@ def _sum_float_optional(values) -> float | None:
 def _submission_read(
     submission: GradingSubmission,
     attempt: GradingAiAttempt | None,
+    files: list[GradingSubmissionFile] | None = None,
 ) -> GradingSubmissionRead:
+    file_rows = files if files is not None else [
+        GradingSubmissionFile(
+            id=submission.id,
+            job_id=submission.job_id,
+            submission_id=submission.id,
+            source_file_id=submission.source_file_id,
+            source_name=submission.source_name,
+            mime_type=submission.mime_type,
+        )
+    ]
     return GradingSubmissionRead(
         id=submission.id,
         student_email=submission.student_email,
@@ -1213,6 +1329,14 @@ def _submission_read(
         source_file_id=submission.source_file_id,
         source_name=submission.source_name,
         mime_type=submission.mime_type,
+        files=[
+            GradingSubmissionFileRead(
+                source_file_id=row.source_file_id,
+                source_name=row.source_name,
+                mime_type=row.mime_type,
+            )
+            for row in file_rows
+        ],
         ai_score=submission.ai_score,
         confidence=submission.confidence,
         final_score=submission.final_score,
@@ -1255,22 +1379,101 @@ def _int_or_none(value: object) -> int | None:
         return None
 
 
+def group_key_for(file: SubmissionFile) -> str:
+    """Key that collapses a student's attachments into one submission. The real
+    provider supplies the Classroom submission id; otherwise each file is its own
+    group (preserving single-file behavior)."""
+    return file.classroom_submission_id or file.source_file_id
+
+
+def _group_files(files: list[SubmissionFile]) -> list[list[SubmissionFile]]:
+    """Group attachments by submission, preserving first-seen order."""
+    groups: list[list[SubmissionFile]] = []
+    index: dict[str, int] = {}
+    for file in files:
+        key = group_key_for(file)
+        if key not in index:
+            index[key] = len(groups)
+            groups.append([])
+        groups[index[key]].append(file)
+    return groups
+
+
+def ensure_submission_file(
+    session: Session,
+    job: GradingJob,
+    submission: GradingSubmission,
+    file: SubmissionFile,
+    *,
+    commit: bool = True,
+) -> GradingSubmissionFile:
+    existing = session.exec(
+        select(GradingSubmissionFile)
+        .where(GradingSubmissionFile.submission_id == submission.id)
+        .where(GradingSubmissionFile.source_file_id == file.source_file_id)
+    ).first()
+    if existing:
+        return existing
+    row = GradingSubmissionFile(
+        id=str(uuid4()),
+        job_id=job.id,
+        submission_id=submission.id,
+        source_file_id=file.source_file_id,
+        source_name=file.source_name,
+        mime_type=file.mime_type,
+    )
+    session.add(row)
+    if commit:
+        session.commit()
+    else:
+        session.flush()
+    return row
+
+
+def submission_files(
+    session: Session, submission: GradingSubmission
+) -> list[GradingSubmissionFile]:
+    """All attachments for a submission, newest-group-first by insertion. Falls back
+    to a synthetic single-file view for legacy rows created before grouping."""
+    rows = session.exec(
+        select(GradingSubmissionFile)
+        .where(GradingSubmissionFile.submission_id == submission.id)
+        .order_by(GradingSubmissionFile.created_at)
+    ).all()
+    if rows:
+        return list(rows)
+    return [
+        GradingSubmissionFile(
+            id=submission.id,
+            job_id=submission.job_id,
+            submission_id=submission.id,
+            source_file_id=submission.source_file_id,
+            source_name=submission.source_name,
+            mime_type=submission.mime_type,
+        )
+    ]
+
+
 def _submission_for_file(
     session: Session,
     job: GradingJob,
     file: SubmissionFile,
 ) -> GradingSubmission:
+    group_key = group_key_for(file)
     existing = session.exec(
         select(GradingSubmission)
         .where(GradingSubmission.job_id == job.id)
-        .where(GradingSubmission.source_file_id == file.source_file_id)
+        .where(GradingSubmission.group_key == group_key)
     ).first()
     if existing:
+        ensure_submission_file(session, job, existing, file, commit=False)
+        session.commit()
         log_event(
             logger,
             "grading.submission.hit",
             job_id=job.id,
             submission_id=existing.id,
+            group_key=group_key,
             source_file_id=file.source_file_id,
             student_email=existing.student_email,
             student_name=existing.student_name,
@@ -1279,6 +1482,7 @@ def _submission_for_file(
     row = GradingSubmission(
         id=str(uuid4()),
         job_id=job.id,
+        group_key=group_key,
         student_email=file.student_email,
         student_name=file.student_name,
         source_file_id=file.source_file_id,
@@ -1286,6 +1490,8 @@ def _submission_for_file(
         mime_type=file.mime_type,
     )
     session.add(row)
+    session.flush()
+    ensure_submission_file(session, job, row, file, commit=False)
     session.commit()
     session.refresh(row)
     log_event(
@@ -1293,6 +1499,7 @@ def _submission_for_file(
         "grading.submission.create",
         job_id=job.id,
         submission_id=row.id,
+        group_key=group_key,
         source_file_id=file.source_file_id,
         source_name=file.source_name,
         student_email=file.student_email,

@@ -533,14 +533,10 @@ def test_grade_loop_no_longer_swaps_criteria(tmp_path) -> None:
     with Session(engine) as session:
         job = _seed_infer_job(session, description=None)
         files = provider.list_submission_files("course-infer", ["activity-infer"])
-        from classroom_downloader.grading import (
-            _submission_for_file,
-            cache_submission_file,
-        )
+        from classroom_downloader.grading import _submission_for_file
 
         submission = _submission_for_file(session, job, files[0])
-        cache_file = cache_submission_file(session, job, submission, files[0], provider)
-        _draft_submission(session, job, submission, cache_file, _InferReturningEngine())
+        _draft_submission(session, job, submission, files, provider, _InferReturningEngine())
         session.commit()
         names = {
             row.name
@@ -1692,6 +1688,7 @@ def _seed_preview_cache(
 ) -> tuple[str, str]:
     job_id = f"preview-job-{uuid4()}"
     submission_id = f"preview-submission-{uuid4()}"
+    source_file_id = f"file-{uuid4()}"
     cache_dir = tmp_path / job_id
     cache_dir.mkdir(parents=True)
     cached_path = cache_dir / source_name
@@ -1713,7 +1710,7 @@ def _seed_preview_cache(
             GradingSubmission(
                 id=submission_id,
                 job_id=job_id,
-                source_file_id=f"file-{uuid4()}",
+                source_file_id=source_file_id,
                 source_name=source_name,
                 mime_type=mime_type,
             )
@@ -1723,7 +1720,7 @@ def _seed_preview_cache(
                 id=f"cache-{uuid4()}",
                 job_id=job_id,
                 submission_id=submission_id,
-                source_file_id=f"file-{uuid4()}",
+                source_file_id=source_file_id,
                 source_name=source_name,
                 mime_type=mime_type,
                 cached_path=str(cached_path),

@@ -253,6 +253,7 @@ export const api = {
       return response;
     }),
   gradingCsvUrl: (jobId: string) => `${API_BASE}/api/grading/jobs/${jobId}/export.csv`,
-  submissionPreviewUrl: (jobId: string, submissionId: string) =>
-    `${API_BASE}/api/grading/jobs/${jobId}/submissions/${submissionId}/preview`,
+  submissionPreviewUrl: (jobId: string, submissionId: string, fileId?: string) =>
+    `${API_BASE}/api/grading/jobs/${jobId}/submissions/${submissionId}/preview` +
+    (fileId ? `?file_id=${encodeURIComponent(fileId)}` : ""),
 };

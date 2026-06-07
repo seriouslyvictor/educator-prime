@@ -87,6 +87,9 @@ class SubmissionFile:
     source_name: str
     mime_type: str
     content: bytes = b""
+    # Groups a student's attachments into one submission. Real provider sets this to
+    # the Classroom studentSubmission id; when absent, callers fall back to source_file_id.
+    classroom_submission_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -197,6 +200,7 @@ def drive_files_from_submission(
                 source_file_id=file_id,
                 source_name=drive_file.get("title") or drive_file.get("name") or file_id,
                 mime_type=drive_file.get("mimeType") or "application/octet-stream",
+                classroom_submission_id=submission_id or None,
             )
         )
     log_event(
@@ -732,6 +736,15 @@ class MockGoogleProvider(GoogleProvider):
                 "the organization and mechanics of your writing."
             ),
         ),
+        ClassroomActivity(
+            "activity-4",
+            "course-2",
+            "Projeto Final (multi-arquivo)",
+            "ASSIGNMENT",
+            "PUBLISHED",
+            "Jun 5",
+            description="Envie as duas partes do projeto como anexos.",
+        ),
     ]
 
     files = [
@@ -778,6 +791,32 @@ class MockGoogleProvider(GoogleProvider):
             "essay draft.docx",
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             b"Mock DOCX bytes for Diego Lima\n",
+        ),
+        # One student (Júlia) submits two attachments under a single Classroom
+        # submission — they must collapse into one card graded as a set.
+        SubmissionFile(
+            "sub-julia:drive-file-5",
+            "course-2",
+            "activity-4",
+            "julia.rocha@example.edu",
+            "Júlia Rocha",
+            "drive-file-5",
+            "parte-1.txt",
+            "text/plain",
+            b"Parte 1: introducao do projeto final de Julia.\n",
+            classroom_submission_id="sub-julia",
+        ),
+        SubmissionFile(
+            "sub-julia:drive-file-6",
+            "course-2",
+            "activity-4",
+            "julia.rocha@example.edu",
+            "Júlia Rocha",
+            "drive-file-6",
+            "parte-2.txt",
+            "text/plain",
+            b"Parte 2: conclusao do projeto final de Julia.\n",
+            classroom_submission_id="sub-julia",
         ),
     ]
 

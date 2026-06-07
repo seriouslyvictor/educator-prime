@@ -7,7 +7,11 @@ from uuid import uuid4
 from sqlmodel import Session, select
 
 from .google_provider import GoogleProvider, SubmissionFile
-from .grading import cache_submission_file, scrub_submission_cached
+from .grading import (
+    _submission_for_file,
+    cache_submission_file,
+    scrub_submission_cached,
+)
 from .models import GradingJob, GradingSubmission, PrivacyAudit, PrivacyAuditRow
 from .observability import get_logger, log_debug, log_event, safe_fields
 from .privacy import pseudonym_for_submission
@@ -241,47 +245,11 @@ def _submission_for_audit(
     job: GradingJob,
     file: SubmissionFile,
 ) -> GradingSubmission:
-    existing = session.exec(
-        select(GradingSubmission)
-        .where(GradingSubmission.job_id == job.id)
-        .where(GradingSubmission.source_file_id == file.source_file_id)
-    ).first()
-    if existing:
-        log_event(
-            logger,
-            "privacy_audit.submission.hit",
-            job_id=job.id,
-            submission_id=existing.id,
-            source_file_id=file.source_file_id,
-            student_email=existing.student_email,
-            student_name=existing.student_name,
-        )
-        return existing
-    row = GradingSubmission(
-        id=str(uuid4()),
-        job_id=job.id,
-        student_email=file.student_email,
-        student_name=file.student_name,
-        source_file_id=file.source_file_id,
-        source_name=file.source_name,
-        mime_type=file.mime_type,
-    )
-    session.add(row)
-    session.flush()
-    session.refresh(row)
-    pseudonym_for_submission(session, job, row, commit=False)
-    log_event(
-        logger,
-        "privacy_audit.submission.create",
-        job_id=job.id,
-        submission_id=row.id,
-        source_file_id=file.source_file_id,
-        source_name=file.source_name,
-        student_email=file.student_email,
-        student_name=file.student_name,
-        mime_type=file.mime_type,
-    )
-    return row
+    # Group a student's attachments into one submission (shared with the draft path),
+    # then ensure the pseudonym exists. The audit still emits one row per file.
+    submission = _submission_for_file(session, job, file)
+    pseudonym_for_submission(session, job, submission, commit=False)
+    return submission
 
 
 def _refresh_audit_counts(session: Session, audit: PrivacyAudit) -> None:

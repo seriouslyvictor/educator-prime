@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../../lib/api";
-import type { GradingJob, GradingSubmission, PrivacyAudit } from "../../types";
+import type { GradingJob, GradingSubmission, GradingSubmissionFile, PrivacyAudit } from "../../types";
 import { AppIcon } from "../icons";
 import { GraderTopbar } from "./GraderTopbar";
 import {
   privacyLabel,
   privacyTone,
+  redactionLabel,
   redactionSummary,
   safeStatusLabel,
 } from "./graderStatus";
@@ -233,7 +234,9 @@ export function GraderReview({
                   <div className="preview-student-copy">
                     <div className="name">{studentLabel(active)}</div>
                     <div className="file">
-                      {active.source_name} · {active.mime_type}
+                      {active.files && active.files.length > 1
+                        ? `${active.files.length} arquivos`
+                        : `${active.source_name} · ${active.mime_type}`}
                       {active.confidence != null && !blockedActive
                         ? ` · ${Math.round(active.confidence * 100)}% confiança`
                         : ""}
@@ -256,7 +259,7 @@ export function GraderReview({
                 {blockedActive ? (
                   <BlockedEvidence jobId={job.id} submission={active} busy={busy} onRetry={() => onRetry(active)} />
                 ) : (
-                  <SubmissionPreview job={job} submission={active} />
+                  <SubmissionFiles job={job} submission={active} />
                 )}
               </div>
             </>
@@ -441,8 +444,9 @@ function AuditReport({ audit, onClose }: { audit: PrivacyAudit; onClose: () => v
 function PrivacyBlock({ submission }: { submission: GradingSubmission }) {
   const tone = privacyTone(submission);
   const label = privacyLabel(submission.privacy_status);
-  const flags = [...submission.ai_flags];
-  if (submission.flag) flags.push(submission.flag);
+  // Only redaction categories belong here — never the engine's grading flags,
+  // which surface in the flag-banner above.
+  const flags = submission.privacy_flags ?? [];
   return (
     <div className={`privacy-block ${tone}`}>
       <div className="pb-row">
@@ -464,7 +468,7 @@ function PrivacyBlock({ submission }: { submission: GradingSubmission }) {
           {flags.length ? (
             <div className="pb-flags">
               {flags.map((flag) => (
-                <span className="pb-flag" key={flag}><AppIcon name="eyeOff" /> {safeStatusLabel(flag)}</span>
+                <span className="pb-flag" key={flag}><AppIcon name="eyeOff" /> {redactionLabel(flag)}</span>
               ))}
             </div>
           ) : null}
@@ -589,14 +593,56 @@ function extensionOf(name: string): string {
   return index >= 0 ? name.slice(index).toLowerCase() : "";
 }
 
-function isInlineTextSubmission(submission: GradingSubmission, mime: string): boolean {
+function isInlineTextSubmission(sourceName: string, mime: string): boolean {
   if (mime.startsWith("text/") || INLINE_TEXT_MIME.has(mime)) return true;
-  return mime === "application/octet-stream" && INLINE_TEXT_EXTENSIONS.has(extensionOf(submission.source_name));
+  return mime === "application/octet-stream" && INLINE_TEXT_EXTENSIONS.has(extensionOf(sourceName));
 }
 
-function SubmissionPreview({ job, submission }: { job: GradingJob; submission: GradingSubmission }) {
-  const url = api.submissionPreviewUrl(job.id, submission.id);
-  const mime = (submission.mime_type ?? "").split(";")[0].trim().toLowerCase();
+// A student's submission may carry several attachments; show one tab per file.
+function SubmissionFiles({ job, submission }: { job: GradingJob; submission: GradingSubmission }) {
+  const files: GradingSubmissionFile[] = submission.files?.length
+    ? submission.files
+    : [{ source_file_id: submission.source_file_id, source_name: submission.source_name, mime_type: submission.mime_type }];
+  const [activeFileId, setActiveFileId] = useState(files[0].source_file_id);
+  useEffect(() => {
+    setActiveFileId(files[0].source_file_id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [submission.id]);
+  const activeFile = files.find((file) => file.source_file_id === activeFileId) ?? files[0];
+
+  return (
+    <>
+      {files.length > 1 ? (
+        <div className="file-tabs" role="tablist" aria-label="Arquivos da entrega">
+          {files.map((file) => (
+            <button
+              key={file.source_file_id}
+              role="tab"
+              aria-selected={file.source_file_id === activeFile.source_file_id}
+              className={`file-tab ${file.source_file_id === activeFile.source_file_id ? "active" : ""}`}
+              onClick={() => setActiveFileId(file.source_file_id)}
+            >
+              <AppIcon name="fileText" /> {file.source_name}
+            </button>
+          ))}
+        </div>
+      ) : null}
+      <SubmissionPreview job={job} submission={submission} file={activeFile} />
+    </>
+  );
+}
+
+function SubmissionPreview({
+  job,
+  submission,
+  file,
+}: {
+  job: GradingJob;
+  submission: GradingSubmission;
+  file: GradingSubmissionFile;
+}) {
+  const url = api.submissionPreviewUrl(job.id, submission.id, file.source_file_id);
+  const mime = (file.mime_type ?? "").split(";")[0].trim().toLowerCase();
   const title = `Entrega de ${studentLabel(submission)}`;
 
   if (INLINE_IMAGE_MIME.has(mime)) {
@@ -606,8 +652,8 @@ function SubmissionPreview({ job, submission }: { job: GradingJob; submission: G
       </div>
     );
   }
-  if (isInlineTextSubmission(submission, mime)) {
-    return <SubmissionTextPreview url={url} title={title} fileName={submission.source_name} mimeType={submission.mime_type} />;
+  if (isInlineTextSubmission(file.source_name, mime)) {
+    return <SubmissionTextPreview url={url} title={title} fileName={file.source_name} mimeType={file.mime_type} />;
   }
   if (mime === "application/pdf") {
     return <iframe className="preview-frame" src={url} title={title} />;
@@ -616,8 +662,8 @@ function SubmissionPreview({ job, submission }: { job: GradingJob; submission: G
     <div className="preview-card">
       <AppIcon name="fileText" />
       <div className="preview-card-copy">
-        <strong>{submission.source_name}</strong>
-        <span>{submission.mime_type || "arquivo"}</span>
+        <strong>{file.source_name}</strong>
+        <span>{file.mime_type || "arquivo"}</span>
       </div>
       <a className="btn btn-secondary" href={url} target="_blank" rel="noreferrer">
         <AppIcon name="download" /> Baixar original

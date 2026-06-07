@@ -70,6 +70,7 @@ def _ensure_grading_submission_columns(target_engine: Engine) -> None:
         target_engine,
         "gradingsubmission",
         {
+            "group_key": "VARCHAR",
             "classroom_submission_id": "VARCHAR",
             "alternate_link": "VARCHAR",
             "posted_to_classroom": "BOOLEAN DEFAULT 0",

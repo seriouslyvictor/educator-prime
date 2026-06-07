@@ -91,6 +91,12 @@ export interface GradingCriterionInput {
   description?: string | null;
 }
 
+export interface GradingSubmissionFile {
+  source_file_id: string;
+  source_name: string;
+  mime_type: string;
+}
+
 export interface GradingSubmission {
   id: string;
   student_email: string | null;
@@ -98,6 +104,7 @@ export interface GradingSubmission {
   source_file_id: string;
   source_name: string;
   mime_type: string;
+  files: GradingSubmissionFile[];
   ai_score: number | null;
   confidence: number | null;
   final_score: number | null;

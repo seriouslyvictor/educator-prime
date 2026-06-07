@@ -120,8 +120,12 @@ class GradingCriterion(SQLModel, table=True):
 class GradingSubmission(SQLModel, table=True):
     id: str = Field(primary_key=True)
     job_id: str = Field(index=True)
+    # Groups a student's attachments into one card. Defaults to source_file_id for
+    # single-file submissions; set to the Classroom submission id when grouping.
+    group_key: str | None = Field(default=None, index=True)
     student_email: str | None = None
     student_name: str | None = None
+    # Primary file (first attachment seen); all attachments live in GradingSubmissionFile.
     source_file_id: str
     source_name: str
     mime_type: str
@@ -138,6 +142,19 @@ class GradingSubmission(SQLModel, table=True):
     posted_at: datetime | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class GradingSubmissionFile(SQLModel, table=True):
+    """One attachment within a grouped submission. A student who submits multiple
+    files gets one GradingSubmission and one of these rows per file."""
+
+    id: str = Field(primary_key=True)
+    job_id: str = Field(index=True)
+    submission_id: str = Field(index=True)
+    source_file_id: str
+    source_name: str
+    mime_type: str
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class GradingFileCache(SQLModel, table=True):
