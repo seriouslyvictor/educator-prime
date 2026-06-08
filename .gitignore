@@ -15,4 +15,8 @@ dist/
 .tokens/
 .superpowers/
 .cache/
+.claude
 docs
+graphify-out/cost.json       
+graphify-out/cache/       
+study-roadmap.md  
