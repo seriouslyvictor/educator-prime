@@ -1,337 +1,407 @@
 {
-  "D:\\Classroom Downloader\\.claude\\settings.local.json": {
+  ".claude/settings.local.json": {
     "mtime": 1780674745.1390164,
     "ast_hash": "d500bc58a20245ef3b583e32236c5f3a",
     "semantic_hash": "d500bc58a20245ef3b583e32236c5f3a"
   },
-  "D:\\Classroom Downloader\\apps\\api\\config\\llm-model-overrides.json": {
+  "apps/api/config/llm-model-overrides.json": {
     "mtime": 1780635820.067061,
     "ast_hash": "8f241f018f3090735ca4a4094a6adcc1",
     "semantic_hash": "8f241f018f3090735ca4a4094a6adcc1"
   },
-  "D:\\Classroom Downloader\\apps\\api\\scripts\\smoke_litellm_grading.py": {
+  "apps/api/scripts/smoke_litellm_grading.py": {
     "mtime": 1780630756.7081685,
     "ast_hash": "7cbc48ed82b93257ecb840d52d16d400",
     "semantic_hash": "7cbc48ed82b93257ecb840d52d16d400"
   },
-  "D:\\Classroom Downloader\\apps\\api\\src\\classroom_downloader\\__init__.py": {
+  "apps/api/src/classroom_downloader/__init__.py": {
     "mtime": 1779244653.8871336,
     "ast_hash": "f419496b11b4ade913ab84377a70affc",
     "semantic_hash": "f419496b11b4ade913ab84377a70affc"
   },
-  "D:\\Classroom Downloader\\apps\\api\\src\\classroom_downloader\\content_extraction.py": {
+  "apps/api/src/classroom_downloader/content_extraction.py": {
     "mtime": 1780612249.0595798,
     "ast_hash": "c31fb4a3cdf8511010dcfa3458cf9178",
     "semantic_hash": "c31fb4a3cdf8511010dcfa3458cf9178"
   },
-  "D:\\Classroom Downloader\\apps\\api\\src\\classroom_downloader\\database.py": {
-    "mtime": 1780848183.4884205,
-    "ast_hash": "f83adf918b8cd7479b5670be64ea585c",
-    "semantic_hash": "f83adf918b8cd7479b5670be64ea585c"
+  "apps/api/src/classroom_downloader/database.py": {
+    "mtime": 1780952287.9311738,
+    "ast_hash": "84b99e535ff40c894836f0c8f3709a0f",
+    "semantic_hash": ""
   },
-  "D:\\Classroom Downloader\\apps\\api\\src\\classroom_downloader\\google_provider.py": {
-    "mtime": 1780849488.3838704,
-    "ast_hash": "c6da19a35ff1a7798a70ca006958d5ba",
-    "semantic_hash": "c6da19a35ff1a7798a70ca006958d5ba"
+  "apps/api/src/classroom_downloader/google_provider.py": {
+    "mtime": 1780968999.8906553,
+    "ast_hash": "faca5f77f89fbf5c63a5241256da70dd",
+    "semantic_hash": ""
   },
-  "D:\\Classroom Downloader\\apps\\api\\src\\classroom_downloader\\grading.py": {
+  "apps/api/src/classroom_downloader/grading.py": {
     "mtime": 1780849082.5970361,
     "ast_hash": "5b03bacf6a1757b1802243e747688e96",
     "semantic_hash": "5b03bacf6a1757b1802243e747688e96"
   },
-  "D:\\Classroom Downloader\\apps\\api\\src\\classroom_downloader\\grading_engine.py": {
+  "apps/api/src/classroom_downloader/grading_engine.py": {
     "mtime": 1780719305.894033,
     "ast_hash": "7f97ac8a945b0be7cac8397dff7e02e1",
     "semantic_hash": "7f97ac8a945b0be7cac8397dff7e02e1"
   },
-  "D:\\Classroom Downloader\\apps\\api\\src\\classroom_downloader\\litellm_engine.py": {
+  "apps/api/src/classroom_downloader/litellm_engine.py": {
     "mtime": 1780793318.6153483,
     "ast_hash": "10080225eca57c4cd02f96d8bb4c6c96",
     "semantic_hash": "10080225eca57c4cd02f96d8bb4c6c96"
   },
-  "D:\\Classroom Downloader\\apps\\api\\src\\classroom_downloader\\llm_catalog.py": {
+  "apps/api/src/classroom_downloader/llm_catalog.py": {
     "mtime": 1780612249.0756357,
     "ast_hash": "ff2d1fd1b230a9d5d095f8b4bdb3cb7b",
     "semantic_hash": "ff2d1fd1b230a9d5d095f8b4bdb3cb7b"
   },
-  "D:\\Classroom Downloader\\apps\\api\\src\\classroom_downloader\\main.py": {
-    "mtime": 1780849102.3956225,
-    "ast_hash": "1c839afb7bd7fd46139ae0d091585f87",
-    "semantic_hash": "1c839afb7bd7fd46139ae0d091585f87"
+  "apps/api/src/classroom_downloader/main.py": {
+    "mtime": 1780973239.5210612,
+    "ast_hash": "e7928b5734c45b20f0c924b543c08cf5",
+    "semantic_hash": ""
   },
-  "D:\\Classroom Downloader\\apps\\api\\src\\classroom_downloader\\models.py": {
-    "mtime": 1780848172.428302,
-    "ast_hash": "329adcea6c0d9e3c0232e6d872e0241e",
-    "semantic_hash": "329adcea6c0d9e3c0232e6d872e0241e"
+  "apps/api/src/classroom_downloader/models.py": {
+    "mtime": 1780952233.3345292,
+    "ast_hash": "0254db112d2c251eb15f1559c09bfa3d",
+    "semantic_hash": ""
   },
-  "D:\\Classroom Downloader\\apps\\api\\src\\classroom_downloader\\naming.py": {
+  "apps/api/src/classroom_downloader/naming.py": {
     "mtime": 1779245123.240474,
     "ast_hash": "163ebc71bf7e7be3749214cc4d0271ba",
     "semantic_hash": "163ebc71bf7e7be3749214cc4d0271ba"
   },
-  "D:\\Classroom Downloader\\apps\\api\\src\\classroom_downloader\\observability.py": {
+  "apps/api/src/classroom_downloader/observability.py": {
     "mtime": 1780630756.717526,
     "ast_hash": "c6e0935ea21b8e2939807c28fd9487f5",
     "semantic_hash": "c6e0935ea21b8e2939807c28fd9487f5"
   },
-  "D:\\Classroom Downloader\\apps\\api\\src\\classroom_downloader\\privacy.py": {
+  "apps/api/src/classroom_downloader/privacy.py": {
     "mtime": 1780802615.417532,
     "ast_hash": "a4e702fd7f3e0230fb1e796ee9894556",
     "semantic_hash": "a4e702fd7f3e0230fb1e796ee9894556"
   },
-  "D:\\Classroom Downloader\\apps\\api\\src\\classroom_downloader\\privacy_audit.py": {
+  "apps/api/src/classroom_downloader/privacy_audit.py": {
     "mtime": 1780848558.2516503,
     "ast_hash": "ad353cf21dd937356b3b43a77f264035",
     "semantic_hash": "ad353cf21dd937356b3b43a77f264035"
   },
-  "D:\\Classroom Downloader\\apps\\api\\src\\classroom_downloader\\schemas.py": {
+  "apps/api/src/classroom_downloader/schemas.py": {
     "mtime": 1780848215.7486885,
     "ast_hash": "ef824542aa7fbd9ebc7bb7820b7b49e1",
     "semantic_hash": "ef824542aa7fbd9ebc7bb7820b7b49e1"
   },
-  "D:\\Classroom Downloader\\apps\\api\\src\\classroom_downloader\\settings.py": {
-    "mtime": 1780849051.808945,
-    "ast_hash": "70e8ae8dbf5dd88ec57f1af22d6ad496",
-    "semantic_hash": "70e8ae8dbf5dd88ec57f1af22d6ad496"
+  "apps/api/src/classroom_downloader/settings.py": {
+    "mtime": 1780952239.4626677,
+    "ast_hash": "d8861859dfe594f7dc74ef42e4f6178f",
+    "semantic_hash": ""
   },
-  "D:\\Classroom Downloader\\apps\\api\\tests\\conftest.py": {
+  "apps/api/tests/conftest.py": {
     "mtime": 1780635324.6980536,
     "ast_hash": "f557a091737867152bbc7afd99870f91",
     "semantic_hash": "f557a091737867152bbc7afd99870f91"
   },
-  "D:\\Classroom Downloader\\apps\\api\\tests\\test_api.py": {
-    "mtime": 1780802633.1060202,
-    "ast_hash": "0e123dd8593d0907d3b8a4d72261aab4",
-    "semantic_hash": "0e123dd8593d0907d3b8a4d72261aab4"
+  "apps/api/tests/test_api.py": {
+    "mtime": 1780972573.3867927,
+    "ast_hash": "e4c2c3d93c996df687b41458cb158848",
+    "semantic_hash": ""
   },
-  "D:\\Classroom Downloader\\apps\\api\\tests\\test_database.py": {
+  "apps/api/tests/test_database.py": {
     "mtime": 1780807709.4606967,
     "ast_hash": "c7bd2880503929b8943bfc8437b77b68",
     "semantic_hash": "c7bd2880503929b8943bfc8437b77b68"
   },
-  "D:\\Classroom Downloader\\apps\\api\\tests\\test_google_provider_units.py": {
+  "apps/api/tests/test_google_provider_units.py": {
     "mtime": 1780849535.302367,
     "ast_hash": "7cae747c88cf18ac08101d7251f0c052",
     "semantic_hash": "7cae747c88cf18ac08101d7251f0c052"
   },
-  "D:\\Classroom Downloader\\apps\\api\\tests\\test_google_real_provider.py": {
+  "apps/api/tests/test_google_real_provider.py": {
     "mtime": 1780612265.4314487,
     "ast_hash": "8e554179f0a186c03e67e5fc658019ab",
     "semantic_hash": "8e554179f0a186c03e67e5fc658019ab"
   },
-  "D:\\Classroom Downloader\\apps\\api\\tests\\test_grading.py": {
-    "mtime": 1780849397.8226666,
-    "ast_hash": "aac5dbb09ce6fc38c6dbe5af4c9b43de",
-    "semantic_hash": "aac5dbb09ce6fc38c6dbe5af4c9b43de"
+  "apps/api/tests/test_grading.py": {
+    "mtime": 1780968581.2155454,
+    "ast_hash": "ea2cf91d0588bcc50109a4d2cc1391b8",
+    "semantic_hash": ""
   },
-  "D:\\Classroom Downloader\\apps\\api\\tests\\test_grading_resume.py": {
+  "apps/api/tests/test_grading_resume.py": {
     "mtime": 1780677894.8140287,
     "ast_hash": "ff933bdf60ff6925b5ade99aa8229be2",
     "semantic_hash": "ff933bdf60ff6925b5ade99aa8229be2"
   },
-  "D:\\Classroom Downloader\\apps\\api\\tests\\test_litellm_engine.py": {
+  "apps/api/tests/test_litellm_engine.py": {
     "mtime": 1780632003.4002106,
     "ast_hash": "5febe3630f0924f89653529e3318665f",
     "semantic_hash": "5febe3630f0924f89653529e3318665f"
   },
-  "D:\\Classroom Downloader\\apps\\api\\tests\\test_llm_catalog.py": {
+  "apps/api/tests/test_llm_catalog.py": {
     "mtime": 1780612249.0756357,
     "ast_hash": "8c4763f6f63b5c395fa82debf40a6fc8",
     "semantic_hash": "8c4763f6f63b5c395fa82debf40a6fc8"
   },
-  "D:\\Classroom Downloader\\apps\\api\\tests\\test_naming.py": {
+  "apps/api/tests/test_naming.py": {
     "mtime": 1779244655.5790472,
     "ast_hash": "6947084b7b1b9cb27df1b1323ecc363b",
     "semantic_hash": "6947084b7b1b9cb27df1b1323ecc363b"
   },
-  "D:\\Classroom Downloader\\apps\\api\\tests\\test_oauth_callback.py": {
-    "mtime": 1779248990.7402995,
-    "ast_hash": "559a3dc78876ce0dc4eb996a328ec3f0",
-    "semantic_hash": "559a3dc78876ce0dc4eb996a328ec3f0"
+  "apps/api/tests/test_oauth_callback.py": {
+    "mtime": 1780968603.0280266,
+    "ast_hash": "a3a91b9e2de2d906b15e146221c4a13a",
+    "semantic_hash": ""
   },
-  "D:\\Classroom Downloader\\apps\\api\\tests\\test_observability.py": {
+  "apps/api/tests/test_observability.py": {
     "mtime": 1780630756.72751,
     "ast_hash": "6dbed14ac81155fb3a1663e02bcd0fe5",
     "semantic_hash": "6dbed14ac81155fb3a1663e02bcd0fe5"
   },
-  "D:\\Classroom Downloader\\apps\\api\\tests\\test_privacy.py": {
+  "apps/api/tests/test_privacy.py": {
     "mtime": 1780803142.9973464,
     "ast_hash": "aa32b254760d78caec81c919585cccb1",
     "semantic_hash": "aa32b254760d78caec81c919585cccb1"
   },
-  "D:\\Classroom Downloader\\apps\\web\\package.json": {
+  "apps/web/package.json": {
     "mtime": 1779807775.9801054,
     "ast_hash": "05332e0e9259a3889429a572ca1fcd27",
     "semantic_hash": "05332e0e9259a3889429a572ca1fcd27"
   },
-  "D:\\Classroom Downloader\\apps\\web\\src\\App.tsx": {
+  "apps/web/src/App.tsx": {
     "mtime": 1780849189.3657422,
     "ast_hash": "f557bbaf3cea078a27336479f612e87d",
     "semantic_hash": "f557bbaf3cea078a27336479f612e87d"
   },
-  "D:\\Classroom Downloader\\apps\\web\\src\\components\\ActionBar.tsx": {
+  "apps/web/src/components/ActionBar.tsx": {
     "mtime": 1780612249.093089,
     "ast_hash": "f44f87b10a27fe73fd72499f13afd9c9",
     "semantic_hash": "f44f87b10a27fe73fd72499f13afd9c9"
   },
-  "D:\\Classroom Downloader\\apps\\web\\src\\components\\ConnectView.tsx": {
+  "apps/web/src/components/ConnectView.tsx": {
     "mtime": 1780630756.732434,
     "ast_hash": "85183cfed737ae4bbec6ac633d483270",
     "semantic_hash": "85183cfed737ae4bbec6ac633d483270"
   },
-  "D:\\Classroom Downloader\\apps\\web\\src\\components\\DoneView.tsx": {
+  "apps/web/src/components/DoneView.tsx": {
     "mtime": 1780630756.7334616,
     "ast_hash": "9bd35b73cc32d0faea4bceb58ec3924a",
     "semantic_hash": "9bd35b73cc32d0faea4bceb58ec3924a"
   },
-  "D:\\Classroom Downloader\\apps\\web\\src\\components\\DryRunDrawer.tsx": {
+  "apps/web/src/components/DryRunDrawer.tsx": {
     "mtime": 1780630756.7357268,
     "ast_hash": "7298efb54365e9e0454f955f0f6f3667",
     "semantic_hash": "7298efb54365e9e0454f955f0f6f3667"
   },
-  "D:\\Classroom Downloader\\apps\\web\\src\\components\\HistoryView.tsx": {
+  "apps/web/src/components/HistoryView.tsx": {
     "mtime": 1780630756.7357268,
     "ast_hash": "da8ac3d0ea902a809afd9e915968bf9f",
     "semantic_hash": "da8ac3d0ea902a809afd9e915968bf9f"
   },
-  "D:\\Classroom Downloader\\apps\\web\\src\\components\\ProgressView.tsx": {
+  "apps/web/src/components/ProgressView.tsx": {
     "mtime": 1780630756.7357268,
     "ast_hash": "4be4ceb4c402449d48f1dce8033d0f45",
     "semantic_hash": "4be4ceb4c402449d48f1dce8033d0f45"
   },
-  "D:\\Classroom Downloader\\apps\\web\\src\\components\\Rail.tsx": {
+  "apps/web/src/components/Rail.tsx": {
     "mtime": 1780630756.7424688,
     "ast_hash": "6b328337b00b869e06e48a8976e5b85f",
     "semantic_hash": "6b328337b00b869e06e48a8976e5b85f"
   },
-  "D:\\Classroom Downloader\\apps\\web\\src\\components\\ThemeToggle.tsx": {
+  "apps/web/src/components/ThemeToggle.tsx": {
     "mtime": 1780612249.1013927,
     "ast_hash": "ed446cf4d4da31021e40248e51d3cbf1",
     "semantic_hash": "ed446cf4d4da31021e40248e51d3cbf1"
   },
-  "D:\\Classroom Downloader\\apps\\web\\src\\components\\grader\\GraderQueue.tsx": {
+  "apps/web/src/components/grader/GraderQueue.tsx": {
     "mtime": 1780714149.7074604,
     "ast_hash": "2d22bc4bf8d8e18318a717151791081b",
     "semantic_hash": "2d22bc4bf8d8e18318a717151791081b"
   },
-  "D:\\Classroom Downloader\\apps\\web\\src\\components\\grader\\GraderReview.tsx": {
+  "apps/web/src/components/grader/GraderReview.tsx": {
     "mtime": 1780849297.6847234,
     "ast_hash": "4340af192657e2abb583f2044ffbef64",
     "semantic_hash": "4340af192657e2abb583f2044ffbef64"
   },
-  "D:\\Classroom Downloader\\apps\\web\\src\\components\\grader\\GraderSetup.tsx": {
+  "apps/web/src/components/grader/GraderSetup.tsx": {
     "mtime": 1780810523.453712,
     "ast_hash": "f476e41f290f035dcbf1854fc92313d7",
     "semantic_hash": "f476e41f290f035dcbf1854fc92313d7"
   },
-  "D:\\Classroom Downloader\\apps\\web\\src\\components\\grader\\GraderTopbar.tsx": {
+  "apps/web/src/components/grader/GraderTopbar.tsx": {
     "mtime": 1780630756.7458863,
     "ast_hash": "cefe806f8e18243e34f09b672751b825",
     "semantic_hash": "cefe806f8e18243e34f09b672751b825"
   },
-  "D:\\Classroom Downloader\\apps\\web\\src\\components\\grader\\GraderWrap.tsx": {
+  "apps/web/src/components/grader/GraderWrap.tsx": {
     "mtime": 1780792196.4910595,
     "ast_hash": "f7ca02d6fec9f5760e79ec2d0046b045",
     "semantic_hash": "f7ca02d6fec9f5760e79ec2d0046b045"
   },
-  "D:\\Classroom Downloader\\apps\\web\\src\\components\\grader\\graderStatus.ts": {
+  "apps/web/src/components/grader/graderStatus.ts": {
     "mtime": 1780802824.0826712,
     "ast_hash": "e95d4684900731e54f021cb593df682a",
     "semantic_hash": "e95d4684900731e54f021cb593df682a"
   },
-  "D:\\Classroom Downloader\\apps\\web\\src\\components\\grader\\index.ts": {
+  "apps/web/src/components/grader/index.ts": {
     "mtime": 1780715566.6053069,
     "ast_hash": "2a73b00b4d9c94fb2e96371a31a481fb",
     "semantic_hash": "2a73b00b4d9c94fb2e96371a31a481fb"
   },
-  "D:\\Classroom Downloader\\apps\\web\\src\\components\\icons.tsx": {
+  "apps/web/src/components/icons.tsx": {
     "mtime": 1780790079.3464837,
     "ast_hash": "c1e9d91710c906d7265e400dba09f8f7",
     "semantic_hash": "c1e9d91710c906d7265e400dba09f8f7"
   },
-  "D:\\Classroom Downloader\\apps\\web\\src\\components\\ui.tsx": {
+  "apps/web/src/components/ui.tsx": {
     "mtime": 1780630756.7533395,
     "ast_hash": "d7e67cca74b1075a86d713ebae75b317",
     "semantic_hash": "d7e67cca74b1075a86d713ebae75b317"
   },
-  "D:\\Classroom Downloader\\apps\\web\\src\\components\\workspace\\ActivityList.tsx": {
+  "apps/web/src/components/workspace/ActivityList.tsx": {
     "mtime": 1780714168.6586466,
     "ast_hash": "64ec08a090542ffc5beee9a3a42d6086",
     "semantic_hash": "64ec08a090542ffc5beee9a3a42d6086"
   },
-  "D:\\Classroom Downloader\\apps\\web\\src\\components\\workspace\\ClassroomList.tsx": {
+  "apps/web/src/components/workspace/ClassroomList.tsx": {
     "mtime": 1780784012.9218807,
     "ast_hash": "70e63faa6e7ebcb073ec6ccca7fed3c6",
     "semantic_hash": "70e63faa6e7ebcb073ec6ccca7fed3c6"
   },
-  "D:\\Classroom Downloader\\apps\\web\\src\\components\\workspace\\TurmasView.tsx": {
+  "apps/web/src/components/workspace/TurmasView.tsx": {
     "mtime": 1780857058.7100449,
     "ast_hash": "819df2ffc986e29fab5054778fcb771d",
     "semantic_hash": "819df2ffc986e29fab5054778fcb771d"
   },
-  "D:\\Classroom Downloader\\apps\\web\\src\\components\\workspace\\index.ts": {
+  "apps/web/src/components/workspace/index.ts": {
     "mtime": 1780784143.555186,
     "ast_hash": "c1c1f24b137a843c1c837f21bc14ed85",
     "semantic_hash": "c1c1f24b137a843c1c837f21bc14ed85"
   },
-  "D:\\Classroom Downloader\\apps\\web\\src\\lib\\api.ts": {
+  "apps/web/src/lib/api.ts": {
     "mtime": 1780848818.5604937,
     "ast_hash": "4b49cb5993371aebd495d15a18f32fae",
     "semantic_hash": "4b49cb5993371aebd495d15a18f32fae"
   },
-  "D:\\Classroom Downloader\\apps\\web\\src\\lib\\folder-export.ts": {
+  "apps/web/src/lib/folder-export.ts": {
     "mtime": 1780612249.1067848,
     "ast_hash": "e813e7827c2248f5a8d5b89cc81c056c",
     "semantic_hash": "e813e7827c2248f5a8d5b89cc81c056c"
   },
-  "D:\\Classroom Downloader\\apps\\web\\src\\lib\\local-history.ts": {
+  "apps/web/src/lib/local-history.ts": {
     "mtime": 1779807775.99094,
     "ast_hash": "c10c751a6b56c3fb2cce2f34ae468c8e",
     "semantic_hash": "c10c751a6b56c3fb2cce2f34ae468c8e"
   },
-  "D:\\Classroom Downloader\\apps\\web\\src\\lib\\preview-tree.ts": {
+  "apps/web/src/lib/preview-tree.ts": {
     "mtime": 1780612249.1067848,
     "ast_hash": "07f0fb3f3e3da99b70291d1b8fa8adcc",
     "semantic_hash": "07f0fb3f3e3da99b70291d1b8fa8adcc"
   },
-  "D:\\Classroom Downloader\\apps\\web\\src\\lib\\theme.ts": {
+  "apps/web/src/lib/theme.ts": {
     "mtime": 1779807775.999249,
     "ast_hash": "53a30aa88ccd5636accd67409c02692a",
     "semantic_hash": "53a30aa88ccd5636accd67409c02692a"
   },
-  "D:\\Classroom Downloader\\apps\\web\\src\\main.tsx": {
+  "apps/web/src/main.tsx": {
     "mtime": 1780630756.7590327,
     "ast_hash": "28ff9538439fa9ff89efa58d0b6f544d",
     "semantic_hash": "28ff9538439fa9ff89efa58d0b6f544d"
   },
-  "D:\\Classroom Downloader\\apps\\web\\src\\types.ts": {
+  "apps/web/src/types.ts": {
     "mtime": 1780848798.5280666,
     "ast_hash": "f9ca48c5f12ff85235d3e6596a093686",
     "semantic_hash": "f9ca48c5f12ff85235d3e6596a093686"
   },
-  "D:\\Classroom Downloader\\apps\\web\\src\\vite-env.d.ts": {
+  "apps/web/src/vite-env.d.ts": {
     "mtime": 1779244819.4686885,
     "ast_hash": "5fbbb407b6e5c27720688df56356df38",
     "semantic_hash": "5fbbb407b6e5c27720688df56356df38"
   },
-  "D:\\Classroom Downloader\\apps\\web\\tsconfig.json": {
+  "apps/web/tsconfig.json": {
     "mtime": 1779244818.6593158,
     "ast_hash": "3e406117c398f31c1e8d7c5e9744644f",
     "semantic_hash": "3e406117c398f31c1e8d7c5e9744644f"
   },
-  "D:\\Classroom Downloader\\apps\\web\\vite.config.ts": {
+  "apps/web/vite.config.ts": {
     "mtime": 1780630756.7623,
     "ast_hash": "4731c318e0993878337aca242b0e1ddd",
     "semantic_hash": "4731c318e0993878337aca242b0e1ddd"
   },
-  "D:\\Classroom Downloader\\README.md": {
+  "README.md": {
     "mtime": 1780802847.7418694,
     "ast_hash": "19aedf867fd31e44e972afa0ee34b5ea",
     "semantic_hash": "19aedf867fd31e44e972afa0ee34b5ea"
   },
-  "D:\\Classroom Downloader\\apps\\web\\index.html": {
+  "apps/web/index.html": {
     "mtime": 1780612249.093089,
     "ast_hash": "83066fc063fc61aa05b98ccd5d594b93",
     "semantic_hash": "83066fc063fc61aa05b98ccd5d594b93"
+  },
+  "CLAUDE.md": {
+    "mtime": 1780885670.0208304,
+    "ast_hash": "8a6643a420fdad6bfb583523bc6cef16",
+    "semantic_hash": ""
+  },
+  "apps/api/scripts/route_snapshot.py": {
+    "mtime": 1780972299.5636797,
+    "ast_hash": "32d2fed801e92c0ce172ee3850395eec",
+    "semantic_hash": ""
+  },
+  "apps/api/src/classroom_downloader/api/__init__.py": {
+    "mtime": 1780972369.1328616,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": ""
+  },
+  "apps/api/src/classroom_downloader/api/auth_errors.py": {
+    "mtime": 1780972393.0993152,
+    "ast_hash": "06bcf0e7fa69439fbb87d10eda0556f3",
+    "semantic_hash": ""
+  },
+  "apps/api/src/classroom_downloader/api/common.py": {
+    "mtime": 1780972380.4567592,
+    "ast_hash": "ad715e902187ac35542cbbb633a2d84a",
+    "semantic_hash": ""
+  },
+  "apps/api/src/classroom_downloader/api/deps.py": {
+    "mtime": 1780972542.1489935,
+    "ast_hash": "cd3145621075468118e4daae147ed59f",
+    "semantic_hash": ""
+  },
+  "apps/api/src/classroom_downloader/api/session_cleanup.py": {
+    "mtime": 1780972406.5361686,
+    "ast_hash": "15d2d3b00d82c509067fb91c40fd3775",
+    "semantic_hash": ""
+  },
+  "apps/api/src/classroom_downloader/routers/__init__.py": {
+    "mtime": 1780972613.3958738,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": ""
+  },
+  "apps/api/src/classroom_downloader/routers/auth.py": {
+    "mtime": 1780972715.2159326,
+    "ast_hash": "32936ef05b03d4d9ec72a441d403b5ea",
+    "semantic_hash": ""
+  },
+  "apps/api/src/classroom_downloader/routers/courses.py": {
+    "mtime": 1780972806.0690272,
+    "ast_hash": "a08683635c8f157bee42c7a148b4ad56",
+    "semantic_hash": ""
+  },
+  "apps/api/src/classroom_downloader/routers/exports.py": {
+    "mtime": 1780972912.0368114,
+    "ast_hash": "d27c930e6833fa51ff24b2fab289ef46",
+    "semantic_hash": ""
+  },
+  "apps/api/src/classroom_downloader/routers/grading.py": {
+    "mtime": 1780973119.4659505,
+    "ast_hash": "a559d9b1a94fb3ef4c3fd44cb2019a08",
+    "semantic_hash": ""
+  },
+  "apps/api/src/classroom_downloader/routers/health.py": {
+    "mtime": 1780972618.346806,
+    "ast_hash": "d3e054f890afd36cc0eff091428e146f",
+    "semantic_hash": ""
+  },
+  "plan.md": {
+    "mtime": 1780972105.6570122,
+    "ast_hash": "45b1ba3a90cb2c528c45bd7af605c155",
+    "semantic_hash": ""
   }
 }
