@@ -117,7 +117,7 @@ def test_auth_me_profile_failure_keeps_loadable_google_token_signed_in(
             raise RuntimeError("stale token")
 
     monkeypatch.setattr(
-        "classroom_downloader.main.make_google_provider", lambda *_, **__: FailingProvider()
+        "classroom_downloader.api.deps.make_google_provider", lambda *_, **__: FailingProvider()
     )
 
     with TestClient(app) as client:
