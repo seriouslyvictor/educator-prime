@@ -1897,6 +1897,7 @@ def _seed_preview_cache(
                 rubric_mode="infer",
                 teacher_loop="approve",
                 total_submissions=1,
+                user_email="teacher@example.edu",
             )
         )
         session.add(

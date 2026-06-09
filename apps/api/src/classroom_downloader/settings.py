@@ -37,8 +37,11 @@ class Settings(BaseSettings):
     google_client_id: str | None = None
     google_client_secret: str | None = None
     google_redirect_uri: str = "http://localhost:8000/api/auth/google/callback"
-    google_token_path: str = ".tokens/google-user.json"
-    google_oauth_state_path: str = ".tokens/google-oauth-state.txt"
+    google_token_path: str = ".tokens/google-user.json"  # deprecated, ignored
+    google_oauth_state_path: str = ".tokens/google-oauth-state.txt"  # deprecated, ignored
+    session_secret_key: str | None = None
+    session_max_age_hours: int = 24
+    session_cookie_name: str = "cd_session"
     grading_cache_path: str = ".cache/grading"
     grading_cache_ttl_hours: int = 24
     classroom_cache_ttl_minutes: int = 10

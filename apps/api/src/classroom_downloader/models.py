@@ -23,6 +23,7 @@ class Course(SQLModel, table=True):
     name: str
     section: str | None = None
     course_state: str = "ACTIVE"
+    user_email: str = Field(default="", index=True)
     fetched_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
@@ -35,6 +36,7 @@ class Activity(SQLModel, table=True):
     state: str = "PUBLISHED"
     due_label: str | None = None
     description: str | None = None
+    user_email: str = Field(default="", index=True)
     fetched_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
@@ -43,6 +45,7 @@ class ExportJob(SQLModel, table=True):
     id: str = Field(primary_key=True)
     course_id: str = Field(index=True)
     course_name: str
+    user_email: str = Field(default="", index=True)
     status: ExportStatus = Field(default=ExportStatus.queued)
     total_files: int = 0
     completed_files: int = 0
@@ -84,6 +87,7 @@ class GradingJob(SQLModel, table=True):
     course_id: str = Field(index=True)
     course_name: str
     activity_id: str = Field(index=True)
+    user_email: str = Field(default="", index=True)
     activity_title: str
     activity_description: str | None = None
     rubric_mode: str
@@ -256,3 +260,19 @@ class PrivacyAuditRow(SQLModel, table=True):
     audit_pass: bool = False
     blocked_reason: str | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class UserSession(SQLModel, table=True):
+    id: str = Field(primary_key=True)
+    user_email: str = Field(index=True)
+    google_credentials_json: str
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    expires_at: datetime
+    last_seen_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class OAuthState(SQLModel, table=True):
+    id: str = Field(primary_key=True)
+    scopes_json: str
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    expires_at: datetime

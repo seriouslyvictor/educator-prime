@@ -32,6 +32,7 @@ def ensure_sqlite_dev_migrations(target_engine: Engine) -> None:
     _ensure_grading_ai_attempt_columns(target_engine)
     _ensure_privacy_columns(target_engine)
     _ensure_cache_columns(target_engine)
+    _ensure_user_email_columns(target_engine)
 
 
 def _ensure_activity_columns(target_engine: Engine) -> None:
@@ -177,6 +178,11 @@ def _ensure_cache_columns(target_engine: Engine) -> None:
                             f"ADD COLUMN {column_name} {column_type}"
                         )
                     )
+
+
+def _ensure_user_email_columns(target_engine: Engine) -> None:
+    for table_name in ("course", "activity", "gradingjob", "exportjob"):
+        _ensure_columns(target_engine, table_name, {"user_email": "VARCHAR DEFAULT ''"})
 
 
 def get_session() -> Generator[Session, None, None]:

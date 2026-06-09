@@ -34,17 +34,14 @@ class _TtlCacheEntry:
     expires_at: datetime
 
 
-_GOOGLE_PROVIDER_CACHE: dict[str, tuple[object, float | None]] = {}
 _PROFILE_CACHE: dict[str, _TtlCacheEntry] = {}
-_ACCOUNT_PROFILE_CACHE: _TtlCacheEntry | None = None
+_ACCOUNT_PROFILE_CACHE: dict[str, _TtlCacheEntry] = {}
 _DRIVE_METADATA_CACHE: dict[str, _TtlCacheEntry] = {}
 
 
 def clear_google_provider_caches() -> None:
-    _GOOGLE_PROVIDER_CACHE.clear()
     _PROFILE_CACHE.clear()
-    global _ACCOUNT_PROFILE_CACHE
-    _ACCOUNT_PROFILE_CACHE = None
+    _ACCOUNT_PROFILE_CACHE.clear()
     _DRIVE_METADATA_CACHE.clear()
     log_event(logger, "google.cache.clear")
 
@@ -324,10 +321,10 @@ class GoogleApiProvider(GoogleProvider):
         self._profile_cache: dict[str, tuple[str | None, str | None]] = {}
 
     def account_profile(self) -> AccountProfile:
-        global _ACCOUNT_PROFILE_CACHE
         settings = get_settings()
-        if _cache_hit(_ACCOUNT_PROFILE_CACHE):
-            profile = _ACCOUNT_PROFILE_CACHE.value
+        cached = _ACCOUNT_PROFILE_CACHE.get("me")
+        if _cache_hit(cached):
+            profile = cached.value
             if isinstance(profile, AccountProfile):
                 log_cache_hit(logger, "google.account_profile", "me")
                 return profile
@@ -350,7 +347,7 @@ class GoogleApiProvider(GoogleProvider):
             email=account.email,
             picture=account.picture,
         )
-        _ACCOUNT_PROFILE_CACHE = _TtlCacheEntry(
+        _ACCOUNT_PROFILE_CACHE["me"] = _TtlCacheEntry(
             account,
             _ttl(settings.google_profile_cache_ttl_minutes),
         )
@@ -938,29 +935,72 @@ class MockGoogleProvider(GoogleProvider):
         raise KeyError(file_id)
 
 
-def get_google_provider() -> GoogleProvider:
+class DbTokenStore:
+    """Loads and refreshes Google credentials stored in the UserSession DB row."""
+
+    def __init__(self, session_id: str, db) -> None:
+        self._session_id = session_id
+        self._db = db
+
+    def load_credentials(self):
+        from .models import UserSession
+
+        row = self._db.get(UserSession, self._session_id)
+        expires = row.expires_at if row else None
+        if expires is not None and expires.tzinfo is None:
+            expires = expires.replace(tzinfo=UTC)
+        if row is None or expires < datetime.now(UTC):
+            log_warning(logger, "google.token.missing", session_id=self._session_id)
+            raise FileNotFoundError("Session not found or expired")
+        from google.oauth2.credentials import Credentials
+
+        import json as _json
+        log_event(logger, "google.token.load", session_id=self._session_id)
+        return Credentials.from_authorized_user_info(_json.loads(row.google_credentials_json))
+
+    def load_valid_credentials(self):
+        from .models import UserSession
+
+        credentials = self.load_credentials()
+        if credentials.valid:
+            return credentials
+        if credentials.expired and credentials.refresh_token:
+            from google.auth.transport.requests import Request
+
+            log_event(logger, "google.token.refresh", session_id=self._session_id)
+            credentials.refresh(Request())
+            row = self._db.get(UserSession, self._session_id)
+            if row is not None:
+                row.google_credentials_json = credentials.to_json()
+                row.last_seen_at = datetime.now(UTC)
+                self._db.add(row)
+                self._db.commit()
+            return credentials
+        from google.auth.exceptions import RefreshError
+
+        log_warning(
+            logger,
+            "google.token.not_refreshable",
+            session_id=self._session_id,
+            expired=credentials.expired,
+            has_refresh_token=bool(credentials.refresh_token),
+        )
+        raise RefreshError("Stored Google credentials cannot be refreshed.")
+
+
+def make_google_provider(session_id: str | None, db) -> GoogleProvider:
     settings = get_settings()
     log_debug(logger, "google.provider.select", provider=settings.google_provider)
     if settings.google_provider == "google":
+        store = DbTokenStore(session_id, db)
+        return GoogleApiProvider(store.load_valid_credentials())
+    return MockGoogleProvider()
+
+
+def get_google_provider() -> GoogleProvider:
+    """Legacy single-user helper. Use make_google_provider() for multi-user flows."""
+    settings = get_settings()
+    if settings.google_provider == "google":
         token_store = TokenStore(settings.google_token_path)
-        token_mtime = (
-            token_store.token_path.stat().st_mtime
-            if token_store.token_path.exists()
-            else None
-        )
-        cached = _GOOGLE_PROVIDER_CACHE.get(settings.google_token_path)
-        if cached and cached[1] == token_mtime:
-            log_cache_hit(logger, "google.provider", settings.google_token_path)
-            provider = cached[0]
-            if isinstance(provider, GoogleProvider):
-                return provider
-        log_cache_miss(logger, "google.provider", settings.google_token_path)
-        provider = GoogleApiProvider(token_store.load_valid_credentials())
-        token_mtime = (
-            token_store.token_path.stat().st_mtime
-            if token_store.token_path.exists()
-            else None
-        )
-        _GOOGLE_PROVIDER_CACHE[settings.google_token_path] = (provider, token_mtime)
-        return provider
+        return GoogleApiProvider(token_store.load_valid_credentials())
     return MockGoogleProvider()
