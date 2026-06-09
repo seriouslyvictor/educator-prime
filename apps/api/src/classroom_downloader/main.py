@@ -1,12 +1,10 @@
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 import json
 import os
 from pathlib import Path
 from queue import Queue
-import shutil
 from secrets import token_urlsafe
 from threading import Thread
 from uuid import uuid4
@@ -93,18 +91,31 @@ from .schemas import (
     PrivacyAuditRead,
 )
 from .settings import get_settings
+from .api.common import (
+    _sse_event,
+    _as_utc,
+    _is_fresh,
+    _etag,
+    _cache_headers,
+    _if_none_match,
+    _conditional_response,
+    _is_future,
+)
+from .api.auth_errors import (
+    AuthFailure,
+    _contains_invalid_grant,
+    _http_error_content,
+    _http_403_is_hard_auth_failure,
+    google_auth_http_exception,
+)
+from .api.session_cleanup import (
+    purge_cached_classroom_state_for_user,
+    purge_google_session_if_needed,
+)
 
 settings = get_settings()
 configure_logging()
 logger = get_logger(__name__)
-
-
-def _sse_event(payload: dict) -> str:
-    return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
-
-
-def _as_utc(dt: datetime) -> datetime:
-    return dt if dt.tzinfo else dt.replace(tzinfo=UTC)
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
@@ -132,45 +143,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-def purge_cached_classroom_state_for_user(user_email: str, session: Session) -> None:
-    clear_google_provider_caches()
-    for row in session.exec(select(Activity).where(Activity.user_email == user_email)).all():
-        session.delete(row)
-    for row in session.exec(select(Course).where(Course.user_email == user_email)).all():
-        session.delete(row)
-    now = datetime.now(UTC)
-    job_ids = [
-        row.id
-        for row in session.exec(
-            select(GradingJob.id).where(GradingJob.user_email == user_email)
-        ).all()
-    ]
-    if job_ids:
-        for row in session.exec(
-            select(GradingFileCache).where(GradingFileCache.job_id.in_(job_ids))
-        ).all():
-            row.deleted_at = row.deleted_at or now
-            session.add(row)
-        for row in session.exec(
-            select(GradingScrubCache).where(GradingScrubCache.job_id.in_(job_ids))
-        ).all():
-            row.deleted_at = row.deleted_at or now
-            session.add(row)
-        for row in session.exec(
-            select(ExportFile).where(ExportFile.job_id.in_(job_ids))
-        ).all():
-            row.cached_path = None
-            row.content_hash = None
-            row.byte_size = None
-            row.cache_expires_at = None
-            session.add(row)
-        session.commit()
-        for job_id in job_ids:
-            shutil.rmtree(Path(settings.grading_cache_path) / job_id, ignore_errors=True)
-            shutil.rmtree(Path(settings.export_cache_path) / job_id, ignore_errors=True)
-    else:
-        session.commit()
 
 
 def get_current_session(
@@ -254,94 +226,6 @@ def disconnected_auth_state() -> AuthState:
         provider=settings.google_provider,
     )
 
-
-@dataclass(frozen=True)
-class AuthFailure:
-    http: HTTPException
-    purge_token: bool = False
-
-
-def _contains_invalid_grant(error: Exception) -> bool:
-    haystack = " ".join(str(part) for part in getattr(error, "args", ()) if part)
-    haystack = f"{haystack} {error}".lower()
-    return "invalid_grant" in haystack
-
-
-def _http_error_content(error: Exception) -> str:
-    content = getattr(error, "content", b"")
-    if isinstance(content, bytes):
-        return content.decode("utf-8", errors="ignore").lower()
-    return str(content).lower()
-
-
-def _http_403_is_hard_auth_failure(error: Exception) -> bool:
-    content = _http_error_content(error)
-    hard_markers = (
-        "invalid_grant",
-        "invalid credentials",
-        "autherror",
-        "unauthorized_client",
-    )
-    return any(marker in content for marker in hard_markers)
-
-
-def google_auth_http_exception(error: Exception) -> AuthFailure | None:
-    if isinstance(error, FileNotFoundError):
-        log_warning(logger, "google.auth.token_missing")
-        return AuthFailure(
-            HTTPException(
-                status_code=401,
-                detail="Google session missing. Please connect your Google account again.",
-            ),
-            purge_token=False,
-        )
-    try:
-        from google.auth.exceptions import RefreshError
-        from googleapiclient.errors import HttpError
-    except Exception:
-        return None
-
-    if isinstance(error, RefreshError):
-        purge_token = _contains_invalid_grant(error)
-        log_warning(logger, "google.auth.refresh_failed", purge_token=purge_token)
-        return AuthFailure(
-            HTTPException(
-                status_code=401,
-                detail="Google session expired. Please connect your Google account again.",
-            ),
-            purge_token=purge_token,
-        )
-    status_code = getattr(getattr(error, "resp", None), "status", None)
-    if isinstance(error, HttpError) and status_code in {401, 403}:
-        purge_token = status_code == 403 and _http_403_is_hard_auth_failure(error)
-        log_warning(
-            logger,
-            "google.auth.api_denied",
-            status_code=status_code,
-            purge_token=purge_token,
-        )
-        return AuthFailure(
-            HTTPException(
-                status_code=401,
-                detail="Google authorization failed. Please connect your Google account again.",
-            ),
-            purge_token=purge_token,
-        )
-    return None
-
-
-def purge_google_session_if_needed(
-    auth_failure: AuthFailure,
-    current_session: UserSession,
-    db: Session,
-) -> None:
-    if not auth_failure.purge_token:
-        return
-    row = db.get(UserSession, current_session.id)
-    if row is not None:
-        db.delete(row)
-        db.commit()
-    purge_cached_classroom_state_for_user(current_session.user_email, db)
 
 
 def ensure_privacy_audit_allows_draft(
@@ -1881,48 +1765,6 @@ def export_grading_csv(
     )
 
 
-def _is_fresh(value: datetime | None, ttl_minutes: int) -> bool:
-    if value is None:
-        return False
-    if value.tzinfo is None:
-        value = value.replace(tzinfo=UTC)
-    return value > datetime.now(UTC) - timedelta(minutes=ttl_minutes)
-
-
-def _etag(content: bytes | str) -> str:
-    body = content.encode("utf-8") if isinstance(content, str) else content
-    return f'"{sha256(body).hexdigest()}"'
-
-
-def _cache_headers(etag: str, max_age_seconds: int) -> dict[str, str]:
-    return {
-        "Cache-Control": f"private, max-age={max_age_seconds}",
-        "ETag": etag,
-    }
-
-
-def _if_none_match(request: Request) -> set[str]:
-    header = request.headers.get("if-none-match", "")
-    return {part.strip() for part in header.split(",") if part.strip()}
-
-
-def _conditional_response(
-    request: Request,
-    content: bytes | str,
-    media_type: str,
-    headers: dict[str, str] | None = None,
-    max_age_seconds: int = 300,
-) -> Response:
-    etag = _etag(content)
-    response_headers = {
-        **(headers or {}),
-        **_cache_headers(etag, max_age_seconds),
-    }
-    if etag in _if_none_match(request):
-        return Response(status_code=304, headers=response_headers)
-    return Response(content=content, media_type=media_type, headers=response_headers)
-
-
 def _export_file_cache_response(request: Request, file: ExportFile) -> Response | None:
     if not file.cached_path or not file.content_hash or not file.cache_expires_at:
         return None
@@ -1975,14 +1817,6 @@ def _store_and_stream_export_file(
         media_type=media_type,
         max_age_seconds=settings.export_cache_ttl_hours * 3600,
     )
-
-
-def _is_future(value: datetime | None) -> bool:
-    if value is None:
-        return False
-    if value.tzinfo is None:
-        value = value.replace(tzinfo=UTC)
-    return value > datetime.now(UTC)
 
 
 def _static_frontend_root() -> Path | None:
