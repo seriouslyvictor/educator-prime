@@ -5,8 +5,15 @@
       "input_tokens": 304577,
       "output_tokens": 0,
       "files": 67
+    },
+    {
+      "date": "2026-06-09T14:52:27.647292+00:00",
+      "input_tokens": 36685,
+      "output_tokens": 0,
+      "files": 80,
+      "note": "full rebuild after main.py router split"
     }
   ],
-  "total_input_tokens": 304577,
+  "total_input_tokens": 341262,
   "total_output_tokens": 0
 }
