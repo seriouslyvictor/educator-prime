@@ -9,7 +9,6 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response, StreamingResponse
 from sqlmodel import Session, select
 
-from .. import grading as grading_service
 from ..api.auth_errors import google_auth_http_exception
 from ..api.common import _conditional_response, _sse_event
 from ..api.deps import (
