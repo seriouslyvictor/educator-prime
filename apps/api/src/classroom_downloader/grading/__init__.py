@@ -1,19 +1,12 @@
 from datetime import UTC, datetime
-import csv
-from hashlib import sha256
-from io import StringIO
-from pathlib import Path
-import random
-import shutil
-from uuid import uuid4
 import json
+import random
 import time
 
 import litellm
 
 from sqlmodel import Session, select
 
-from ..content_extraction import extract_submission_content
 from ..content_extraction import ExtractedSubmissionContent
 from ..grading_engine import (
     GradingEngine,
@@ -25,32 +18,20 @@ from ..google_provider import GoogleProvider, SubmissionFile
 from ..models import (
     GradingAiAttempt,
     GradingCriterion,
-    GradingFileCache,
     GradingJob,
-    GradingScrubCache,
     GradingStatus,
     GradingSubmission,
-    GradingSubmissionFile,
 )
 from ..observability import (
     get_logger,
-    log_cache_hit,
-    log_cache_miss,
     log_debug,
     log_error,
     log_event,
     safe_fields,
     text_preview,
 )
-from ..privacy import PrivacyReport, ScrubbedSubmission, scrub_submission
-from ..schemas import (
-    GradingCriterionInput,
-    GradingCriterionRead,
-    GradingFileCacheRead,
-    GradingJobRead,
-    GradingSubmissionFileRead,
-    GradingSubmissionRead,
-)
+from ..privacy import ScrubbedSubmission
+from ..schemas import GradingCriterionInput
 from ..settings import get_settings
 from ._common import (
     CachedScrubbedSubmission,
@@ -60,151 +41,43 @@ from ._common import (
     _worst_status,
     _sum_optional,
     _sum_float_optional,
-    _int_or_none,
-    _identity_hash,
-    _iso,
-    _aware,
 )
+from .criteria import (
+    DEFAULT_CRITERIA,
+    ensure_default_criteria,
+    _criteria_match_defaults,
+    _normalize_inferred_criteria,
+    _replace_job_criteria,
+    _is_substantial_description,
+    _normalize_weights_to_100,
+    _apply_criterion_notes,
+)
+from .submissions import (
+    _student_sort_key,
+    group_key_for,
+    _group_files,
+    ensure_submission_file,
+    submission_files,
+    _submission_for_file,
+)
+from .caching import (
+    cache_submission_file,
+    scrub_submission_cached,
+    delete_job_cache,
+)
+from .attempts import (
+    _record_attempt,
+    _attempt_metadata,
+    _completion_cost_cents,
+)
+from .snapshots import (
+    _submission_read,
+    grading_job_snapshot,
+    grading_submission_snapshot,
+)
+from .export import grading_csv
 
 logger = get_logger(__name__)
-
-
-DEFAULT_CRITERIA = [
-    GradingCriterionInput(
-        name="Understanding",
-        weight=30,
-        description="Shows command of the core concepts in the assignment.",
-    ),
-    GradingCriterionInput(
-        name="Evidence",
-        weight=25,
-        description="Uses relevant details, sources, examples, or artifacts.",
-    ),
-    GradingCriterionInput(
-        name="Reasoning",
-        weight=30,
-        description="Connects evidence to conclusions with clear logic.",
-    ),
-    GradingCriterionInput(
-        name="Clarity",
-        weight=15,
-        description="Communicates in an organized, readable way.",
-    ),
-]
-
-
-def ensure_default_criteria(
-    session: Session,
-    job_id: str,
-    criteria: list[GradingCriterionInput] | None,
-) -> None:
-    rows = criteria or DEFAULT_CRITERIA
-    for criterion in rows:
-        session.add(
-            GradingCriterion(
-                id=str(uuid4()),
-                job_id=job_id,
-                name=criterion.name,
-                weight=criterion.weight,
-                description=criterion.description,
-            )
-        )
-
-
-def _criteria_match_defaults(criteria: list[GradingCriterion]) -> bool:
-    if len(criteria) != len(DEFAULT_CRITERIA):
-        return False
-    for row, default in zip(criteria, DEFAULT_CRITERIA, strict=True):
-        if row.name != default.name or row.weight != default.weight or row.description != default.description:
-            return False
-    return True
-
-
-def _normalize_inferred_criteria(
-    rows: list[dict[str, str | int | None]] | None,
-) -> list[GradingCriterionInput]:
-    if not rows:
-        return []
-    criteria: list[GradingCriterionInput] = []
-    for row in rows:
-        name = str(row.get("name") or "").strip()
-        try:
-            weight = int(row.get("weight") or 0)
-        except (TypeError, ValueError):
-            weight = 0
-        description_value = row.get("description")
-        description = str(description_value).strip() if description_value else None
-        if not name or weight <= 0:
-            continue
-        criteria.append(
-            GradingCriterionInput(
-                name=name,
-                weight=weight,
-                description=description,
-            )
-        )
-    return criteria
-
-
-def _replace_job_criteria(
-    session: Session,
-    job_id: str,
-    criteria: list[GradingCriterionInput],
-) -> list[GradingCriterion]:
-    existing = session.exec(
-        select(GradingCriterion).where(GradingCriterion.job_id == job_id)
-    ).all()
-    for row in existing:
-        session.delete(row)
-    session.flush()
-    created: list[GradingCriterion] = []
-    for criterion in criteria:
-        row = GradingCriterion(
-            id=str(uuid4()),
-            job_id=job_id,
-            name=criterion.name,
-            weight=criterion.weight,
-            description=criterion.description,
-        )
-        session.add(row)
-        created.append(row)
-    session.flush()
-    return created
-
-
-def _is_substantial_description(text: str | None) -> bool:
-    settings = get_settings()
-    if not text:
-        return False
-    normalized = " ".join(text.split())
-    return (
-        len(normalized) >= settings.rubric_description_min_chars
-        and len(normalized.split()) >= settings.rubric_description_min_words
-    )
-
-
-def _normalize_weights_to_100(
-    criteria: list[GradingCriterionInput],
-) -> list[GradingCriterionInput]:
-    total = sum(criterion.weight for criterion in criteria)
-    if not criteria or total <= 0:
-        return []
-    scaled: list[GradingCriterionInput] = []
-    running = 0
-    for index, criterion in enumerate(criteria):
-        if index == len(criteria) - 1:
-            weight = max(1, 100 - running)
-        else:
-            weight = max(1, round(criterion.weight * 100 / total))
-            running += weight
-        scaled.append(
-            GradingCriterionInput(
-                name=criterion.name,
-                weight=weight,
-                description=criterion.description,
-            )
-        )
-    return scaled
 
 
 def _collect_inference_samples(
@@ -332,102 +205,6 @@ def infer_job_criteria(
     if on_progress:
         on_progress(1, 1, f"{len(created)} critérios definidos")
     return created
-
-
-def grading_job_snapshot(session: Session, job: GradingJob) -> GradingJobRead:
-    submissions = session.exec(
-        select(GradingSubmission).where(GradingSubmission.job_id == job.id)
-    ).all()
-    criteria = session.exec(
-        select(GradingCriterion).where(GradingCriterion.job_id == job.id)
-    ).all()
-    cache_files = session.exec(
-        select(GradingFileCache).where(GradingFileCache.job_id == job.id)
-    ).all()
-    attempts = session.exec(
-        select(GradingAiAttempt)
-        .where(GradingAiAttempt.job_id == job.id)
-        .order_by(GradingAiAttempt.created_at.desc())
-    ).all()
-    latest_attempts: dict[str, GradingAiAttempt] = {}
-    for attempt in attempts:
-        latest_attempts.setdefault(attempt.submission_id, attempt)
-    file_rows = session.exec(
-        select(GradingSubmissionFile)
-        .where(GradingSubmissionFile.job_id == job.id)
-        .order_by(GradingSubmissionFile.created_at)
-    ).all()
-    files_by_submission: dict[str, list[GradingSubmissionFile]] = {}
-    for row in file_rows:
-        files_by_submission.setdefault(row.submission_id, []).append(row)
-    return GradingJobRead(
-        id=job.id,
-        course_id=job.course_id,
-        course_name=job.course_name,
-        activity_id=job.activity_id,
-        activity_title=job.activity_title,
-        rubric_mode=job.rubric_mode,
-        teacher_loop=job.teacher_loop,
-        rubric_text=job.rubric_text,
-        batch_mode=job.batch_mode,
-        status=job.status,
-        total_submissions=job.total_submissions,
-        reviewed_submissions=job.reviewed_submissions,
-        flagged_submissions=job.flagged_submissions,
-        total_prompt_tokens=job.total_prompt_tokens,
-        total_completion_tokens=job.total_completion_tokens,
-        total_cached_tokens=job.total_cached_tokens,
-        total_cost_cents=job.total_cost_cents,
-        wall_clock_ms=job.wall_clock_ms,
-        submissions_graded=job.submissions_graded,
-        ai_engine=job.ai_engine,
-        ai_mode=job.ai_mode,
-        ai_model=job.ai_model,
-        cache_expires_at=_iso(job.cache_expires_at),
-        criteria=[
-            GradingCriterionRead.model_validate(row, from_attributes=True)
-            for row in criteria
-        ],
-        submissions=[
-            _submission_read(
-                row,
-                latest_attempts.get(row.id),
-                files_by_submission.get(row.id),
-            )
-            for row in submissions
-        ],
-        cache_files=[
-            GradingFileCacheRead(
-                id=row.id,
-                submission_id=row.submission_id,
-                source_file_id=row.source_file_id,
-                source_name=row.source_name,
-                mime_type=row.mime_type,
-                content_hash=row.content_hash,
-                byte_size=row.byte_size,
-                expires_at=_iso(row.expires_at) or "",
-                deleted_at=_iso(row.deleted_at),
-            )
-            for row in cache_files
-        ],
-    )
-
-
-def grading_submission_snapshot(
-    session: Session,
-    submission: GradingSubmission,
-) -> GradingSubmissionRead:
-    latest_attempt = session.exec(
-        select(GradingAiAttempt)
-        .where(GradingAiAttempt.submission_id == submission.id)
-        .order_by(GradingAiAttempt.created_at.desc())
-    ).first()
-    return _submission_read(submission, latest_attempt, submission_files(session, submission))
-
-
-def _student_sort_key(group_files: list[SubmissionFile]) -> str:
-    first = group_files[0]
-    return (first.student_name or first.student_email or "~").casefold()
 
 
 def draft_grading_job(
@@ -603,266 +380,6 @@ def retry_submission(
         flagged_submissions=job.flagged_submissions,
     )
     return job
-
-
-def cache_submission_file(
-    session: Session,
-    job: GradingJob,
-    submission: GradingSubmission,
-    file: SubmissionFile,
-    provider: GoogleProvider,
-    commit: bool = True,
-) -> GradingFileCache:
-    now = datetime.now(UTC)
-    existing = session.exec(
-        select(GradingFileCache)
-        .where(GradingFileCache.job_id == job.id)
-        .where(GradingFileCache.submission_id == submission.id)
-        .where(GradingFileCache.source_file_id == file.source_file_id)
-        .where(GradingFileCache.deleted_at.is_(None))
-        .order_by(GradingFileCache.created_at.desc())
-    ).first()
-    if (
-        existing
-        and _aware(existing.expires_at) > now
-        and Path(existing.cached_path).exists()
-    ):
-        log_cache_hit(
-            logger,
-            "grading.file",
-            file.source_file_id,
-            job_id=job.id,
-            submission_id=submission.id,
-            cache_id=existing.id,
-            source_file_id=existing.source_file_id,
-            source_name=existing.source_name,
-            cached_path=existing.cached_path,
-            byte_size=existing.byte_size,
-            content_hash=existing.content_hash,
-            expires_at=existing.expires_at,
-        )
-        existing._cache_hit = True
-        return existing
-
-    log_cache_miss(
-        logger,
-        "grading.file",
-        file.source_file_id,
-        job_id=job.id,
-        submission_id=submission.id,
-        source_file_id=file.source_file_id,
-        source_name=file.source_name,
-        mime_type=file.mime_type,
-    )
-    content, media_type = provider.get_file_content(file.source_file_id)
-    cache_root = Path(get_settings().grading_cache_path)
-    job_dir = cache_root / job.id
-    job_dir.mkdir(parents=True, exist_ok=True)
-    digest = sha256(content).hexdigest()
-    suffix = Path(file.source_name).suffix or ".bin"
-    cached_path = job_dir / f"{submission.id}-{digest[:12]}{suffix}"
-    cached_path.write_bytes(content)
-    row = GradingFileCache(
-        id=str(uuid4()),
-        job_id=job.id,
-        submission_id=submission.id,
-        source_file_id=file.source_file_id,
-        source_name=file.source_name,
-        mime_type=media_type or file.mime_type,
-        cached_path=str(cached_path),
-        content_hash=digest,
-        byte_size=len(content),
-        expires_at=default_cache_expiry(),
-    )
-    session.add(row)
-    job.cache_expires_at = row.expires_at
-    session.add(job)
-    if commit:
-        session.commit()
-    else:
-        session.flush()
-    session.refresh(row)
-    log_event(
-        logger,
-        "grading.cache.write",
-        job_id=job.id,
-        submission_id=submission.id,
-        cache_id=row.id,
-        source_file_id=file.source_file_id,
-        source_name=file.source_name,
-        media_type=media_type,
-        cached_path=str(cached_path),
-        byte_size=len(content),
-        content_hash=digest,
-        expires_at=row.expires_at,
-    )
-    row._cache_hit = False
-    return row
-
-
-def scrub_submission_cached(
-    session: Session,
-    job: GradingJob,
-    submission: GradingSubmission,
-    cache_file: GradingFileCache,
-    commit: bool = True,
-) -> CachedScrubbedSubmission:
-    now = datetime.now(UTC)
-    identity_hash = _identity_hash(submission)
-    existing = session.exec(
-        select(GradingScrubCache)
-        .where(GradingScrubCache.job_id == job.id)
-        .where(GradingScrubCache.submission_id == submission.id)
-        .where(GradingScrubCache.content_hash == cache_file.content_hash)
-        .where(GradingScrubCache.identity_hash == identity_hash)
-        .where(GradingScrubCache.deleted_at.is_(None))
-        .order_by(GradingScrubCache.created_at.desc())
-    ).first()
-    if existing and _aware(existing.expires_at) > now:
-        extracted = ExtractedSubmissionContent(
-            status=existing.extraction_status,
-            text="",
-            safe_source_label=existing.safe_source_label,
-            error=existing.extraction_error,
-        )
-        scrubbed = ScrubbedSubmission(
-            student_label=existing.student_label,
-            source_label=existing.source_label,
-            content=existing.scrubbed_content,
-            report=PrivacyReport(
-                status=existing.privacy_status,
-                counts=json.loads(existing.redaction_counts_json),
-            ),
-        )
-        log_cache_hit(
-            logger,
-            "grading.scrub",
-            cache_file.content_hash,
-            job_id=job.id,
-            submission_id=submission.id,
-            cache_id=existing.id,
-            content_hash=cache_file.content_hash,
-            privacy_status=scrubbed.report.status,
-            extraction_status=extracted.status,
-        )
-        return CachedScrubbedSubmission(extracted, scrubbed, cache_hit=True)
-
-    log_cache_miss(
-        logger,
-        "grading.scrub",
-        cache_file.content_hash,
-        job_id=job.id,
-        submission_id=submission.id,
-        content_hash=cache_file.content_hash,
-    )
-    extracted = extract_submission_content(cache_file)
-    scrubbed = scrub_submission(session, job, submission, extracted)
-    row = GradingScrubCache(
-        id=str(uuid4()),
-        job_id=job.id,
-        submission_id=submission.id,
-        content_hash=cache_file.content_hash,
-        identity_hash=identity_hash,
-        student_label=scrubbed.student_label,
-        source_label=scrubbed.source_label,
-        safe_source_label=extracted.safe_source_label,
-        scrubbed_content=scrubbed.content,
-        extraction_status=extracted.status,
-        extraction_error=extracted.error,
-        privacy_status=scrubbed.report.status,
-        privacy_flags_json=json.dumps(scrubbed.report.flags),
-        redaction_counts_json=json.dumps(scrubbed.report.counts),
-        byte_size=cache_file.byte_size,
-        expires_at=min(_aware(cache_file.expires_at), default_cache_expiry()),
-    )
-    session.add(row)
-    if commit:
-        session.commit()
-    else:
-        session.flush()
-    session.refresh(row)
-    log_event(
-        logger,
-        "grading.scrub_cache.write",
-        job_id=job.id,
-        submission_id=submission.id,
-        cache_id=row.id,
-        content_hash=cache_file.content_hash,
-        privacy_status=scrubbed.report.status,
-        extraction_status=extracted.status,
-    )
-    return CachedScrubbedSubmission(extracted, scrubbed, cache_hit=False)
-
-
-def delete_job_cache(session: Session, job: GradingJob) -> GradingJob:
-    now = datetime.now(UTC)
-    rows = session.exec(
-        select(GradingFileCache).where(GradingFileCache.job_id == job.id)
-    ).all()
-    for row in rows:
-        path = Path(row.cached_path)
-        if path.exists() and path.is_file():
-            path.unlink()
-            log_event(logger, "grading.cache.file_deleted", job_id=job.id, cache_id=row.id, cached_path=row.cached_path)
-        row.deleted_at = row.deleted_at or now
-        session.add(row)
-    scrub_rows = session.exec(
-        select(GradingScrubCache).where(GradingScrubCache.job_id == job.id)
-    ).all()
-    for row in scrub_rows:
-        row.deleted_at = row.deleted_at or now
-        session.add(row)
-    job.cache_expires_at = None
-    job.updated_at = now
-    session.add(job)
-    session.commit()
-    shutil.rmtree(Path(get_settings().grading_cache_path) / job.id, ignore_errors=True)
-    session.refresh(job)
-    log_event(
-        logger,
-        "grading.cache.delete.complete",
-        job_id=job.id,
-        cache_count=len(rows),
-        scrub_cache_count=len(scrub_rows),
-    )
-    return job
-
-
-def grading_csv(session: Session, job: GradingJob) -> str:
-    submissions = session.exec(
-        select(GradingSubmission).where(GradingSubmission.job_id == job.id)
-    ).all()
-    buffer = StringIO()
-    writer = csv.DictWriter(
-        buffer,
-        fieldnames=[
-            "student_name",
-            "student_email",
-            "ai_score",
-            "final_score",
-            "reviewed",
-            "feedback",
-            "confidence",
-            "flag",
-            "error",
-        ],
-    )
-    writer.writeheader()
-    for submission in submissions:
-        writer.writerow(
-            {
-                "student_name": submission.student_name or "",
-                "student_email": submission.student_email or "",
-                "ai_score": submission.ai_score or "",
-                "final_score": submission.final_score or "",
-                "reviewed": submission.reviewed,
-                "feedback": submission.feedback or "",
-                "confidence": submission.confidence or "",
-                "flag": submission.flag or "",
-                "error": submission.error or "",
-            }
-        )
-    return buffer.getvalue()
 
 
 def _combine_submission_content(
@@ -1149,342 +666,6 @@ def _draft_submission(
     return stats
 
 
-def _apply_criterion_notes(
-    session: Session,
-    criteria: list[GradingCriterion],
-    criterion_notes: list[dict[str, str]],
-) -> None:
-    notes_by_name = {
-        note["criterion"].strip().lower(): note["note"].strip()
-        for note in criterion_notes
-        if note.get("criterion") and note.get("note")
-    }
-    if not notes_by_name:
-        return
-    for criterion in criteria:
-        note = notes_by_name.get(criterion.name.strip().lower())
-        if note:
-            criterion.latest_ai_note = note
-            session.add(criterion)
-
-
-def _record_attempt(
-    session: Session,
-    job: GradingJob,
-    submission: GradingSubmission,
-    engine: GradingEngine,
-    status: str,
-    extraction_status: str,
-    privacy_status: str,
-    flags: list[str],
-    retry_count: int,
-    privacy_flags: list[str] | None = None,
-    safe_error: str | None = None,
-    prompt_tokens: int | None = None,
-    completion_tokens: int | None = None,
-    token_count: int | None = None,
-    cached_prompt_tokens: int | None = None,
-    cache_write_tokens: int | None = None,
-    cost_cents: float | None = None,
-    latency_ms: int | None = None,
-) -> GradingAiAttempt:
-    attempt = GradingAiAttempt(
-        id=str(uuid4()),
-        job_id=job.id,
-        submission_id=submission.id,
-        engine=engine.name,
-        model=getattr(engine, "model", None),
-        status=status,
-        extraction_status=extraction_status,
-        privacy_status=privacy_status,
-        safe_error=safe_error,
-        flags_json=json.dumps(flags),
-        privacy_flags_json=json.dumps(privacy_flags or []),
-        prompt_tokens=prompt_tokens,
-        completion_tokens=completion_tokens,
-        token_count=token_count,
-        cached_prompt_tokens=cached_prompt_tokens,
-        cache_write_tokens=cache_write_tokens,
-        cost_cents=cost_cents,
-        latency_ms=latency_ms,
-        retry_count=retry_count,
-    )
-    session.add(attempt)
-    session.commit()
-    session.refresh(attempt)
-    log_event(
-        logger,
-        "grading.attempt.record",
-        attempt_id=attempt.id,
-        job_id=job.id,
-        submission_id=submission.id,
-        engine=attempt.engine,
-        model=attempt.model,
-        status=attempt.status,
-        extraction_status=attempt.extraction_status,
-        privacy_status=attempt.privacy_status,
-        safe_error=attempt.safe_error,
-        flags=flags,
-        prompt_tokens=attempt.prompt_tokens,
-        completion_tokens=attempt.completion_tokens,
-        token_count=attempt.token_count,
-        cached_prompt_tokens=attempt.cached_prompt_tokens,
-        cache_write_tokens=attempt.cache_write_tokens,
-        cost_cents=attempt.cost_cents,
-        latency_ms=attempt.latency_ms,
-        retry_count=attempt.retry_count,
-    )
-    return attempt
-
-
-def _attempt_metadata(grading_engine: GradingEngine) -> dict[str, int | float | None]:
-    usage = getattr(grading_engine, "last_usage", {}) or {}
-    prompt_tokens = _int_or_none(usage.get("prompt_tokens"))
-    completion_tokens = _int_or_none(usage.get("completion_tokens"))
-    token_count = _int_or_none(usage.get("total_tokens"))
-    cached_prompt_tokens = _int_or_none(usage.get("cache_read_input_tokens"))
-    cache_write_tokens = _int_or_none(usage.get("cache_creation_input_tokens"))
-    latency_ms = _int_or_none(getattr(grading_engine, "last_latency_ms", None))
-    cost_cents: float | None = None
-
-    if (
-        grading_engine.name == "litellm"
-        and prompt_tokens is not None
-        and completion_tokens is not None
-    ):
-        cost_cents = _completion_cost_cents(grading_engine)
-        if cost_cents is None:
-            from ..llm_catalog import estimate_cost_cents, load_llm_catalog
-
-            catalog_model = getattr(grading_engine, "catalog_model", None)
-            if catalog_model is None:
-                model_id = getattr(grading_engine, "model", None)
-                catalog_model = load_llm_catalog().models.get(model_id)
-            if catalog_model is not None:
-                cost_cents = estimate_cost_cents(
-                    catalog_model,
-                    prompt_tokens,
-                    completion_tokens,
-                )
-
-    return {
-        "prompt_tokens": prompt_tokens,
-        "completion_tokens": completion_tokens,
-        "token_count": token_count,
-        "cached_prompt_tokens": cached_prompt_tokens,
-        "cache_write_tokens": cache_write_tokens,
-        "cost_cents": cost_cents,
-        "latency_ms": latency_ms,
-    }
-
-
-def _completion_cost_cents(grading_engine: GradingEngine) -> float | None:
-    response = getattr(grading_engine, "last_response", None)
-    if response is None:
-        return None
-    try:
-        cost_usd = litellm.completion_cost(completion_response=response)
-    except Exception:
-        return None
-    try:
-        return round(float(cost_usd) * 100, 4)
-    except (TypeError, ValueError):
-        return None
-
-
-def _submission_read(
-    submission: GradingSubmission,
-    attempt: GradingAiAttempt | None,
-    files: list[GradingSubmissionFile] | None = None,
-) -> GradingSubmissionRead:
-    file_rows = files if files is not None else [
-        GradingSubmissionFile(
-            id=submission.id,
-            job_id=submission.job_id,
-            submission_id=submission.id,
-            source_file_id=submission.source_file_id,
-            source_name=submission.source_name,
-            mime_type=submission.mime_type,
-        )
-    ]
-    return GradingSubmissionRead(
-        id=submission.id,
-        student_email=submission.student_email,
-        student_name=submission.student_name,
-        source_file_id=submission.source_file_id,
-        source_name=submission.source_name,
-        mime_type=submission.mime_type,
-        files=[
-            GradingSubmissionFileRead(
-                source_file_id=row.source_file_id,
-                source_name=row.source_name,
-                mime_type=row.mime_type,
-            )
-            for row in file_rows
-        ],
-        ai_score=submission.ai_score,
-        confidence=submission.confidence,
-        final_score=submission.final_score,
-        feedback=submission.feedback,
-        reviewed=submission.reviewed,
-        flag=submission.flag,
-        error=submission.error,
-        classroom_submission_id=submission.classroom_submission_id,
-        alternate_link=submission.alternate_link,
-        posted_to_classroom=submission.posted_to_classroom,
-        posted_at=_iso(submission.posted_at),
-        privacy_status=attempt.privacy_status if attempt else None,
-        extraction_status=attempt.extraction_status if attempt else None,
-        ai_attempt_status=attempt.status if attempt else None,
-        ai_engine=attempt.engine if attempt else None,
-        ai_model=attempt.model if attempt else None,
-        ai_safe_error=attempt.safe_error if attempt else None,
-        ai_flags=json.loads(attempt.flags_json) if attempt else [],
-        privacy_flags=(
-            json.loads(attempt.privacy_flags_json)
-            if attempt and attempt.privacy_flags_json
-            else []
-        ),
-        ai_prompt_tokens=attempt.prompt_tokens if attempt else None,
-        ai_completion_tokens=attempt.completion_tokens if attempt else None,
-        ai_token_count=attempt.token_count if attempt else None,
-        ai_cached_prompt_tokens=attempt.cached_prompt_tokens if attempt else None,
-        ai_cache_write_tokens=attempt.cache_write_tokens if attempt else None,
-        ai_cost_cents=attempt.cost_cents if attempt else None,
-        ai_latency_ms=attempt.latency_ms if attempt else None,
-    )
-
-
-def group_key_for(file: SubmissionFile) -> str:
-    """Key that collapses a student's attachments into one submission. The real
-    provider supplies the Classroom submission id; otherwise each file is its own
-    group (preserving single-file behavior)."""
-    return file.classroom_submission_id or file.source_file_id
-
-
-def _group_files(files: list[SubmissionFile]) -> list[list[SubmissionFile]]:
-    """Group attachments by submission, preserving first-seen order."""
-    groups: list[list[SubmissionFile]] = []
-    index: dict[str, int] = {}
-    for file in files:
-        key = group_key_for(file)
-        if key not in index:
-            index[key] = len(groups)
-            groups.append([])
-        groups[index[key]].append(file)
-    return groups
-
-
-def ensure_submission_file(
-    session: Session,
-    job: GradingJob,
-    submission: GradingSubmission,
-    file: SubmissionFile,
-    *,
-    commit: bool = True,
-) -> GradingSubmissionFile:
-    existing = session.exec(
-        select(GradingSubmissionFile)
-        .where(GradingSubmissionFile.submission_id == submission.id)
-        .where(GradingSubmissionFile.source_file_id == file.source_file_id)
-    ).first()
-    if existing:
-        return existing
-    row = GradingSubmissionFile(
-        id=str(uuid4()),
-        job_id=job.id,
-        submission_id=submission.id,
-        source_file_id=file.source_file_id,
-        source_name=file.source_name,
-        mime_type=file.mime_type,
-    )
-    session.add(row)
-    if commit:
-        session.commit()
-    else:
-        session.flush()
-    return row
-
-
-def submission_files(
-    session: Session, submission: GradingSubmission
-) -> list[GradingSubmissionFile]:
-    """All attachments for a submission, newest-group-first by insertion. Falls back
-    to a synthetic single-file view for legacy rows created before grouping."""
-    rows = session.exec(
-        select(GradingSubmissionFile)
-        .where(GradingSubmissionFile.submission_id == submission.id)
-        .order_by(GradingSubmissionFile.created_at)
-    ).all()
-    if rows:
-        return list(rows)
-    return [
-        GradingSubmissionFile(
-            id=submission.id,
-            job_id=submission.job_id,
-            submission_id=submission.id,
-            source_file_id=submission.source_file_id,
-            source_name=submission.source_name,
-            mime_type=submission.mime_type,
-        )
-    ]
-
-
-def _submission_for_file(
-    session: Session,
-    job: GradingJob,
-    file: SubmissionFile,
-) -> GradingSubmission:
-    group_key = group_key_for(file)
-    existing = session.exec(
-        select(GradingSubmission)
-        .where(GradingSubmission.job_id == job.id)
-        .where(GradingSubmission.group_key == group_key)
-    ).first()
-    if existing:
-        ensure_submission_file(session, job, existing, file, commit=False)
-        session.commit()
-        log_event(
-            logger,
-            "grading.submission.hit",
-            job_id=job.id,
-            submission_id=existing.id,
-            group_key=group_key,
-            source_file_id=file.source_file_id,
-            student_email=existing.student_email,
-            student_name=existing.student_name,
-        )
-        return existing
-    row = GradingSubmission(
-        id=str(uuid4()),
-        job_id=job.id,
-        group_key=group_key,
-        student_email=file.student_email,
-        student_name=file.student_name,
-        source_file_id=file.source_file_id,
-        source_name=file.source_name,
-        mime_type=file.mime_type,
-    )
-    session.add(row)
-    session.flush()
-    ensure_submission_file(session, job, row, file, commit=False)
-    session.commit()
-    session.refresh(row)
-    log_event(
-        logger,
-        "grading.submission.create",
-        job_id=job.id,
-        submission_id=row.id,
-        group_key=group_key,
-        source_file_id=file.source_file_id,
-        source_name=file.source_name,
-        student_email=file.student_email,
-        student_name=file.student_name,
-        mime_type=file.mime_type,
-    )
-    return row
-
-
 def _refresh_counts(session: Session, job: GradingJob) -> None:
     submissions = session.exec(
         select(GradingSubmission).where(GradingSubmission.job_id == job.id)
@@ -1492,3 +673,5 @@ def _refresh_counts(session: Session, job: GradingJob) -> None:
     job.total_submissions = len(submissions)
     job.reviewed_submissions = sum(1 for row in submissions if row.reviewed)
     job.flagged_submissions = sum(1 for row in submissions if row.flag or row.error)
+
+
