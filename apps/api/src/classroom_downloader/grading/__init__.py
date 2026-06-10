@@ -1,6 +1,5 @@
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 import csv
-from dataclasses import dataclass
 from hashlib import sha256
 from io import StringIO
 from pathlib import Path
@@ -14,16 +13,16 @@ import litellm
 
 from sqlmodel import Session, select
 
-from .content_extraction import extract_submission_content
-from .content_extraction import ExtractedSubmissionContent
-from .grading_engine import (
+from ..content_extraction import extract_submission_content
+from ..content_extraction import ExtractedSubmissionContent
+from ..grading_engine import (
     GradingEngine,
     GradingEngineRequest,
     RubricInferenceRequest,
     get_grading_engine,
 )
-from .google_provider import GoogleProvider, SubmissionFile
-from .models import (
+from ..google_provider import GoogleProvider, SubmissionFile
+from ..models import (
     GradingAiAttempt,
     GradingCriterion,
     GradingFileCache,
@@ -33,7 +32,7 @@ from .models import (
     GradingSubmission,
     GradingSubmissionFile,
 )
-from .observability import (
+from ..observability import (
     get_logger,
     log_cache_hit,
     log_cache_miss,
@@ -43,8 +42,8 @@ from .observability import (
     safe_fields,
     text_preview,
 )
-from .privacy import PrivacyReport, ScrubbedSubmission, scrub_submission
-from .schemas import (
+from ..privacy import PrivacyReport, ScrubbedSubmission, scrub_submission
+from ..schemas import (
     GradingCriterionInput,
     GradingCriterionRead,
     GradingFileCacheRead,
@@ -52,7 +51,20 @@ from .schemas import (
     GradingSubmissionFileRead,
     GradingSubmissionRead,
 )
-from .settings import get_settings
+from ..settings import get_settings
+from ._common import (
+    CachedScrubbedSubmission,
+    default_cache_expiry,
+    _PRIVACY_STATUS_RANK,
+    _EXTRACTION_STATUS_RANK,
+    _worst_status,
+    _sum_optional,
+    _sum_float_optional,
+    _int_or_none,
+    _identity_hash,
+    _iso,
+    _aware,
+)
 
 logger = get_logger(__name__)
 
@@ -79,18 +91,6 @@ DEFAULT_CRITERIA = [
         description="Communicates in an organized, readable way.",
     ),
 ]
-
-
-@dataclass(frozen=True)
-class CachedScrubbedSubmission:
-    extracted: ExtractedSubmissionContent
-    scrubbed: ScrubbedSubmission
-    cache_hit: bool
-
-
-def default_cache_expiry() -> datetime:
-    settings = get_settings()
-    return datetime.now(UTC) + timedelta(hours=settings.grading_cache_ttl_hours)
 
 
 def ensure_default_criteria(
@@ -865,23 +865,6 @@ def grading_csv(session: Session, job: GradingJob) -> str:
     return buffer.getvalue()
 
 
-_PRIVACY_STATUS_RANK = {
-    "clean": 0,
-    "partial_redaction": 1,
-    "redacted": 2,
-    "high_reidentification_risk": 3,
-    "failed": 4,
-}
-_EXTRACTION_STATUS_RANK = {"supported": 0, "degraded": 1, "unsupported": 2, "failed": 3}
-
-
-def _worst_status(statuses: list[str], ranks: dict[str, int], default: str) -> str:
-    present = [status for status in statuses if status]
-    if not present:
-        return default
-    return max(present, key=lambda status: ranks.get(status, 0))
-
-
 def _combine_submission_content(
     parts: list[tuple[SubmissionFile, ExtractedSubmissionContent, ScrubbedSubmission]],
 ) -> str:
@@ -1271,7 +1254,7 @@ def _attempt_metadata(grading_engine: GradingEngine) -> dict[str, int | float | 
     ):
         cost_cents = _completion_cost_cents(grading_engine)
         if cost_cents is None:
-            from .llm_catalog import estimate_cost_cents, load_llm_catalog
+            from ..llm_catalog import estimate_cost_cents, load_llm_catalog
 
             catalog_model = getattr(grading_engine, "catalog_model", None)
             if catalog_model is None:
@@ -1307,20 +1290,6 @@ def _completion_cost_cents(grading_engine: GradingEngine) -> float | None:
         return round(float(cost_usd) * 100, 4)
     except (TypeError, ValueError):
         return None
-
-
-def _sum_optional(values) -> int | None:
-    present = [value for value in values if value is not None]
-    if not present:
-        return None
-    return sum(present)
-
-
-def _sum_float_optional(values) -> float | None:
-    present = [value for value in values if value is not None]
-    if not present:
-        return None
-    return round(sum(present), 4)
 
 
 def _submission_read(
@@ -1384,15 +1353,6 @@ def _submission_read(
         ai_cost_cents=attempt.cost_cents if attempt else None,
         ai_latency_ms=attempt.latency_ms if attempt else None,
     )
-
-
-def _int_or_none(value: object) -> int | None:
-    if isinstance(value, bool) or value is None:
-        return None
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return None
 
 
 def group_key_for(file: SubmissionFile) -> str:
@@ -1525,16 +1485,6 @@ def _submission_for_file(
     return row
 
 
-def _identity_hash(submission: GradingSubmission) -> str:
-    payload = "\0".join(
-        [
-            submission.student_name or "",
-            submission.student_email or "",
-        ]
-    )
-    return sha256(payload.encode("utf-8")).hexdigest()
-
-
 def _refresh_counts(session: Session, job: GradingJob) -> None:
     submissions = session.exec(
         select(GradingSubmission).where(GradingSubmission.job_id == job.id)
@@ -1542,13 +1492,3 @@ def _refresh_counts(session: Session, job: GradingJob) -> None:
     job.total_submissions = len(submissions)
     job.reviewed_submissions = sum(1 for row in submissions if row.reviewed)
     job.flagged_submissions = sum(1 for row in submissions if row.flag or row.error)
-
-
-def _iso(value: datetime | None) -> str | None:
-    return value.isoformat() if value else None
-
-
-def _aware(value: datetime) -> datetime:
-    if value.tzinfo is None:
-        return value.replace(tzinfo=UTC)
-    return value
