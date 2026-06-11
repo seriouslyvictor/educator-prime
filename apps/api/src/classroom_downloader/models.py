@@ -189,6 +189,7 @@ class GradingAiAttempt(SQLModel, table=True):
     id: str = Field(primary_key=True)
     job_id: str = Field(index=True)
     submission_id: str = Field(index=True)
+    stage: str = "grading"
     engine: str
     model: str | None = None
     status: str
@@ -204,6 +205,7 @@ class GradingAiAttempt(SQLModel, table=True):
     cache_write_tokens: int | None = None
     cost_cents: float | None = None
     latency_ms: int | None = None
+    retryable: bool = False
     retry_count: int = 0
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 

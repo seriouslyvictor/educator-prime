@@ -6,6 +6,7 @@ from sqlmodel import Session, select
 from ..content_extraction import ExtractedSubmissionContent
 from ..grading_engine import GradingEngine, GradingEngineRequest
 from ..google_provider import GoogleProvider, SubmissionFile
+from ..llm_errors import LlmCallError, classify_llm_exception
 from ..models import (
     GradingAiAttempt,
     GradingCriterion,
@@ -198,36 +199,42 @@ def _draft_submission(
             content_chars=len(combined_content),
             content_preview=text_preview(combined_content),
         )
-        result = grading_engine.grade(
-            GradingEngineRequest(
-                job_id=job.id,
-                submission_id=submission.id,
-                activity_title=job.activity_title,
-                rubric_mode=job.rubric_mode,
-                teacher_loop=job.teacher_loop,
-                request_score=job.teacher_loop != "cowrite",
-                rubric_text=job.rubric_text,
-                criteria=[
-                    {
-                        "name": criterion.name,
-                        "weight": criterion.weight,
-                        "description": criterion.description,
-                    }
-                    for criterion in criteria
-                ],
-                student_label=student_label,
-                source_label=source_label,
-                mime_type=mime_type,
-                content=combined_content,
-            )
+        request = GradingEngineRequest(
+            job_id=job.id,
+            submission_id=submission.id,
+            activity_title=job.activity_title,
+            rubric_mode=job.rubric_mode,
+            teacher_loop=job.teacher_loop,
+            request_score=job.teacher_loop != "cowrite",
+            rubric_text=job.rubric_text,
+            criteria=[
+                {
+                    "name": criterion.name,
+                    "weight": criterion.weight,
+                    "description": criterion.description,
+                }
+                for criterion in criteria
+            ],
+            student_label=student_label,
+            source_label=source_label,
+            mime_type=mime_type,
+            content=combined_content,
         )
-    except Exception:
+        try:
+            result = grading_engine.grade(request)
+        except LlmCallError:
+            raise
+        except Exception as exc:
+            raise classify_llm_exception(exc) from exc
+    except LlmCallError as exc:
         log_error(
             logger,
             "grading.submission.engine_call.failed",
             job_id=job.id,
             submission_id=submission.id,
             engine=grading_engine.name,
+            safe_error=exc.code,
+            retryable=exc.retryable,
         )
         attempt = _record_attempt(
             session=session,
@@ -240,7 +247,8 @@ def _draft_submission(
             flags=[],
             privacy_flags=privacy_flags,
             retry_count=retry_count,
-            safe_error="grading_engine_failed",
+            safe_error=exc.code,
+            retryable=exc.retryable,
         )
         submission.flag = attempt.safe_error
         submission.error = attempt.safe_error

@@ -68,6 +68,7 @@ def _submission_read(
         privacy_status=attempt.privacy_status if attempt else None,
         extraction_status=attempt.extraction_status if attempt else None,
         ai_attempt_status=attempt.status if attempt else None,
+        error_retryable=attempt.retryable if attempt else False,
         ai_engine=attempt.engine if attempt else None,
         ai_model=attempt.model if attempt else None,
         ai_safe_error=attempt.safe_error if attempt else None,

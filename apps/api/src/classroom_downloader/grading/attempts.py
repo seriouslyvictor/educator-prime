@@ -23,6 +23,7 @@ def _record_attempt(
     privacy_status: str,
     flags: list[str],
     retry_count: int,
+    stage: str = "grading",
     privacy_flags: list[str] | None = None,
     safe_error: str | None = None,
     prompt_tokens: int | None = None,
@@ -32,11 +33,13 @@ def _record_attempt(
     cache_write_tokens: int | None = None,
     cost_cents: float | None = None,
     latency_ms: int | None = None,
+    retryable: bool = False,
 ) -> GradingAiAttempt:
     attempt = GradingAiAttempt(
         id=str(uuid4()),
         job_id=job.id,
         submission_id=submission.id,
+        stage=stage,
         engine=engine.name,
         model=getattr(engine, "model", None),
         status=status,
@@ -52,6 +55,7 @@ def _record_attempt(
         cache_write_tokens=cache_write_tokens,
         cost_cents=cost_cents,
         latency_ms=latency_ms,
+        retryable=retryable,
         retry_count=retry_count,
     )
     session.add(attempt)
@@ -63,6 +67,7 @@ def _record_attempt(
         attempt_id=attempt.id,
         job_id=job.id,
         submission_id=submission.id,
+        stage=attempt.stage,
         engine=attempt.engine,
         model=attempt.model,
         status=attempt.status,
@@ -77,6 +82,7 @@ def _record_attempt(
         cache_write_tokens=attempt.cache_write_tokens,
         cost_cents=attempt.cost_cents,
         latency_ms=attempt.latency_ms,
+        retryable=attempt.retryable,
         retry_count=attempt.retry_count,
     )
     return attempt

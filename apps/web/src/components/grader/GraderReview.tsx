@@ -373,10 +373,12 @@ export function GraderReview({
             </label>
 
             <div className="suggestion-actions">
-              <button className="btn btn-secondary" onClick={() => onRetry(active)} disabled={busy}>
-                <AppIcon name={busy ? "loader" : "refresh"} className={busy ? "ico spin" : "ico"} />
-                {blockedActive ? "Tentar de novo" : "Repetir"}
-              </button>
+              {!blockedActive || active.error_retryable ? (
+                <button className="btn btn-secondary" onClick={() => onRetry(active)} disabled={busy}>
+                  <AppIcon name={busy ? "loader" : "refresh"} className={busy ? "ico spin" : "ico"} />
+                  {blockedActive ? "Tentar novamente" : "Repetir"}
+                </button>
+              ) : null}
               <button className="btn btn-ai" onClick={accept} disabled={!hasValidScore || busy}>
                 <AppIcon name="check" />
                 {blockedActive ? "Salvar nota manual" : "Aceitar e avançar"}
@@ -787,16 +789,19 @@ function BlockedEvidence({
       <h2>Esta entrega não pôde ser lida pela IA</h2>
       <p>
         {submission.error ? `${safeStatusLabel(submission.error)}. ` : ""}
-        Você ainda pode abrir o arquivo original, tentar extrair novamente ou dar uma nota manual no painel ao lado.
+        Você ainda pode abrir o arquivo original
+        {submission.error_retryable ? ", tentar novamente" : ""} ou dar uma nota manual no painel ao lado.
       </p>
       <div className="preview-blocked-actions">
         <a className="btn btn-secondary" href={url} target="_blank" rel="noreferrer">
           <AppIcon name="download" /> Baixar original
         </a>
-        <button className="btn btn-ai" onClick={onRetry} disabled={busy}>
-          <AppIcon name={busy ? "loader" : "refresh"} className={busy ? "ico spin" : "ico"} />
-          Tentar extrair novamente
-        </button>
+        {submission.error_retryable ? (
+          <button className="btn btn-ai" onClick={onRetry} disabled={busy}>
+            <AppIcon name={busy ? "loader" : "refresh"} className={busy ? "ico spin" : "ico"} />
+            Tentar novamente
+          </button>
+        ) : null}
       </div>
     </div>
   );

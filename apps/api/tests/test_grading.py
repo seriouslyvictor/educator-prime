@@ -9,6 +9,7 @@ os.environ["CD_DATABASE_URL"] = "sqlite:///:memory:"
 os.environ["CD_GOOGLE_PROVIDER"] = "mock"
 
 from fastapi.testclient import TestClient
+from litellm import exceptions as litellm_exceptions
 from sqlmodel import Session, select
 
 from classroom_downloader.database import engine
@@ -1604,8 +1605,93 @@ def test_litellm_malformed_response_marks_attempt_failed(
 
     submission = body["submissions"][0]
     assert submission["ai_attempt_status"] == "failed"
-    assert submission["ai_safe_error"] == "grading_engine_failed"
-    assert submission["error"] == "grading_engine_failed"
+    assert submission["ai_safe_error"] == "malformed_llm_response"
+    assert submission["error"] == "malformed_llm_response"
+    assert submission["error_retryable"] is True
+
+
+def test_litellm_503_marks_attempt_retryable_api_unavailable(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    settings = get_settings()
+    original_settings = {
+        "grading_cache_path": settings.grading_cache_path,
+        "grading_engine": settings.grading_engine,
+        "litellm_model": settings.litellm_model,
+        "llm_model_catalog_mode": settings.llm_model_catalog_mode,
+        "llm_model_catalog_cache_path": settings.llm_model_catalog_cache_path,
+        "llm_model_overlay_path": settings.llm_model_overlay_path,
+    }
+    cache_path = tmp_path / "model-prices.json"
+    overlay_path = tmp_path / "overlay.json"
+    cache_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "fetched_at": "2025-01-01T00:00:00Z",
+                "models": [
+                    {
+                        "litellm_model": "openai/gpt-5",
+                        "input_cost_per_token": 0.0,
+                        "output_cost_per_token": 0.0,
+                        "max_input_tokens": 128000,
+                        "max_output_tokens": 4096,
+                        "supports_response_schema": True,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    overlay_path.write_text(
+        '{"schema_version":1,"default_model":"openai/gpt-5","models":{"openai/gpt-5":{"enabled":true,"use_cases":["grading_draft"]}}}',
+        encoding="utf-8",
+    )
+
+    def fake_completion(**kwargs):
+        raise litellm_exceptions.ServiceUnavailableError("down", "openai", "gpt-5")
+
+    monkeypatch.setattr(
+        "classroom_downloader.litellm_engine.litellm.completion",
+        fake_completion,
+    )
+
+    try:
+        settings.grading_cache_path = str(tmp_path / "grading")
+        settings.grading_engine = "litellm"
+        settings.litellm_model = "openai/gpt-5"
+        settings.llm_model_catalog_mode = "local_only"
+        settings.llm_model_catalog_cache_path = str(cache_path)
+        settings.llm_model_overlay_path = str(overlay_path)
+
+        with TestClient(app) as client:
+            job = client.post(
+                "/api/grading/jobs",
+                json={
+                    "course_id": "course-2",
+                    "activity_id": "activity-3",
+                    "rubric_mode": "brief",
+                    "teacher_loop": "approve",
+                },
+            ).json()
+            body = client.post(f"/api/grading/jobs/{job['id']}/draft").json()
+    finally:
+        for key, value in original_settings.items():
+            setattr(settings, key, value)
+
+    submission = body["submissions"][0]
+    assert submission["ai_attempt_status"] == "failed"
+    assert submission["ai_safe_error"] == "api_unavailable"
+    assert submission["error"] == "api_unavailable"
+    assert submission["error_retryable"] is True
+    with Session(engine) as session:
+        attempt = session.exec(
+            select(GradingAiAttempt).where(GradingAiAttempt.submission_id == submission["id"])
+        ).first()
+    assert attempt is not None
+    assert attempt.stage == "grading"
+    assert attempt.retryable is True
 
 
 def test_litellm_missing_score_marks_attempt_failed_in_scored_mode(
@@ -1676,7 +1762,8 @@ def test_litellm_missing_score_marks_attempt_failed_in_scored_mode(
     submission = body["submissions"][0]
     assert submission["ai_attempt_status"] == "failed"
     assert submission["ai_score"] is None
-    assert submission["error"] == "grading_engine_failed"
+    assert submission["error"] == "malformed_llm_response"
+    assert submission["error_retryable"] is True
 
 
 def test_pseudonym_mapping_is_local_and_stable_across_retry(tmp_path) -> None:

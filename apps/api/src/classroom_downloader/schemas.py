@@ -163,6 +163,7 @@ class GradingSubmissionRead(BaseModel):
     privacy_status: str | None = None
     extraction_status: str | None = None
     ai_attempt_status: str | None = None
+    error_retryable: bool = False
     ai_engine: str | None = None
     ai_model: str | None = None
     ai_safe_error: str | None = None

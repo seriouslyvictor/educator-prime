@@ -3,6 +3,7 @@
 > **Status:** in execution on branch `codex/image-grading`; Phase 0 complete.
 > **Execution progress:**
 > - Phase 0 baseline complete: `uv run pytest -q` in `apps/api` -> 123 passed; `pnpm install --frozen-lockfile; pnpm build` in `apps/web` -> build succeeded.
+> - Phase 1 error taxonomy complete: added shared LLM error classification, grading-stage retryable persistence, snapshot/frontend retry surfacing, and tests. Gate: `uv run pytest -q` in `apps/api` -> 127 passed; `pnpm build` in `apps/web` -> build succeeded.
 > **Updated 2026-06-10** after the `grading.py` → `grading/` package split (`plan-grading-split.md`,
 > commits `5d02ad1`…`9b72d83`): all grading-layer references below now point at the package
 > submodules. The compat shim `grading/__init__.py` keeps `classroom_downloader.grading.*`
