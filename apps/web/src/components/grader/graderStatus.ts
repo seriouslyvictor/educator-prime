@@ -98,6 +98,25 @@ export function safeStatusLabel(value?: string | null) {
   return labels[value] ?? value.replaceAll("_", " ");
 }
 
+export function errorLayerLabel(value?: string | null) {
+  if (!value) return "";
+  if (value === "cached_file_missing" || value.startsWith("local_")) {
+    return "Imagem nao saiu do computador";
+  }
+  if (
+    value.startsWith("api_") ||
+    value.startsWith("vision_api_") ||
+    value === "malformed_llm_response" ||
+    value === "vision_malformed_response"
+  ) {
+    return "Falha temporaria do provedor";
+  }
+  if (value.startsWith("vision_") || value === "content_blocked") {
+    return "A IA recebeu e nao conseguiu concluir";
+  }
+  return "Requer revisao manual";
+}
+
 export function privacyTone(submission?: GradingSubmission) {
   if (!submission?.privacy_status) return "neutral";
   if (submission.privacy_status === "clean") return "ok";

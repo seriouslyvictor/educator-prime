@@ -8,6 +8,7 @@ import {
   privacyTone,
   redactionLabel,
   redactionSummary,
+  errorLayerLabel,
   safeStatusLabel,
 } from "./graderStatus";
 import graderStyles from "./Grader.module.css";
@@ -25,6 +26,11 @@ function initials(name: string | null | undefined, fallback: string): string {
 
 function isBlocked(submission: GradingSubmission | undefined): boolean {
   return Boolean(submission?.error) || submission?.ai_attempt_status === "blocked";
+}
+
+function isVisualSubmission(submission: GradingSubmission): boolean {
+  const files = submission.files?.length ? submission.files : [{ mime_type: submission.mime_type }];
+  return files.some((file) => file.mime_type?.startsWith("image/"));
 }
 
 function studentLabel(submission: GradingSubmission): string {
@@ -255,6 +261,7 @@ export function GraderReview({
                       {active.confidence != null && !blockedActive
                         ? ` · ${Math.round(active.confidence * 100)}% confiança`
                         : ""}
+                      {isVisualSubmission(active) ? <span className="visual-badge">visual transcrito</span> : null}
                     </div>
                   </div>
                 </div>
@@ -326,8 +333,14 @@ export function GraderReview({
                 <AppIcon name="triangleAlert" />
                 <div>
                   <strong>A IA não pôde gerar um rascunho.</strong>
-                  {active.error ? ` ${safeStatusLabel(active.error)}.` : ""} Tente extrair novamente, dê uma nota manual
-                  ou deixe esta entrega para correção manual.
+                  {active.error ? (
+                    <>
+                      {" "}
+                      <span className="error-layer">{errorLayerLabel(active.error)}</span>: {safeStatusLabel(active.error)}.
+                    </>
+                  ) : null}{" "}
+                  {active.error_retryable ? "Tente novamente, " : ""}dê uma nota manual ou deixe esta entrega para
+                  correção manual.
                 </div>
               </div>
             ) : active.flag ? (
@@ -452,7 +465,14 @@ function AuditReport({ audit, onClose }: { audit: PrivacyAudit; onClose: () => v
                 <span className={`student-state ${row.privacy_status === "clean" ? "ok" : row.audit_pass ? "warn" : "danger"}`}>
                   {safeStatusLabel(row.blocked_reason) || privacyLabel(row.privacy_status)}
                 </span>
-                <span className="ar-flags">{redactionSummary(row.redaction_counts)}</span>
+                <span className="ar-flags">
+                  {redactionSummary(row.redaction_counts)}
+                  {row.extraction_status === "pending_vision" ? (
+                    <small className="visual-audit-note">
+                      Imagem sera enviada uma vez para transcricao ao gerar rascunhos.
+                    </small>
+                  ) : null}
+                </span>
               </div>
             ))}
           </section>
@@ -535,6 +555,7 @@ function StudentRow({
             <AppIcon name={meta.icon} />
           )}
           {drafting ? "gerando rascunho..." : queued ? "na fila" : meta.label}
+          {isVisualSubmission(submission) ? <span className="visual-dot">visual</span> : null}
         </div>
       </div>
       <div className="student-score">
@@ -788,7 +809,11 @@ function BlockedEvidence({
       <AppIcon name="triangleAlert" />
       <h2>Esta entrega não pôde ser lida pela IA</h2>
       <p>
-        {submission.error ? `${safeStatusLabel(submission.error)}. ` : ""}
+        {submission.error ? (
+          <>
+            <span className="error-layer">{errorLayerLabel(submission.error)}</span>: {safeStatusLabel(submission.error)}.{" "}
+          </>
+        ) : null}
         Você ainda pode abrir o arquivo original
         {submission.error_retryable ? ", tentar novamente" : ""} ou dar uma nota manual no painel ao lado.
       </p>
