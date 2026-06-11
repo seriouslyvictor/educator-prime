@@ -20,29 +20,29 @@
     "semantic_hash": "f419496b11b4ade913ab84377a70affc"
   },
   "apps/api/src/classroom_downloader/content_extraction.py": {
-    "mtime": 1780612249.0595798,
-    "ast_hash": "c31fb4a3cdf8511010dcfa3458cf9178",
-    "semantic_hash": "c31fb4a3cdf8511010dcfa3458cf9178"
+    "mtime": 1781146703.976799,
+    "ast_hash": "e20393481050a9d9868d77b7abf59c08",
+    "semantic_hash": ""
   },
   "apps/api/src/classroom_downloader/database.py": {
-    "mtime": 1780952287.9311738,
-    "ast_hash": "84b99e535ff40c894836f0c8f3709a0f",
-    "semantic_hash": "84b99e535ff40c894836f0c8f3709a0f"
+    "mtime": 1781146028.2512643,
+    "ast_hash": "2d7e8f3c2e2dbc12742ecdcff5df5ba0",
+    "semantic_hash": ""
   },
   "apps/api/src/classroom_downloader/google_provider.py": {
-    "mtime": 1780968999.8906553,
-    "ast_hash": "faca5f77f89fbf5c63a5241256da70dd",
-    "semantic_hash": "faca5f77f89fbf5c63a5241256da70dd"
+    "mtime": 1781147030.6712508,
+    "ast_hash": "da3fa37c69dce5efd2e2380191ed634e",
+    "semantic_hash": ""
   },
   "apps/api/src/classroom_downloader/grading_engine.py": {
-    "mtime": 1780719305.894033,
-    "ast_hash": "7f97ac8a945b0be7cac8397dff7e02e1",
-    "semantic_hash": "7f97ac8a945b0be7cac8397dff7e02e1"
+    "mtime": 1781146703.980898,
+    "ast_hash": "5b1f56ed58852f778196c984fc7cd55d",
+    "semantic_hash": ""
   },
   "apps/api/src/classroom_downloader/litellm_engine.py": {
-    "mtime": 1780793318.6153483,
-    "ast_hash": "10080225eca57c4cd02f96d8bb4c6c96",
-    "semantic_hash": "10080225eca57c4cd02f96d8bb4c6c96"
+    "mtime": 1781146749.3189592,
+    "ast_hash": "13656119ff6d6334008c4ebe597149fa",
+    "semantic_hash": ""
   },
   "apps/api/src/classroom_downloader/llm_catalog.py": {
     "mtime": 1780612249.0756357,
@@ -55,9 +55,9 @@
     "semantic_hash": "fde419e8d4569dfa8107b2bd9955056b"
   },
   "apps/api/src/classroom_downloader/models.py": {
-    "mtime": 1780952233.3345292,
-    "ast_hash": "0254db112d2c251eb15f1559c09bfa3d",
-    "semantic_hash": "0254db112d2c251eb15f1559c09bfa3d"
+    "mtime": 1781146028.2512643,
+    "ast_hash": "50d961f41d93e4aa019e8abc5885ea89",
+    "semantic_hash": ""
   },
   "apps/api/src/classroom_downloader/naming.py": {
     "mtime": 1779245123.240474,
@@ -70,9 +70,9 @@
     "semantic_hash": "c6e0935ea21b8e2939807c28fd9487f5"
   },
   "apps/api/src/classroom_downloader/privacy.py": {
-    "mtime": 1780802615.417532,
-    "ast_hash": "a4e702fd7f3e0230fb1e796ee9894556",
-    "semantic_hash": "a4e702fd7f3e0230fb1e796ee9894556"
+    "mtime": 1781146703.980898,
+    "ast_hash": "ca474c317bc9f37f1ecb3d7f08d32ed6",
+    "semantic_hash": ""
   },
   "apps/api/src/classroom_downloader/privacy_audit.py": {
     "mtime": 1780848558.2516503,
@@ -80,9 +80,9 @@
     "semantic_hash": "ad353cf21dd937356b3b43a77f264035"
   },
   "apps/api/src/classroom_downloader/schemas.py": {
-    "mtime": 1780848215.7486885,
-    "ast_hash": "ef824542aa7fbd9ebc7bb7820b7b49e1",
-    "semantic_hash": "ef824542aa7fbd9ebc7bb7820b7b49e1"
+    "mtime": 1781146028.2512643,
+    "ast_hash": "1dc7a344408f9f5cd9c81bc41c767c52",
+    "semantic_hash": ""
   },
   "apps/api/src/classroom_downloader/settings.py": {
     "mtime": 1780952239.4626677,
@@ -115,9 +115,9 @@
     "semantic_hash": "8e554179f0a186c03e67e5fc658019ab"
   },
   "apps/api/tests/test_grading.py": {
-    "mtime": 1780968581.2155454,
-    "ast_hash": "ea2cf91d0588bcc50109a4d2cc1391b8",
-    "semantic_hash": "ea2cf91d0588bcc50109a4d2cc1391b8"
+    "mtime": 1781147164.6356277,
+    "ast_hash": "1432b35898ae4672f7e83989771587d0",
+    "semantic_hash": ""
   },
   "apps/api/tests/test_grading_resume.py": {
     "mtime": 1780677894.8140287,
@@ -125,9 +125,9 @@
     "semantic_hash": "ff933bdf60ff6925b5ade99aa8229be2"
   },
   "apps/api/tests/test_litellm_engine.py": {
-    "mtime": 1780632003.4002106,
-    "ast_hash": "5febe3630f0924f89653529e3318665f",
-    "semantic_hash": "5febe3630f0924f89653529e3318665f"
+    "mtime": 1781146918.3535657,
+    "ast_hash": "78ced665e173322d9fcfee7777a8ce77",
+    "semantic_hash": ""
   },
   "apps/api/tests/test_llm_catalog.py": {
     "mtime": 1780612249.0756357,
@@ -160,9 +160,9 @@
     "semantic_hash": "05332e0e9259a3889429a572ca1fcd27"
   },
   "apps/web/src/App.tsx": {
-    "mtime": 1780849189.3657422,
-    "ast_hash": "f557bbaf3cea078a27336479f612e87d",
-    "semantic_hash": "f557bbaf3cea078a27336479f612e87d"
+    "mtime": 1781146348.3869648,
+    "ast_hash": "ce4b51d2f4965b8b977007c7a5a96d8d",
+    "semantic_hash": ""
   },
   "apps/web/src/components/ActionBar.tsx": {
     "mtime": 1780612249.093089,
@@ -210,14 +210,14 @@
     "semantic_hash": "2d22bc4bf8d8e18318a717151791081b"
   },
   "apps/web/src/components/grader/GraderReview.tsx": {
-    "mtime": 1780849297.6847234,
-    "ast_hash": "4340af192657e2abb583f2044ffbef64",
-    "semantic_hash": "4340af192657e2abb583f2044ffbef64"
+    "mtime": 1781147508.2362714,
+    "ast_hash": "b436f2c592a950358bdf1ad930036288",
+    "semantic_hash": ""
   },
   "apps/web/src/components/grader/GraderSetup.tsx": {
-    "mtime": 1780810523.453712,
-    "ast_hash": "f476e41f290f035dcbf1854fc92313d7",
-    "semantic_hash": "f476e41f290f035dcbf1854fc92313d7"
+    "mtime": 1781146300.6346202,
+    "ast_hash": "1f6922da18e9d6aceb398ed5f2f68480",
+    "semantic_hash": ""
   },
   "apps/web/src/components/grader/GraderTopbar.tsx": {
     "mtime": 1780630756.7458863,
@@ -230,9 +230,9 @@
     "semantic_hash": "f7ca02d6fec9f5760e79ec2d0046b045"
   },
   "apps/web/src/components/grader/graderStatus.ts": {
-    "mtime": 1780802824.0826712,
-    "ast_hash": "e95d4684900731e54f021cb593df682a",
-    "semantic_hash": "e95d4684900731e54f021cb593df682a"
+    "mtime": 1781147338.543229,
+    "ast_hash": "db30d3956d69793e0d5b66c223859b49",
+    "semantic_hash": ""
   },
   "apps/web/src/components/grader/index.ts": {
     "mtime": 1780715566.6053069,
@@ -270,9 +270,9 @@
     "semantic_hash": "c1c1f24b137a843c1c837f21bc14ed85"
   },
   "apps/web/src/lib/api.ts": {
-    "mtime": 1780848818.5604937,
-    "ast_hash": "4b49cb5993371aebd495d15a18f32fae",
-    "semantic_hash": "4b49cb5993371aebd495d15a18f32fae"
+    "mtime": 1781146076.9212687,
+    "ast_hash": "af8a82daf195af4ba657f165bd888c57",
+    "semantic_hash": ""
   },
   "apps/web/src/lib/folder-export.ts": {
     "mtime": 1780612249.1067848,
@@ -300,9 +300,9 @@
     "semantic_hash": "28ff9538439fa9ff89efa58d0b6f544d"
   },
   "apps/web/src/types.ts": {
-    "mtime": 1780848798.5280666,
-    "ast_hash": "f9ca48c5f12ff85235d3e6596a093686",
-    "semantic_hash": "f9ca48c5f12ff85235d3e6596a093686"
+    "mtime": 1781146076.9202406,
+    "ast_hash": "58e902d93b346e7b5e6ac9b5d86c9a2f",
+    "semantic_hash": ""
   },
   "apps/web/src/vite-env.d.ts": {
     "mtime": 1779244819.4686885,
@@ -385,8 +385,8 @@
     "semantic_hash": "1d8793c3039f0084f474752b643eccbf"
   },
   "apps/api/src/classroom_downloader/routers/grading.py": {
-    "mtime": 1781107675.9546854,
-    "ast_hash": "f1ae1bfbac7261c13cb7ef8ac84f1669",
+    "mtime": 1781146028.263119,
+    "ast_hash": "96a232341ebc3c115a52a302b56393f9",
     "semantic_hash": ""
   },
   "apps/api/src/classroom_downloader/routers/health.py": {
@@ -410,12 +410,12 @@
     "semantic_hash": ""
   },
   "apps/api/grading_surface_after.json": {
-    "mtime": 1781108540.3331861,
+    "mtime": 1781145314.7865417,
     "ast_hash": "f36c879b22530a5a9b0fd8e570cf710b",
     "semantic_hash": ""
   },
   "apps/api/grading_surface_before.json": {
-    "mtime": 1781107671.4528954,
+    "mtime": 1781145314.7875412,
     "ast_hash": "f36c879b22530a5a9b0fd8e570cf710b",
     "semantic_hash": ""
   },
@@ -430,18 +430,18 @@
     "semantic_hash": ""
   },
   "apps/api/src/classroom_downloader/grading/_common.py": {
-    "mtime": 1781107953.134966,
-    "ast_hash": "a7f19235a335507ed2d7e56f5b9b05f0",
+    "mtime": 1781146028.2512643,
+    "ast_hash": "b618ee3239e681e7dd930c1f0f4503a8",
     "semantic_hash": ""
   },
   "apps/api/src/classroom_downloader/grading/attempts.py": {
-    "mtime": 1781108187.5674744,
-    "ast_hash": "6a76d1dadf062479a44300e0b06f7f3d",
+    "mtime": 1781145515.7005148,
+    "ast_hash": "c73ad3d38194c6daa34535780c5ff071",
     "semantic_hash": ""
   },
   "apps/api/src/classroom_downloader/grading/caching.py": {
-    "mtime": 1781108167.969649,
-    "ast_hash": "c3f4dd2581af7a7f35f6530a31591911",
+    "mtime": 1781146806.6502929,
+    "ast_hash": "fb8243ad1df005ffe07ce4dddcbf0c92",
     "semantic_hash": ""
   },
   "apps/api/src/classroom_downloader/grading/criteria.py": {
@@ -450,8 +450,8 @@
     "semantic_hash": ""
   },
   "apps/api/src/classroom_downloader/grading/drafting.py": {
-    "mtime": 1781108485.997517,
-    "ast_hash": "af1b574e4afd5928c13c76445eeb73d0",
+    "mtime": 1781147207.1341434,
+    "ast_hash": "f38b07ad1c83aca5b38fe4e80170e16c",
     "semantic_hash": ""
   },
   "apps/api/src/classroom_downloader/grading/export.py": {
@@ -465,8 +465,8 @@
     "semantic_hash": ""
   },
   "apps/api/src/classroom_downloader/grading/snapshots.py": {
-    "mtime": 1781108211.9691398,
-    "ast_hash": "73da9189c4a6d65343b3a30d90ea6046",
+    "mtime": 1781146028.2611804,
+    "ast_hash": "103f5ffbcd23b8041830b0ea7b9f63fb",
     "semantic_hash": ""
   },
   "apps/api/src/classroom_downloader/grading/submissions.py": {
@@ -539,14 +539,9 @@
     "ast_hash": "45b1ba3a90cb2c528c45bd7af605c155",
     "semantic_hash": ""
   },
-  "plan-grading-split.md": {
-    "mtime": 1781058871.420314,
-    "ast_hash": "e67bbdf6bd2a58f43885a30046ad8099",
-    "semantic_hash": ""
-  },
   "plan-image-grading.md": {
-    "mtime": 1781106287.0825546,
-    "ast_hash": "27bc40ef045743f8a5f8e66b57a7567e",
+    "mtime": 1781147653.4120994,
+    "ast_hash": "e65739d5d3e760217c41fa7dcc1860a6",
     "semantic_hash": ""
   },
   ".audit-ui/shots/1024x768_00-connect.png": {
@@ -732,6 +727,41 @@
   ".audit-ui/shots/debug_state.png": {
     "mtime": 1781061504.0912602,
     "ast_hash": "b2f54edca921ad795adee36d96ce69a8",
+    "semantic_hash": ""
+  },
+  "apps/api/src/classroom_downloader/image_preprocessing.py": {
+    "mtime": 1781146489.4804292,
+    "ast_hash": "b1435ac28f1e6fbd030821c297f21868",
+    "semantic_hash": ""
+  },
+  "apps/api/src/classroom_downloader/llm_errors.py": {
+    "mtime": 1781145515.6965165,
+    "ast_hash": "0b2d351b340bf79aa0e24095c63542d6",
+    "semantic_hash": ""
+  },
+  "apps/api/tests/test_image_preprocessing.py": {
+    "mtime": 1781146555.4702442,
+    "ast_hash": "dcf20fa2b4e2ec87c6f059389fe02fc2",
+    "semantic_hash": ""
+  },
+  "apps/api/tests/test_llm_errors.py": {
+    "mtime": 1781145719.759802,
+    "ast_hash": "b4e061bbd9186cdc9e142956886b6296",
+    "semantic_hash": ""
+  },
+  "apps/api/tests/test_vision_live.py": {
+    "mtime": 1781147709.766211,
+    "ast_hash": "71f1cceb8fc3f35d15d7c85400531e61",
+    "semantic_hash": ""
+  },
+  "archive/plan-grading-split.md": {
+    "mtime": 1781058871.420314,
+    "ast_hash": "e67bbdf6bd2a58f43885a30046ad8099",
+    "semantic_hash": ""
+  },
+  "plan-observability.md": {
+    "mtime": 1781144504.826085,
+    "ast_hash": "09f5f111b41a22e5f32e6d697897c41d",
     "semantic_hash": ""
   }
 }

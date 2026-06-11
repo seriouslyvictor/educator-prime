@@ -3,6 +3,11 @@ from pathlib import Path
 
 from .models import GradingFileCache
 from .observability import get_logger, log_event, text_preview
+from .zip_extraction import (
+    ZIP_MIME_TYPES,
+    extract_zip_submission,
+    render_zip_submission_text,
+)
 
 
 logger = get_logger(__name__)
@@ -34,6 +39,7 @@ SAFE_SOURCE_EXTENSIONS = {
     ".py",
     ".txt",
     ".webp",
+    ".zip",
 }
 
 
@@ -108,6 +114,9 @@ def extract_submission_content(
             error="cached_file_missing",
         )
 
+    if _is_zip_submission(cache_file, mime_type):
+        return _extract_zip_content(cache_file, path, safe_source_label)
+
     content = path.read_bytes()
     text = _decode_text(content)
     if text is None:
@@ -164,6 +173,66 @@ def extract_submission_content(
         text="",
         safe_source_label=safe_source_label,
         error="unsupported_file_type",
+    )
+
+
+def _is_zip_submission(cache_file: GradingFileCache, mime_type: str) -> bool:
+    if mime_type in ZIP_MIME_TYPES:
+        return True
+    return Path(cache_file.source_name).suffix.lower() == ".zip"
+
+
+def _extract_zip_content(
+    cache_file: GradingFileCache,
+    path: Path,
+    safe_source_label: str,
+) -> ExtractedSubmissionContent:
+    result = extract_zip_submission(path)
+    if result.error:
+        log_event(
+            logger,
+            "content.extract.zip_rejected",
+            cache_file_id=cache_file.id,
+            error=result.error,
+        )
+        return ExtractedSubmissionContent(
+            status="unsupported",
+            text="",
+            safe_source_label=safe_source_label,
+            error=result.error,
+        )
+    if not result.entries:
+        log_event(
+            logger,
+            "content.extract.zip_no_gradeable_entries",
+            cache_file_id=cache_file.id,
+            skipped_count=len(result.skipped),
+            noise_count=result.noise_count,
+        )
+        return ExtractedSubmissionContent(
+            status="unsupported",
+            text="",
+            safe_source_label=safe_source_label,
+            error="zip_no_gradeable_entries",
+        )
+    text = render_zip_submission_text(result)
+    status = "supported" if not result.skipped and not result.truncated else "degraded"
+    log_event(
+        logger,
+        "content.extract.zip",
+        cache_file_id=cache_file.id,
+        status=status,
+        entry_count=len(result.entries),
+        skipped_count=len(result.skipped),
+        noise_count=result.noise_count,
+        truncated=result.truncated,
+        char_count=len(text),
+        text_preview=text_preview(text),
+    )
+    return ExtractedSubmissionContent(
+        status=status,
+        text=text,
+        safe_source_label=safe_source_label,
     )
 
 

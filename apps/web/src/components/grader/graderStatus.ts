@@ -89,6 +89,12 @@ export function safeStatusLabel(value?: string | null) {
     local_unsupported_image_format: "formato de imagem nao suportado (nao foi enviada)",
     local_image_too_large: "imagem grande demais (nao foi enviada)",
     cached_file_missing: "arquivo em cache nao encontrado (nao foi enviado)",
+    zip_invalid: "zip invalido ou corrompido (nao foi enviado)",
+    zip_encrypted: "zip protegido por senha (nao foi enviado)",
+    zip_too_large: "zip grande demais (nao foi enviado)",
+    zip_too_many_files: "zip com arquivos demais (nao foi enviado)",
+    zip_suspicious_compression: "zip com compressao suspeita (nao foi enviado)",
+    zip_no_gradeable_entries: "zip sem arquivos avaliaveis (nao foi enviado)",
     privacy_blocked: "bloqueado por privacidade",
     unsupported_file_type: "tipo de arquivo não suportado",
     high_reidentification_risk: "alto risco de reidentificação",
@@ -102,6 +108,9 @@ export function errorLayerLabel(value?: string | null) {
   if (!value) return "";
   if (value === "cached_file_missing" || value.startsWith("local_")) {
     return "Imagem nao saiu do computador";
+  }
+  if (value.startsWith("zip_")) {
+    return "Arquivo nao saiu do computador";
   }
   if (
     value.startsWith("api_") ||
