@@ -30,7 +30,13 @@ _PRIVACY_STATUS_RANK = {
     "high_reidentification_risk": 3,
     "failed": 4,
 }
-_EXTRACTION_STATUS_RANK = {"supported": 0, "degraded": 1, "unsupported": 2, "failed": 3}
+_EXTRACTION_STATUS_RANK = {
+    "supported": 0,
+    "degraded": 1,
+    "pending_vision": 1,
+    "unsupported": 2,
+    "failed": 3,
+}
 
 
 def _worst_status(statuses: list[str], ranks: dict[str, int], default: str) -> str:

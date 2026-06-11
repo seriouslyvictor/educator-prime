@@ -42,7 +42,11 @@ class ExtractedSubmissionContent:
     error: str | None = None
 
 
-def extract_submission_content(cache_file: GradingFileCache) -> ExtractedSubmissionContent:
+def extract_submission_content(
+    cache_file: GradingFileCache,
+    *,
+    allow_visual_pending: bool = False,
+) -> ExtractedSubmissionContent:
     mime_type = cache_file.mime_type.lower()
     safe_source_label = _safe_source_label(cache_file)
     log_event(
@@ -58,6 +62,18 @@ def extract_submission_content(cache_file: GradingFileCache) -> ExtractedSubmiss
         safe_source_label=safe_source_label,
     )
     if mime_type.startswith("image/"):
+        if allow_visual_pending:
+            log_event(
+                logger,
+                "content.extract.pending_visual",
+                cache_file_id=cache_file.id,
+                mime_type=cache_file.mime_type,
+            )
+            return ExtractedSubmissionContent(
+                status="pending_vision",
+                text="",
+                safe_source_label=safe_source_label,
+            )
         log_event(
             logger,
             "content.extract.unsupported_visual",

@@ -62,11 +62,13 @@ export function GraderSetup({
     rubricMode: RubricMode;
     teacherLoop: TeacherLoopMode;
     rubricText: string;
+    includeVisualSubmissions: boolean;
   }) => void;
   onStart: (payload: {
     rubricMode: RubricMode;
     teacherLoop: TeacherLoopMode;
     rubricText: string;
+    includeVisualSubmissions: boolean;
     criteria?: GradingCriterionInput[];
   }) => void;
   onContinue: () => void;
@@ -75,6 +77,7 @@ export function GraderSetup({
   const [rubricMode, setRubricMode] = useState<RubricMode>("infer");
   const [teacherLoop, setTeacherLoop] = useState<TeacherLoopMode>("approve");
   const [rubricText, setRubricText] = useState("");
+  const [includeVisualSubmissions, setIncludeVisualSubmissions] = useState(false);
   const [criteria, setCriteria] = useState<GradingCriterionInput[]>([
     { name: "Funcionalidade", weight: 60, description: "Resolve o que foi pedido." },
     { name: "Clareza", weight: 40, description: "Organização, leitura e justificativa." },
@@ -84,6 +87,10 @@ export function GraderSetup({
   // edit it. Inference has happened once the job carries non-placeholder criteria.
   const criteriaInferred = rubricMode === "infer" && !!job && job.criteria.length > 0 && !hasDefaultCriteria(job);
   const jobCriteriaSignature = job?.criteria.map((c) => `${c.name}:${c.weight}`).join("|") ?? "";
+
+  useEffect(() => {
+    setIncludeVisualSubmissions(job?.include_visual_submissions ?? false);
+  }, [job?.id, job?.include_visual_submissions]);
 
   // Load the inferred rubric into the editable state so the teacher edits the real
   // criteria (not a throwaway copy). Edits don't change the signature, so they survive.
@@ -227,6 +234,21 @@ export function GraderSetup({
                   <AppIcon name="info" /> A auditoria não chama a IA; ela prepara os arquivos e mostra bloqueios
                   antes dos rascunhos.
                 </p>
+                <label className="visual-consent">
+                  <input
+                    type="checkbox"
+                    checked={includeVisualSubmissions}
+                    disabled={preparing || !!job}
+                    onChange={(event) => setIncludeVisualSubmissions(event.target.checked)}
+                  />
+                  <span>
+                    <strong>Incluir envios visuais (fotos e capturas de tela)</strong>
+                    <small>
+                      Pixels nao podem ser pre-anonimizados; a imagem sera enviada uma vez ao provedor de IA
+                      para transcricao, e a transcricao sera anonimizada antes da correcao.
+                    </small>
+                  </span>
+                </label>
                 <div className="setup-footer-actions">
                   <button className="btn btn-ghost" onClick={onBack} disabled={preparing}>
                     Cancelar
@@ -234,7 +256,7 @@ export function GraderSetup({
                   {rubricMode === "infer" && !criteriaInferred ? (
                     <button
                       className="btn btn-primary"
-                      onClick={() => onInferCriteria({ rubricMode, teacherLoop, rubricText })}
+                      onClick={() => onInferCriteria({ rubricMode, teacherLoop, rubricText, includeVisualSubmissions })}
                       disabled={preparing}
                     >
                       <AppIcon name={preparing ? "loader" : "sparkle"} className={preparing ? "ico spin" : "ico"} />
@@ -243,7 +265,7 @@ export function GraderSetup({
                   ) : (
                     <button
                       className="btn btn-primary"
-                      onClick={() => onStart({ rubricMode, teacherLoop, rubricText, criteria: startCriteria })}
+                      onClick={() => onStart({ rubricMode, teacherLoop, rubricText, includeVisualSubmissions, criteria: startCriteria })}
                       disabled={preparing || !criteriaValid}
                     >
                       <AppIcon name={preparing ? "loader" : "sparkle"} className={preparing ? "ico spin" : "ico"} />
@@ -545,7 +567,14 @@ function PreparedPanel({
             <div className="audit-row" key={row.id}>
               <span>{row.student_label}</span>
               <span>{row.redacted_source_name}</span>
-              <span>{extractionLabel(row.extraction_status)}</span>
+              <span>
+                {extractionLabel(row.extraction_status)}
+                {row.extraction_status === "pending_vision" ? (
+                  <small className="visual-audit-note">
+                    Imagem sera enviada uma vez para transcricao ao gerar rascunhos.
+                  </small>
+                ) : null}
+              </span>
               <span className={`student-state ${row.privacy_status === "clean" ? "ok" : row.audit_pass ? "warn" : "danger"}`}>
                 {safeStatusLabel(row.blocked_reason) || privacyLabel(row.privacy_status)}
               </span>

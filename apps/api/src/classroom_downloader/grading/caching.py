@@ -131,7 +131,11 @@ def scrub_submission_cached(
         .where(GradingScrubCache.deleted_at.is_(None))
         .order_by(GradingScrubCache.created_at.desc())
     ).first()
-    if existing and _aware(existing.expires_at) > now:
+    if (
+        existing
+        and _aware(existing.expires_at) > now
+        and not _bypass_visual_scrub_cache(job, cache_file, existing)
+    ):
         extracted = ExtractedSubmissionContent(
             status=existing.extraction_status,
             text="",
@@ -168,8 +172,20 @@ def scrub_submission_cached(
         submission_id=submission.id,
         content_hash=cache_file.content_hash,
     )
-    extracted = extract_submission_content(cache_file)
+    extracted = extract_submission_content(
+        cache_file,
+        allow_visual_pending=job.include_visual_submissions,
+    )
     scrubbed = scrub_submission(session, job, submission, extracted)
+    if extracted.status == "pending_vision":
+        log_event(
+            logger,
+            "grading.scrub_cache.skip_pending_vision",
+            job_id=job.id,
+            submission_id=submission.id,
+            content_hash=cache_file.content_hash,
+        )
+        return CachedScrubbedSubmission(extracted, scrubbed, cache_hit=False)
     row = GradingScrubCache(
         id=str(uuid4()),
         job_id=job.id,
@@ -205,6 +221,19 @@ def scrub_submission_cached(
         extraction_status=extracted.status,
     )
     return CachedScrubbedSubmission(extracted, scrubbed, cache_hit=False)
+
+
+def _bypass_visual_scrub_cache(
+    job: GradingJob,
+    cache_file: GradingFileCache,
+    existing: GradingScrubCache,
+) -> bool:
+    if not job.include_visual_submissions or not cache_file.mime_type.lower().startswith("image/"):
+        return False
+    return existing.extraction_status == "pending_vision" or (
+        existing.extraction_status == "unsupported"
+        and existing.extraction_error == "unsupported_visual_submission"
+    )
 
 
 def delete_job_cache(session: Session, job: GradingJob) -> GradingJob:

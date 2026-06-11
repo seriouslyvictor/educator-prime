@@ -224,6 +224,45 @@ def test_privacy_audit_endpoint_returns_safe_report_shape(tmp_path) -> None:
     assert all("diagram" not in row["redacted_source_name"] for row in body["rows"])
 
 
+def test_privacy_audit_marks_visual_rows_pending_with_consent_and_does_not_cache(tmp_path) -> None:
+    get_settings().grading_cache_path = str(tmp_path / "grading")
+    with TestClient(app) as client:
+        job = client.post(
+            "/api/grading/jobs",
+            json={
+                "course_id": "course-1",
+                "activity_id": "activity-1",
+                "rubric_mode": "infer",
+                "teacher_loop": "approve",
+                "include_visual_submissions": True,
+            },
+        ).json()
+        response = client.post(f"/api/grading/jobs/{job['id']}/privacy-audit")
+
+    assert response.status_code == 200
+    body = response.json()
+    image_row = next(row for row in body["rows"] if row["mime_type"].startswith("image/"))
+    assert image_row["extraction_status"] == "pending_vision"
+    assert image_row["extraction_error"] is None
+    assert image_row["audit_pass"] is True
+    assert image_row["blocked_reason"] is None
+    assert body["blocked_files"] == 0
+
+    with Session(engine) as session:
+        image_cache = session.exec(
+            select(GradingFileCache)
+            .where(GradingFileCache.job_id == job["id"])
+            .where(GradingFileCache.mime_type == "image/png")
+        ).one()
+        scrub_rows = session.exec(
+            select(GradingScrubCache)
+            .where(GradingScrubCache.job_id == job["id"])
+            .where(GradingScrubCache.content_hash == image_cache.content_hash)
+        ).all()
+
+    assert scrub_rows == []
+
+
 def test_submission_file_logs_do_not_expose_student_identity(tmp_path, caplog) -> None:
     get_settings().grading_cache_path = str(tmp_path / "grading")
     with caplog.at_level(logging.INFO):
@@ -793,6 +832,24 @@ def test_create_job_rejects_unknown_rubric_mode() -> None:
 
     assert response.status_code == 422
     assert "rubric mode" in response.json()["detail"].lower()
+
+
+def test_create_job_exposes_visual_submission_consent() -> None:
+    with TestClient(app) as client:
+        body = client.post(
+            "/api/grading/jobs",
+            json={
+                "course_id": "course-1",
+                "activity_id": "activity-1",
+                "rubric_mode": "brief",
+                "teacher_loop": "approve",
+                "include_visual_submissions": True,
+            },
+        ).json()
+        fetched = client.get(f"/api/grading/jobs/{body['id']}").json()
+
+    assert body["include_visual_submissions"] is True
+    assert fetched["include_visual_submissions"] is True
 
 
 def test_update_criteria_replaces_and_survives_reinference(tmp_path) -> None:

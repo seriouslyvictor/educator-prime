@@ -1479,6 +1479,48 @@
   color: var(--ai);
 }
 
+.visual-consent {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.visual-consent input {
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  accent-color: var(--ai);
+}
+
+.visual-consent span {
+  display: grid;
+  gap: 3px;
+}
+
+.visual-consent strong {
+  font-size: 12.5px;
+}
+
+.visual-consent small {
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+.visual-audit-note {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
 /* ===== Shared grading progress modal ===== */
 .grading-progress-modal {
   position: fixed;

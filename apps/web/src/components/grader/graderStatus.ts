@@ -15,6 +15,7 @@ export function privacyLabel(status?: string | null) {
 export function extractionLabel(status?: string | null) {
   if (!status) return "Pendente";
   const labels: Record<string, string> = {
+    pending_vision: "aguardando extracao visual",
     supported: "suportado",
     degraded: "degradado",
     unsupported: "não suportado",
