@@ -8,6 +8,7 @@
 > - Phase 3 preprocessing complete: added Pillow-backed EXIF-stripping/orientation/downscale JPEG preparation, local image error codes, safe image extensions, and unit tests. Gate: `uv run pytest -q` in `apps/api` -> 135 passed; `pnpm build` in `apps/web` -> build succeeded.
 > - Phase 4 vision extraction complete: added engine contracts, LiteLLM multimodal extraction, mock extraction, draft-time preprocessing/extraction/cache integration, PII merge, extraction attempt recording, retryable no-cache handling, and stale-cache bypass tests. Gate: `uv run pytest -q` in `apps/api` -> 141 passed; `pnpm build` in `apps/web` -> build succeeded.
 > - Phase 5 review-screen surfacing complete: added review visual badges, explicit error-layer labels, retryable-only copy/actions, and pending-vision audit notice in review. Gate: `uv run pytest -q` in `apps/api` -> 141 passed; `pnpm build` in `apps/web` -> build succeeded.
+> - Phase 6 live validation complete: added env-gated live vision fixture tests (skipped by default until fixtures and `LIVE_LLM_TESTS=1` are present), reran final gates, and updated Graphify. Gate: `uv run pytest -q` in `apps/api` -> 141 passed, 4 skipped; `pnpm build` in `apps/web` -> build succeeded; `graphify update .` -> rebuilt graph.
 > **Updated 2026-06-10** after the `grading.py` → `grading/` package split (`plan-grading-split.md`,
 > commits `5d02ad1`…`9b72d83`): all grading-layer references below now point at the package
 > submodules. The compat shim `grading/__init__.py` keeps `classroom_downloader.grading.*`
