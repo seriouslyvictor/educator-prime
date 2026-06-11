@@ -91,13 +91,20 @@ def _draft_submission(
 
     file_cache_hits = file_cache_misses = scrub_cache_hits = scrub_cache_misses = 0
     parts: list[tuple[SubmissionFile, ExtractedSubmissionContent, ScrubbedSubmission]] = []
+    vision_extractor = _vision_extractor_for_job(job, grading_engine)
     for file in files:
         cache_file = cache_submission_file(session, job, submission, file, provider)
         if getattr(cache_file, "_cache_hit", False):
             file_cache_hits += 1
         else:
             file_cache_misses += 1
-        cached = scrub_submission_cached(session, job, submission, cache_file)
+        cached = scrub_submission_cached(
+            session,
+            job,
+            submission,
+            cache_file,
+            vision_extractor=vision_extractor,
+        )
         if cached.cache_hit:
             scrub_cache_hits += 1
         else:
@@ -143,6 +150,10 @@ def _draft_submission(
             [extracted.status for _, extracted, _ in parts], _EXTRACTION_STATUS_RANK, "failed"
         )
         first_error = next((extracted.error for _, extracted, _ in parts if extracted.error), None)
+        error_retryable = any(
+            extracted.error == first_error and extracted.retryable
+            for _, extracted, _ in parts
+        )
         safe_error = first_error or (privacy_status if privacy_status == "failed" else None) or "unsupported_file_type"
         log_event(
             logger,
@@ -166,6 +177,7 @@ def _draft_submission(
             privacy_flags=privacy_flags,
             retry_count=retry_count,
             safe_error=safe_error,
+            retryable=error_retryable,
         )
         submission.flag = attempt.safe_error
         submission.error = attempt.safe_error
@@ -330,6 +342,20 @@ def _draft_submission(
     return stats
 
 
+def _vision_extractor_for_job(
+    job: GradingJob,
+    grading_engine: GradingEngine,
+) -> GradingEngine | None:
+    if not job.include_visual_submissions:
+        return None
+    if grading_engine.name == "mock":
+        return grading_engine
+    catalog_model = getattr(grading_engine, "catalog_model", None)
+    if getattr(catalog_model, "supports_vision", False):
+        return grading_engine
+    return None
+
+
 def _refresh_counts(session: Session, job: GradingJob) -> None:
     submissions = session.exec(
         select(GradingSubmission).where(GradingSubmission.job_id == job.id)
@@ -353,7 +379,9 @@ def _refresh_cost_rollup(
     job.total_cached_tokens = _sum_optional(row.cached_prompt_tokens for row in attempts)
     job.total_cost_cents = _sum_float_optional(row.cost_cents for row in attempts)
     job.wall_clock_ms = int((time.monotonic() - started) * 1000)
-    job.submissions_graded = sum(1 for row in attempts if row.status == "completed")
+    job.submissions_graded = sum(
+        1 for row in attempts if row.stage == "grading" and row.status == "completed"
+    )
     job.ai_engine = grading_engine.name
     job.ai_mode = job.batch_mode
     job.ai_model = getattr(grading_engine, "model", None)

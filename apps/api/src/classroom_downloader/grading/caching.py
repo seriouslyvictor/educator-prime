@@ -8,12 +8,16 @@ from uuid import uuid4
 from sqlmodel import Session, select
 
 from ..content_extraction import extract_submission_content, ExtractedSubmissionContent
+from ..grading_engine import GradingEngine, VisionExtractionRequest, VisionExtractionResult
 from ..google_provider import GoogleProvider, SubmissionFile
-from ..models import GradingFileCache, GradingJob, GradingScrubCache, GradingSubmission
+from ..image_preprocessing import prepare_image_for_llm
+from ..llm_errors import LlmCallError
+from ..models import GradingAiAttempt, GradingFileCache, GradingJob, GradingScrubCache, GradingSubmission
 from ..observability import get_logger, log_cache_hit, log_cache_miss, log_event
-from ..privacy import PrivacyReport, ScrubbedSubmission, scrub_submission
+from ..privacy import PrivacyReport, ScrubbedSubmission, merge_reported_pii, scrub_submission
 from ..settings import get_settings
 from ._common import CachedScrubbedSubmission, default_cache_expiry, _identity_hash, _aware
+from .attempts import _attempt_metadata, _record_attempt
 
 logger = get_logger(__name__)
 
@@ -119,6 +123,7 @@ def scrub_submission_cached(
     submission: GradingSubmission,
     cache_file: GradingFileCache,
     commit: bool = True,
+    vision_extractor: GradingEngine | None = None,
 ) -> CachedScrubbedSubmission:
     now = datetime.now(UTC)
     identity_hash = _identity_hash(submission)
@@ -176,7 +181,23 @@ def scrub_submission_cached(
         cache_file,
         allow_visual_pending=job.include_visual_submissions,
     )
+    if extracted.status == "pending_vision" and vision_extractor is not None:
+        extracted = _extract_visual_submission(
+            session,
+            job,
+            submission,
+            cache_file,
+            extracted,
+            vision_extractor,
+        )
     scrubbed = scrub_submission(session, job, submission, extracted)
+    if extracted.pii_observed:
+        scrubbed = ScrubbedSubmission(
+            student_label=scrubbed.student_label,
+            source_label=scrubbed.source_label,
+            content=scrubbed.content,
+            report=merge_reported_pii(scrubbed.report, extracted.pii_observed),
+        )
     if extracted.status == "pending_vision":
         log_event(
             logger,
@@ -185,6 +206,12 @@ def scrub_submission_cached(
             submission_id=submission.id,
             content_hash=cache_file.content_hash,
         )
+        return CachedScrubbedSubmission(extracted, scrubbed, cache_hit=False)
+    if (
+        extracted.error
+        and extracted.retryable
+        and cache_file.mime_type.lower().startswith("image/")
+    ):
         return CachedScrubbedSubmission(extracted, scrubbed, cache_hit=False)
     row = GradingScrubCache(
         id=str(uuid4()),
@@ -221,6 +248,135 @@ def scrub_submission_cached(
         extraction_status=extracted.status,
     )
     return CachedScrubbedSubmission(extracted, scrubbed, cache_hit=False)
+
+
+def _extract_visual_submission(
+    session: Session,
+    job: GradingJob,
+    submission: GradingSubmission,
+    cache_file: GradingFileCache,
+    pending: ExtractedSubmissionContent,
+    vision_extractor: GradingEngine,
+) -> ExtractedSubmissionContent:
+    retry_count = len(
+        session.exec(
+            select(GradingAiAttempt).where(GradingAiAttempt.submission_id == submission.id)
+        ).all()
+    )
+    try:
+        prepared = prepare_image_for_llm(Path(cache_file.cached_path))
+    except LlmCallError as exc:
+        status = "unsupported" if exc.code == "local_unsupported_image_format" else "failed"
+        return ExtractedSubmissionContent(
+            status=status,
+            text="",
+            safe_source_label=pending.safe_source_label,
+            error=exc.code,
+            retryable=exc.retryable,
+        )
+
+    try:
+        result = vision_extractor.extract_image(
+            VisionExtractionRequest(
+                job_id=job.id,
+                submission_id=submission.id,
+                activity_title=job.activity_title,
+                source_label=pending.safe_source_label,
+                image_data=prepared.data,
+                image_mime_type=prepared.mime_type,
+            )
+        )
+    except LlmCallError as exc:
+        safe_error = _vision_safe_error(exc.code)
+        metadata = _attempt_metadata(vision_extractor)
+        _record_attempt(
+            session=session,
+            job=job,
+            submission=submission,
+            engine=vision_extractor,
+            stage="extraction",
+            status="failed",
+            extraction_status="failed",
+            privacy_status="failed",
+            flags=[],
+            privacy_flags=[],
+            retry_count=retry_count,
+            safe_error=safe_error,
+            retryable=exc.retryable,
+            prompt_tokens=metadata["prompt_tokens"],
+            completion_tokens=metadata["completion_tokens"],
+            token_count=metadata["token_count"],
+            cached_prompt_tokens=metadata["cached_prompt_tokens"],
+            cache_write_tokens=metadata["cache_write_tokens"],
+            cost_cents=metadata["cost_cents"],
+            latency_ms=metadata["latency_ms"],
+        )
+        return ExtractedSubmissionContent(
+            status="failed",
+            text="",
+            safe_source_label=pending.safe_source_label,
+            error=safe_error,
+            retryable=exc.retryable,
+        )
+
+    extracted = _extracted_from_vision_result(pending, result)
+    metadata = _attempt_metadata(vision_extractor)
+    _record_attempt(
+        session=session,
+        job=job,
+        submission=submission,
+        engine=vision_extractor,
+        stage="extraction",
+        status="failed" if extracted.status == "failed" else "completed",
+        extraction_status=extracted.status,
+        privacy_status="pending",
+        flags=[],
+        privacy_flags=[],
+        retry_count=retry_count,
+        safe_error=extracted.error,
+        retryable=extracted.retryable,
+        prompt_tokens=metadata["prompt_tokens"],
+        completion_tokens=metadata["completion_tokens"],
+        token_count=metadata["token_count"],
+        cached_prompt_tokens=metadata["cached_prompt_tokens"],
+        cache_write_tokens=metadata["cache_write_tokens"],
+        cost_cents=metadata["cost_cents"],
+        latency_ms=metadata["latency_ms"],
+    )
+    return extracted
+
+
+def _extracted_from_vision_result(
+    pending: ExtractedSubmissionContent,
+    result: VisionExtractionResult,
+) -> ExtractedSubmissionContent:
+    blocks = [result.transcription.strip()]
+    if result.visual_description.strip():
+        blocks.append("[descricao visual]\n" + result.visual_description.strip())
+    text = "\n\n".join(block for block in blocks if block)
+    if result.legibility == "unreadable":
+        return ExtractedSubmissionContent(
+            status="failed",
+            text="",
+            safe_source_label=pending.safe_source_label,
+            error="vision_unreadable",
+            retryable=False,
+            pii_observed=result.pii_observed,
+            content_kind=result.content_kind,
+        )
+    return ExtractedSubmissionContent(
+        status="degraded" if result.legibility == "partial" else "supported",
+        text=text,
+        safe_source_label=pending.safe_source_label,
+        pii_observed=result.pii_observed,
+        content_kind=result.content_kind,
+    )
+
+
+def _vision_safe_error(code: str) -> str:
+    if code.startswith("vision_") or code.startswith("local_"):
+        return code
+    return f"vision_{code}"
 
 
 def _bypass_visual_scrub_cache(

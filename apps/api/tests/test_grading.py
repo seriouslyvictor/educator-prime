@@ -17,6 +17,7 @@ from classroom_downloader.content_extraction import extract_submission_content
 from classroom_downloader.google_provider import ClassroomActivity, ClassroomCourse
 from classroom_downloader.main import app, provider_dependency
 from classroom_downloader.grading_engine import GradingEngine, GradingEngineRequest, GradingEngineResult
+from classroom_downloader.llm_errors import LlmCallError
 from classroom_downloader.models import (
     GradingAiAttempt,
     GradingCriterion,
@@ -1881,6 +1882,148 @@ def test_unsupported_submission_blocks_normal_ai_draft(tmp_path) -> None:
     assert visual_submission["extraction_status"] == "unsupported"
     assert visual_submission["ai_score"] is None
     assert visual_submission["error"] == "unsupported_visual_submission"
+
+
+def test_visual_submission_with_consent_is_extracted_scrubbed_cached_and_graded(tmp_path) -> None:
+    get_settings().grading_cache_path = str(tmp_path / "grading")
+    with TestClient(app) as client:
+        job = client.post(
+            "/api/grading/jobs",
+            json={
+                "course_id": "course-1",
+                "activity_id": "activity-1",
+                "rubric_mode": "brief",
+                "teacher_loop": "approve",
+                "include_visual_submissions": True,
+            },
+        ).json()
+        body = client.post(f"/api/grading/jobs/{job['id']}/draft").json()
+
+    visual_submission = next(row for row in body["submissions"] if row["mime_type"].startswith("image/"))
+    assert visual_submission["ai_attempt_status"] == "completed"
+    assert visual_submission["extraction_status"] == "supported"
+    assert visual_submission["privacy_status"] == "redacted"
+    assert "name_visible" in visual_submission["privacy_flags"]
+    assert visual_submission["error"] is None
+    assert visual_submission["ai_score"] is not None
+
+    with Session(engine) as session:
+        attempts = session.exec(
+            select(GradingAiAttempt)
+            .where(GradingAiAttempt.submission_id == visual_submission["id"])
+            .order_by(GradingAiAttempt.created_at)
+        ).all()
+        image_cache = session.exec(
+            select(GradingFileCache)
+            .where(GradingFileCache.job_id == job["id"])
+            .where(GradingFileCache.mime_type == "image/png")
+        ).one()
+        scrub_cache = session.exec(
+            select(GradingScrubCache)
+            .where(GradingScrubCache.job_id == job["id"])
+            .where(GradingScrubCache.content_hash == image_cache.content_hash)
+        ).one()
+
+    assert [attempt.stage for attempt in attempts] == ["extraction", "grading"]
+    assert scrub_cache.extraction_status == "supported"
+    assert "Transcricao visual mock" in scrub_cache.scrubbed_content
+    assert json.loads(scrub_cache.redaction_counts_json)["name_visible"] == 1
+
+
+def test_retryable_vision_error_does_not_write_scrub_cache_and_surfaces_retryable(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    get_settings().grading_cache_path = str(tmp_path / "grading")
+
+    class ApiUnavailableVisionEngine:
+        name = "mock"
+        model = None
+
+        def grade(self, request):
+            return GradingEngineResult(score=80, confidence=0.9, feedback="ok", flags=[])
+
+        def infer_rubric(self, request):
+            return []
+
+        def extract_image(self, request):
+            raise LlmCallError("api_unavailable", True, "down")
+
+    from classroom_downloader import grading
+
+    monkeypatch.setattr(grading, "get_grading_engine", lambda: ApiUnavailableVisionEngine())
+
+    with TestClient(app) as client:
+        job = client.post(
+            "/api/grading/jobs",
+            json={
+                "course_id": "course-1",
+                "activity_id": "activity-1",
+                "rubric_mode": "brief",
+                "teacher_loop": "approve",
+                "include_visual_submissions": True,
+            },
+        ).json()
+        body = client.post(f"/api/grading/jobs/{job['id']}/draft").json()
+
+    visual_submission = next(row for row in body["submissions"] if row["mime_type"].startswith("image/"))
+    assert visual_submission["ai_attempt_status"] == "blocked"
+    assert visual_submission["error"] == "vision_api_unavailable"
+    assert visual_submission["error_retryable"] is True
+
+    with Session(engine) as session:
+        attempts = session.exec(
+            select(GradingAiAttempt)
+            .where(GradingAiAttempt.submission_id == visual_submission["id"])
+            .order_by(GradingAiAttempt.created_at)
+        ).all()
+        image_cache = session.exec(
+            select(GradingFileCache)
+            .where(GradingFileCache.job_id == job["id"])
+            .where(GradingFileCache.mime_type == "image/png")
+        ).one()
+        scrub_rows = session.exec(
+            select(GradingScrubCache)
+            .where(GradingScrubCache.job_id == job["id"])
+            .where(GradingScrubCache.content_hash == image_cache.content_hash)
+        ).all()
+
+    assert [(attempt.stage, attempt.safe_error, attempt.retryable) for attempt in attempts] == [
+        ("extraction", "vision_api_unavailable", True),
+        ("grading", "vision_api_unavailable", True),
+    ]
+    assert scrub_rows == []
+
+
+def test_visual_consent_bypasses_stale_unsupported_visual_scrub_cache(tmp_path) -> None:
+    get_settings().grading_cache_path = str(tmp_path / "grading")
+    with TestClient(app) as client:
+        job = client.post(
+            "/api/grading/jobs",
+            json={
+                "course_id": "course-1",
+                "activity_id": "activity-1",
+                "rubric_mode": "brief",
+                "teacher_loop": "approve",
+            },
+        ).json()
+        first = client.post(f"/api/grading/jobs/{job['id']}/draft").json()
+        first_visual = next(row for row in first["submissions"] if row["mime_type"].startswith("image/"))
+        assert first_visual["error"] == "unsupported_visual_submission"
+
+        with Session(engine) as session:
+            row = session.get(GradingJob, job["id"])
+            assert row is not None
+            row.include_visual_submissions = True
+            session.add(row)
+            session.commit()
+
+        second = client.post(f"/api/grading/jobs/{job['id']}/draft").json()
+
+    second_visual = next(row for row in second["submissions"] if row["mime_type"].startswith("image/"))
+    assert second_visual["ai_attempt_status"] == "completed"
+    assert second_visual["extraction_status"] == "supported"
+    assert second_visual["error"] is None
 
 
 def test_retry_reuses_cache_before_expiry_and_refetches_after(tmp_path) -> None:

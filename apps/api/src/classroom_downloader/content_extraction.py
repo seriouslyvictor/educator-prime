@@ -43,6 +43,9 @@ class ExtractedSubmissionContent:
     text: str
     safe_source_label: str
     error: str | None = None
+    retryable: bool = False
+    pii_observed: list[str] | None = None
+    content_kind: str | None = None
 
 
 def extract_submission_content(

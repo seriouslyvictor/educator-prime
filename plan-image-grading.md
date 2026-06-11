@@ -6,6 +6,7 @@
 > - Phase 1 error taxonomy complete: added shared LLM error classification, grading-stage retryable persistence, snapshot/frontend retry surfacing, and tests. Gate: `uv run pytest -q` in `apps/api` -> 127 passed; `pnpm build` in `apps/web` -> build succeeded.
 > - Phase 2 consent plumbing complete: added create-time visual-submission consent, backend pending-vision audit semantics with no scrub-cache write, API/frontend payload plumbing, setup checkbox, and audit notice. Gate: `uv run pytest -q` in `apps/api` -> 129 passed; `pnpm build` in `apps/web` -> build succeeded.
 > - Phase 3 preprocessing complete: added Pillow-backed EXIF-stripping/orientation/downscale JPEG preparation, local image error codes, safe image extensions, and unit tests. Gate: `uv run pytest -q` in `apps/api` -> 135 passed; `pnpm build` in `apps/web` -> build succeeded.
+> - Phase 4 vision extraction complete: added engine contracts, LiteLLM multimodal extraction, mock extraction, draft-time preprocessing/extraction/cache integration, PII merge, extraction attempt recording, retryable no-cache handling, and stale-cache bypass tests. Gate: `uv run pytest -q` in `apps/api` -> 141 passed; `pnpm build` in `apps/web` -> build succeeded.
 > **Updated 2026-06-10** after the `grading.py` → `grading/` package split (`plan-grading-split.md`,
 > commits `5d02ad1`…`9b72d83`): all grading-layer references below now point at the package
 > submodules. The compat shim `grading/__init__.py` keeps `classroom_downloader.grading.*`

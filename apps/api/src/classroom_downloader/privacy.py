@@ -87,6 +87,25 @@ class PrivacyReport:
         return sorted(self.counts)
 
 
+def merge_reported_pii(
+    report: PrivacyReport,
+    observed: Iterable[str] | None,
+) -> PrivacyReport:
+    counts = dict(report.counts)
+    observed_categories = [category for category in (observed or []) if category]
+    for category in observed_categories:
+        counts[category] = counts.get(category, 0) + 1
+    if not observed_categories:
+        return PrivacyReport(status=report.status, counts=counts)
+    if any(category in {"face", "id_document"} for category in observed_categories):
+        status = "high_reidentification_risk"
+    elif report.status == "clean":
+        status = "redacted"
+    else:
+        status = report.status
+    return PrivacyReport(status=status, counts=counts)
+
+
 @dataclass(frozen=True)
 class ScrubbedSubmission:
     student_label: str
