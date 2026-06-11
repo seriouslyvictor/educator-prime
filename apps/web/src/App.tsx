@@ -111,6 +111,7 @@ function gradingItemFromJob(job: GradingJob): GradingQueueItem {
     submission_count: job.total_submissions,
     status: job.status,
     latest_job_id: job.id,
+    queue_state: job.queue_state,
     reviewed_submissions: job.reviewed_submissions,
     total_submissions: job.total_submissions,
   };
@@ -424,6 +425,7 @@ export function App() {
       submission_count: 0,
       status: "ready",
       latest_job_id: null,
+      queue_state: "active",
       reviewed_submissions: 0,
       total_submissions: 0,
     };
@@ -464,6 +466,7 @@ export function App() {
           submission_count: 0,
           status: "ready",
           latest_job_id: null,
+          queue_state: "active",
           reviewed_submissions: 0,
           total_submissions: 0,
         }));
@@ -489,6 +492,7 @@ export function App() {
       submission_count: existing?.submission_count ?? 0,
       status: existing?.status ?? "ready",
       latest_job_id: existing?.latest_job_id ?? null,
+      queue_state: existing?.queue_state ?? "active",
       reviewed_submissions: existing?.reviewed_submissions ?? 0,
       total_submissions: existing?.total_submissions ?? 0,
     });
