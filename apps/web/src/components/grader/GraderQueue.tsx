@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { GradingQueueItem } from "../../types";
+import type { GradingQueueItem, QueueAction } from "../../types";
 import { AppIcon } from "../icons";
 import { SearchBox } from "../ui";
 import graderStyles from "./Grader.module.css";
@@ -7,19 +7,25 @@ void graderStyles;
 
 export function GraderQueue({
   items,
+  archivedItems,
   loading,
   onRefresh,
   onSetup,
   onOpenJob,
+  onAction,
   onDownloadInstead,
 }: {
   items: GradingQueueItem[];
+  archivedItems: GradingQueueItem[];
   loading: boolean;
   onRefresh?: () => void;
   onSetup: (item: GradingQueueItem) => void;
   onOpenJob: (jobId: string) => void;
+  onAction: (action: QueueAction, items: GradingQueueItem[]) => void;
   onDownloadInstead: () => void;
 }) {
+  void archivedItems;
+  void onAction;
   const [query, setQuery] = useState("");
   const filtered = items.filter((item) =>
     `${item.course_name} ${item.activity_title}`.toLowerCase().includes(query.toLowerCase()),

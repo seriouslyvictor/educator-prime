@@ -37,6 +37,7 @@ import type {
   GradingSubmission,
   LocalExportHistoryItem,
   PrivacyAudit,
+  QueueAction,
   RubricMode,
   TeacherLoopMode,
 } from "./types";
@@ -143,6 +144,7 @@ export function App() {
   const [progressLog, setProgressLog] = useState<ProgressLogItem[]>([]);
   const [selectedGradingItem, setSelectedGradingItem] = useState<GradingQueueItem | null>(null);
   const [gradingQueue, setGradingQueue] = useState<GradingQueueItem[]>([]);
+  const [archivedQueue, setArchivedQueue] = useState<GradingQueueItem[]>([]);
   // Activities the teacher sent from Turmas that don't have a server-side job yet.
   // They surface in the grader queue as "ready" until opened (which creates the job).
   const [pendingQueue, setPendingQueue] = useState<GradingQueueItem[]>([]);
@@ -514,11 +516,96 @@ export function App() {
   async function loadGradingQueue() {
     setGradingQueueLoading(true);
     try {
-      setGradingQueue(await api.gradingJobs());
+      const [activeItems, archivedItems, hiddenItems] = await Promise.all([
+        api.gradingJobs("active"),
+        api.gradingJobs("archived"),
+        api.gradingJobs("hidden"),
+      ]);
+      setGradingQueue(activeItems);
+      setArchivedQueue([...archivedItems, ...hiddenItems]);
     } catch {
       setGradingQueue([]);
+      setArchivedQueue([]);
     } finally {
       setGradingQueueLoading(false);
+    }
+  }
+
+  async function runQueueAction(action: QueueAction, items: GradingQueueItem[]) {
+    if (items.length === 0) return;
+    setGraderBusy(true);
+    setError(null);
+    const shouldIgnoreMissing = (caught: unknown) =>
+      caught instanceof Error && /not found|404/i.test(caught.message);
+    const freshPending: GradingQueueItem[] = [];
+    try {
+      if (action === "remove") {
+        const pendingActivityIds = new Set(
+          items.filter((item) => !item.latest_job_id).map((item) => item.activity_id),
+        );
+        if (pendingActivityIds.size > 0) {
+          setPendingQueue((current) =>
+            current.filter((item) => !pendingActivityIds.has(item.activity_id)),
+          );
+        }
+      }
+
+      for (const item of items) {
+        if (!item.latest_job_id) continue;
+        try {
+          if (action === "remove" || action === "restart") {
+            await api.deleteGradingJob(item.latest_job_id);
+            if (action === "restart") {
+              freshPending.push({
+                course_id: item.course_id,
+                course_name: item.course_name,
+                activity_id: item.activity_id,
+                activity_title: item.activity_title,
+                due_label: item.due_label,
+                submission_count: item.submission_count,
+                status: "ready",
+                latest_job_id: null,
+                queue_state: "active",
+                reviewed_submissions: 0,
+                total_submissions: 0,
+              });
+            }
+          } else if (action === "archive") {
+            await api.archiveGradingJob(item.latest_job_id);
+          } else if (action === "hide") {
+            await api.hideGradingJob(item.latest_job_id);
+          } else if (action === "restore") {
+            await api.restoreGradingJob(item.latest_job_id);
+          }
+        } catch (caught) {
+          if (!shouldIgnoreMissing(caught)) throw caught;
+        }
+      }
+
+      if (freshPending.length > 0) {
+        setPendingQueue((current) => {
+          const activityIds = new Set(freshPending.map((item) => item.activity_id));
+          return [...freshPending, ...current.filter((item) => !activityIds.has(item.activity_id))];
+        });
+      }
+
+      if (
+        gradingJob?.id &&
+        items.some((item) => item.latest_job_id === gradingJob.id) &&
+        action !== "restore"
+      ) {
+        setGradingJob(null);
+        setPrivacyAudit(null);
+        setActiveGradingSubmissionId(null);
+        setSelectedGradingItem(null);
+        writeStoredJobId(null);
+      }
+
+      await loadGradingQueue();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Falha ao gerenciar a fila de correÃ§Ã£o.");
+    } finally {
+      setGraderBusy(false);
     }
   }
 
@@ -1064,10 +1151,12 @@ export function App() {
           <>
             <GraderQueue
               items={queueItems}
+              archivedItems={archivedQueue}
               loading={gradingQueueLoading}
               onRefresh={() => void loadGradingQueue()}
               onSetup={(item) => void beginGradingSetup(item)}
               onOpenJob={(jobId) => void openGradingJob(jobId)}
+              onAction={(action, items) => void runQueueAction(action, items)}
               onDownloadInstead={() => setView("workspace")}
             />
             {error ? <InlineError message={error} /> : null}
