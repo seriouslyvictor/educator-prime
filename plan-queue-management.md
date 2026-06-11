@@ -1,6 +1,6 @@
 # Plan — Grader queue item management (per-card menu + multi-select "Gerenciar")
 
-> **Status:** proposal for review.
+> **Status:** implemented for review.
 > **Audience:** an executing agent with no prior context. Read §0–§9 before touching code.
 > **Line numbers / symbol locations are as-of-writing guides — re-derive every location with
 > `grep -n` at execution time.**
