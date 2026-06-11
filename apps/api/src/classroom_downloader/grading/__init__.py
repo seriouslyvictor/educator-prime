@@ -10,6 +10,7 @@ from .criteria import (
 )
 from .submissions import group_key_for, _submission_for_file
 from .caching import cache_submission_file, scrub_submission_cached, delete_job_cache
+from .lifecycle import delete_job
 from .snapshots import grading_job_snapshot, grading_submission_snapshot
 from .inference import infer_job_criteria
 from .drafting import draft_grading_job, retry_submission, _draft_submission
@@ -29,6 +30,7 @@ __all__ = [
     "cache_submission_file",
     "scrub_submission_cached",
     "delete_job_cache",
+    "delete_job",
     "grading_job_snapshot",
     "grading_submission_snapshot",
     "infer_job_criteria",

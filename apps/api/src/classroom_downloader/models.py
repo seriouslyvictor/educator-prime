@@ -95,6 +95,7 @@ class GradingJob(SQLModel, table=True):
     rubric_text: str | None = None
     batch_mode: str = "per_submission"
     include_visual_submissions: bool = False
+    queue_state: str = Field(default="active", index=True)
     status: GradingStatus = Field(default=GradingStatus.ready)
     total_submissions: int = 0
     reviewed_submissions: int = 0

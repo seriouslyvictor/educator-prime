@@ -54,6 +54,7 @@ def _ensure_grading_job_columns(target_engine: Engine) -> None:
             "activity_description": "VARCHAR",
             "batch_mode": "VARCHAR DEFAULT 'per_submission'",
             "include_visual_submissions": "BOOLEAN DEFAULT 0",
+            "queue_state": "VARCHAR DEFAULT 'active'",
             "total_prompt_tokens": "INTEGER",
             "total_completion_tokens": "INTEGER",
             "total_cached_tokens": "INTEGER",
