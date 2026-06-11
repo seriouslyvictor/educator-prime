@@ -25,12 +25,15 @@ SAFE_SOURCE_EXTENSIONS = {
     ".csv",
     ".docx",
     ".gdoc",
+    ".jpeg",
+    ".jpg",
     ".json",
     ".md",
     ".pdf",
     ".png",
     ".py",
     ".txt",
+    ".webp",
 }
 
 
