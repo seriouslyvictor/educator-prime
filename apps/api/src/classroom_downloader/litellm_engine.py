@@ -222,6 +222,28 @@ def _build_rubric_messages(request: RubricInferenceRequest) -> list[dict[str, st
         f"Activity title: {request.activity_title}",
         f"Activity description: {request.activity_description or '(none provided)'}",
     ]
+    if request.rubric_text:
+        sections.append(f"Teacher rubric notes: {request.rubric_text}")
+    if not request.description_only and request.samples:
+        sections.append(
+            "Sample student submissions (XML-delimited, already redacted):\n"
+            + build_sample_xml(request.samples)
+        )
+    user_content = "\n\n".join(sections)
+    return [
+        {
+            "role": "system",
+            "content": (
+                "Design a grading rubric for this assignment. Infer the criteria a "
+                "teacher would use to evaluate the work, favoring the activity "
+                "description when it is informative and the sample submissions when it "
+                "is thin. Respond with JSON only: an object with a 'criteria' array of "
+                "{name, weight, description}, where weight is an integer percentage and "
+                "all weights sum to 100. return a maximum of 6 criteria."
+            ),
+        },
+        {"role": "user", "content": user_content},
+    ]
 
 
 def _build_vision_messages(request: VisionExtractionRequest) -> list[dict[str, Any]]:
@@ -257,28 +279,6 @@ def _build_vision_messages(request: VisionExtractionRequest) -> list[dict[str, A
                 {"type": "image_url", "image_url": {"url": image_url}},
             ],
         },
-    ]
-    if request.rubric_text:
-        sections.append(f"Teacher rubric notes: {request.rubric_text}")
-    if not request.description_only and request.samples:
-        sections.append(
-            "Sample student submissions (XML-delimited, already redacted):\n"
-            + build_sample_xml(request.samples)
-        )
-    user_content = "\n\n".join(sections)
-    return [
-        {
-            "role": "system",
-            "content": (
-                "Design a grading rubric for this assignment. Infer the criteria a "
-                "teacher would use to evaluate the work, favoring the activity "
-                "description when it is informative and the sample submissions when it "
-                "is thin. Respond with JSON only: an object with a 'criteria' array of "
-                "{name, weight, description}, where weight is an integer percentage and "
-                "all weights sum to 100. return a maximum of 6 criteria."
-            ),
-        },
-        {"role": "user", "content": user_content},
     ]
 
 
