@@ -9,7 +9,6 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response, StreamingResponse
 from sqlmodel import Session, select
 
-from .. import grading as grading_service
 from ..api.auth_errors import google_auth_http_exception
 from ..api.common import _conditional_response, _sse_event
 from ..api.deps import (
@@ -400,6 +399,7 @@ def create_grading_job(
         teacher_loop=payload.teacher_loop,
         rubric_text=payload.rubric_text,
         batch_mode=settings.grading_batch_mode,
+        include_visual_submissions=payload.include_visual_submissions,
         status=GradingStatus.ready,
         cache_expires_at=default_cache_expiry(),
         user_email=user_email,
@@ -420,6 +420,7 @@ def create_grading_job(
         teacher_loop=job.teacher_loop,
         rubric_text=job.rubric_text,
         batch_mode=job.batch_mode,
+        include_visual_submissions=job.include_visual_submissions,
         cache_expires_at=job.cache_expires_at,
     )
     return grading_job_snapshot(session, job)

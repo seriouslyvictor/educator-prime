@@ -21,6 +21,15 @@ from .observability import (
 logger = get_logger(__name__)
 
 
+MOCK_PNG_BYTES = (
+    b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
+    b"\x00\x00\x00\x01\x00\x00\x00\x01\x08\x02\x00\x00\x00"
+    b"\x90wS\xde\x00\x00\x00\x0cIDATx\x9cc\xf8\xcf\xc0\x00"
+    b"\x00\x03\x01\x01\x00\xc9\xfe\x92\xef\x00\x00\x00\x00"
+    b"IEND\xaeB`\x82"
+)
+
+
 GOOGLE_NATIVE_EXPORTS = {
     "application/vnd.google-apps.document": ("application/pdf", ".pdf"),
     "application/vnd.google-apps.spreadsheet": ("application/pdf", ".pdf"),
@@ -767,7 +776,7 @@ class MockGoogleProvider(GoogleProvider):
             "drive-file-1",
             "diagram.png",
             "image/png",
-            b"Mock PNG bytes for Ana Silva\n",
+            MOCK_PNG_BYTES,
         ),
         SubmissionFile(
             "export-file-2",

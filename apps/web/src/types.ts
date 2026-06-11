@@ -119,6 +119,7 @@ export interface GradingSubmission {
   privacy_status: string | null;
   extraction_status: string | null;
   ai_attempt_status: string | null;
+  error_retryable: boolean;
   ai_engine: string | null;
   ai_model: string | null;
   ai_safe_error: string | null;
@@ -147,6 +148,7 @@ export interface GradingJob {
   rubric_mode: string;
   teacher_loop: string;
   rubric_text: string | null;
+  include_visual_submissions: boolean;
   status: GradingStatus;
   total_submissions: number;
   reviewed_submissions: number;

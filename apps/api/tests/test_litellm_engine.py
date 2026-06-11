@@ -6,17 +6,22 @@ os.environ["CD_GOOGLE_PROVIDER"] = "mock"
 
 import pytest
 
-from classroom_downloader.grading_engine import GradingEngineRequest
+from classroom_downloader.grading_engine import GradingEngineRequest, VisionExtractionRequest
 from classroom_downloader.litellm_engine import (
     DEFAULT_MAX_OUTPUT_TOKENS,
     LiteLlmGradingEngine,
     _build_messages,
+    parse_vision_extraction_result,
     parse_litellm_result,
 )
+from classroom_downloader.llm_errors import LlmCallError
 from classroom_downloader.llm_catalog import LlmModelEntry
 
 
-def model_entry(supports_response_schema: bool = True) -> LlmModelEntry:
+def model_entry(
+    supports_response_schema: bool = True,
+    supports_vision: bool = False,
+) -> LlmModelEntry:
     return LlmModelEntry(
         id="openai/gpt-5",
         provider="openai",
@@ -29,7 +34,7 @@ def model_entry(supports_response_schema: bool = True) -> LlmModelEntry:
         max_input_tokens=128000,
         max_output_tokens=8192,
         supports_response_schema=supports_response_schema,
-        supports_vision=False,
+        supports_vision=supports_vision,
         rpm_limit=None,
         tpm_limit=None,
         notes="",
@@ -81,6 +86,44 @@ def test_parse_litellm_result_requires_structured_shape() -> None:
 def test_parse_litellm_result_rejects_malformed_json() -> None:
     with pytest.raises(ValueError, match="malformed_llm_response"):
         parse_litellm_result("not json")
+
+
+def test_parse_vision_extraction_result_requires_structured_shape() -> None:
+    parsed = parse_vision_extraction_result(
+        json.dumps(
+            {
+                "transcription": "Resposta manuscrita.",
+                "visual_description": "Folha com duas secoes.",
+                "content_kind": "handwriting",
+                "legibility": "partial",
+                "pii_observed": ["name_visible"],
+            }
+        )
+    )
+
+    assert parsed.transcription == "Resposta manuscrita."
+    assert parsed.visual_description == "Folha com duas secoes."
+    assert parsed.content_kind == "handwriting"
+    assert parsed.legibility == "partial"
+    assert parsed.pii_observed == ["name_visible"]
+
+
+def test_parse_vision_extraction_result_rejects_empty_readable_response() -> None:
+    with pytest.raises(LlmCallError) as error:
+        parse_vision_extraction_result(
+            json.dumps(
+                {
+                    "transcription": "",
+                    "visual_description": "",
+                    "content_kind": "other",
+                    "legibility": "full",
+                    "pii_observed": [],
+                }
+            )
+        )
+
+    assert error.value.code == "vision_malformed_response"
+    assert error.value.retryable is True
 
 
 def test_parse_litellm_result_requires_score_when_requested() -> None:
@@ -355,3 +398,58 @@ def test_engine_uses_json_schema_response_format_when_supported(monkeypatch) -> 
     assert response_format["type"] == "json_schema"
     assert response_format["json_schema"]["strict"] is True
     assert "score" in response_format["json_schema"]["schema"]["properties"]
+
+
+def test_extract_image_calls_litellm_with_multimodal_payload(monkeypatch) -> None:
+    captured = {}
+
+    def fake_completion(**kwargs):
+        captured.update(kwargs)
+
+        class Choice:
+            message = {
+                "content": json.dumps(
+                    {
+                        "transcription": "Codigo exibido na tela.",
+                        "visual_description": "Terminal com saida de teste.",
+                        "content_kind": "code_screenshot",
+                        "legibility": "full",
+                        "pii_observed": ["name_visible"],
+                    }
+                )
+            }
+
+        class Response:
+            choices = [Choice()]
+            usage = {"prompt_tokens": 80, "completion_tokens": 20, "total_tokens": 100}
+
+        return Response()
+
+    monkeypatch.setattr("classroom_downloader.litellm_engine.litellm.completion", fake_completion)
+    engine = LiteLlmGradingEngine(
+        model=model_entry(supports_vision=True),
+        timeout_seconds=30,
+        max_retries=1,
+    )
+
+    result = engine.extract_image(
+        VisionExtractionRequest(
+            job_id="job-1",
+            submission_id="submission-1",
+            activity_title="Projeto",
+            source_label="submission.png",
+            image_data=b"jpeg-bytes",
+            image_mime_type="image/jpeg",
+        )
+    )
+
+    assert result.content_kind == "code_screenshot"
+    assert result.pii_observed == ["name_visible"]
+    assert captured["model"] == "openai/gpt-5"
+    assert captured["max_tokens"] == 2000
+    assert captured["response_format"]["type"] == "json_schema"
+    user_content = captured["messages"][1]["content"]
+    assert user_content[0]["type"] == "text"
+    assert "Projeto" in user_content[0]["text"]
+    assert user_content[1]["type"] == "image_url"
+    assert user_content[1]["image_url"]["url"].startswith("data:image/jpeg;base64,")

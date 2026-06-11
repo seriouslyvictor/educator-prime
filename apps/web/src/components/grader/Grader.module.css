@@ -1479,6 +1479,48 @@
   color: var(--ai);
 }
 
+.visual-consent {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.visual-consent input {
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  accent-color: var(--ai);
+}
+
+.visual-consent span {
+  display: grid;
+  gap: 3px;
+}
+
+.visual-consent strong {
+  font-size: 12.5px;
+}
+
+.visual-consent small {
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+.visual-audit-note {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
 /* ===== Shared grading progress modal ===== */
 .grading-progress-modal {
   position: fixed;
@@ -1820,6 +1862,20 @@
   color: var(--ai);
 }
 
+.visual-dot {
+  display: inline-flex;
+  align-items: center;
+  min-height: 16px;
+  padding: 1px 5px;
+  border: 1px solid var(--ai-border);
+  border-radius: 6px;
+  background: var(--ai-soft);
+  color: var(--ai);
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+}
+
 .student-score {
   flex: none;
   font-variant-numeric: tabular-nums;
@@ -1878,11 +1934,28 @@
 }
 
 .preview-student-copy .file {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
   overflow: hidden;
   color: var(--muted);
   font-size: 11.5px;
   text-overflow: ellipsis;
-  white-space: nowrap;
+}
+
+.visual-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 18px;
+  padding: 2px 6px;
+  border: 1px solid var(--ai-border);
+  border-radius: 6px;
+  background: var(--ai-soft);
+  color: var(--ai);
+  font-size: 10.5px;
+  font-weight: 800;
+  line-height: 1;
 }
 
 .preview-nav {
@@ -2144,6 +2217,11 @@
 
 .flag-banner strong {
   display: block;
+}
+
+.error-layer {
+  color: var(--ink);
+  font-weight: 800;
 }
 
 .breakdown {

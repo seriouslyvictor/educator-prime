@@ -1,0 +1,24 @@
+﻿{
+  "required_surface": [
+    "CachedScrubbedSubmission",
+    "DEFAULT_CRITERIA",
+    "_criteria_match_defaults",
+    "_draft_submission",
+    "_replace_job_criteria",
+    "_submission_for_file",
+    "cache_submission_file",
+    "default_cache_expiry",
+    "delete_job_cache",
+    "draft_grading_job",
+    "ensure_default_criteria",
+    "get_grading_engine",
+    "grading_csv",
+    "grading_job_snapshot",
+    "grading_submission_snapshot",
+    "group_key_for",
+    "infer_job_criteria",
+    "retry_submission",
+    "scrub_submission_cached"
+  ],
+  "ok": true
+}

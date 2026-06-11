@@ -110,6 +110,7 @@ class GradingJobCreate(BaseModel):
     rubric_mode: str
     teacher_loop: str = "approve"
     rubric_text: str | None = None
+    include_visual_submissions: bool = False
     criteria: list[GradingCriterionInput] | None = None
 
 
@@ -163,6 +164,7 @@ class GradingSubmissionRead(BaseModel):
     privacy_status: str | None = None
     extraction_status: str | None = None
     ai_attempt_status: str | None = None
+    error_retryable: bool = False
     ai_engine: str | None = None
     ai_model: str | None = None
     ai_safe_error: str | None = None
@@ -230,6 +232,7 @@ class GradingJobRead(BaseModel):
     teacher_loop: str
     rubric_text: str | None = None
     batch_mode: str = "per_submission"
+    include_visual_submissions: bool = False
     status: GradingStatus
     total_submissions: int
     reviewed_submissions: int

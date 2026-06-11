@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import time
+from base64 import b64encode
 from typing import Any
 
 import litellm
@@ -12,8 +13,11 @@ from .grading_engine import (
     GradingEngineRequest,
     GradingEngineResult,
     RubricInferenceRequest,
+    VisionExtractionRequest,
+    VisionExtractionResult,
 )
 from .llm_catalog import LlmModelEntry
+from .llm_errors import LlmCallError, classify_llm_exception
 from .observability import get_logger, log_event
 from .settings import get_settings
 
@@ -39,6 +43,7 @@ class LiteLlmGradingEngine:
             model.max_output_tokens or DEFAULT_MAX_OUTPUT_TOKENS,
             DEFAULT_MAX_OUTPUT_TOKENS,
         )
+        self.max_vision_output_tokens = min(model.max_output_tokens or 2000, 2000)
         self.last_usage: dict[str, int] = {}
         self.last_latency_ms: int | None = None
         self.last_response: Any | None = None
@@ -142,6 +147,60 @@ class LiteLlmGradingEngine:
         )
         return criteria
 
+    def extract_image(
+        self, request: VisionExtractionRequest
+    ) -> VisionExtractionResult:
+        messages = _build_vision_messages(request)
+        log_event(
+            logger,
+            "grading_engine.litellm.extract_image.request",
+            job_id=request.job_id,
+            submission_id=request.submission_id,
+            model=self.model,
+            catalog_model=self.catalog_model.id,
+            activity_title=request.activity_title,
+            source_label=request.source_label,
+            image_mime_type=request.image_mime_type,
+            byte_size=len(request.image_data),
+        )
+        started = time.monotonic()
+        try:
+            response = litellm.completion(
+                model=self.model,
+                messages=messages,
+                timeout=self.timeout_seconds,
+                num_retries=self.max_retries,
+                max_tokens=self.max_vision_output_tokens,
+                response_format=_vision_response_format(self.catalog_model),
+            )
+            self.last_response = response
+            self.last_latency_ms = int((time.monotonic() - started) * 1000)
+            self.last_usage = _usage_dict(getattr(response, "usage", None))
+            result = parse_vision_extraction_result(_response_content(response))
+        except LlmCallError:
+            self.last_latency_ms = int((time.monotonic() - started) * 1000)
+            raise
+        except Exception as exc:
+            self.last_latency_ms = int((time.monotonic() - started) * 1000)
+            classified = classify_llm_exception(exc)
+            if classified.code == "malformed_llm_response":
+                raise LlmCallError("vision_malformed_response", True, classified.detail) from exc
+            raise classified from exc
+
+        log_event(
+            logger,
+            "grading_engine.litellm.extract_image.response",
+            job_id=request.job_id,
+            submission_id=request.submission_id,
+            model=self.model,
+            content_kind=result.content_kind,
+            legibility=result.legibility,
+            pii_observed=result.pii_observed,
+            usage=self.last_usage,
+            latency_ms=self.last_latency_ms,
+        )
+        return result
+
 
 def build_sample_xml(samples: list[dict[str, str]]) -> str:
     """Bundle scrubbed submissions into XML-delimited blocks for the prompt.
@@ -162,6 +221,42 @@ def _build_rubric_messages(request: RubricInferenceRequest) -> list[dict[str, st
     sections = [
         f"Activity title: {request.activity_title}",
         f"Activity description: {request.activity_description or '(none provided)'}",
+    ]
+
+
+def _build_vision_messages(request: VisionExtractionRequest) -> list[dict[str, Any]]:
+    context = {
+        "activity_title": request.activity_title,
+        "source_label": request.source_label,
+    }
+    image_url = "data:image/jpeg;base64," + b64encode(request.image_data).decode("ascii")
+    return [
+        {
+            "role": "system",
+            "content": (
+                "You transcribe student work from images for a Brazilian teacher. "
+                "Images may be photographed computer screens, handwritten assignments, "
+                "code or terminal screenshots, frontend/UI screenshots, documents, "
+                "spreadsheets, IDEs, or other computer work. Identify content_kind. "
+                "Transcribe the student's work faithfully and completely in PT-BR. "
+                "For visual work, describe layout, structure, colors, and visible output "
+                "succinctly in PT-BR because the grader will only see this text. "
+                "Replace any visible personal name, ID number, email, phone, or handle at "
+                "the source with [student], [cpf], [email], [phone], or [social]; never "
+                "copy it verbatim. Report the matching pii_observed category. Faces and "
+                "ID documents are only reported in pii_observed and never described. "
+                "Use legibility='full' when essentially everything is readable, 'partial' "
+                "when meaningful chunks are not readable, and 'unreadable' when the work "
+                "cannot be assessed. Respond with JSON only."
+            ),
+        },
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": json.dumps(context, ensure_ascii=True)},
+                {"type": "image_url", "image_url": {"url": image_url}},
+            ],
+        },
     ]
     if request.rubric_text:
         sections.append(f"Teacher rubric notes: {request.rubric_text}")
@@ -218,6 +313,66 @@ def _rubric_response_format(model: LlmModelEntry) -> dict[str, Any]:
                         },
                     },
                     "required": ["criteria"],
+                },
+            },
+        }
+    return {"type": "json_object"}
+
+
+def _vision_response_format(model: LlmModelEntry) -> dict[str, Any]:
+    settings = get_settings()
+    if (
+        settings.grading_structured_output == "auto"
+        and model.supports_response_schema
+    ):
+        litellm.enable_json_schema_validation = True
+        return {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "vision_extraction",
+                "strict": True,
+                "schema": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "transcription": {"type": "string"},
+                        "visual_description": {"type": "string"},
+                        "content_kind": {
+                            "type": "string",
+                            "enum": [
+                                "handwriting",
+                                "screen_photo",
+                                "code_screenshot",
+                                "app_screenshot",
+                                "document_photo",
+                                "other",
+                            ],
+                        },
+                        "legibility": {
+                            "type": "string",
+                            "enum": ["full", "partial", "unreadable"],
+                        },
+                        "pii_observed": {
+                            "type": "array",
+                            "items": {
+                                "type": "string",
+                                "enum": [
+                                    "name_visible",
+                                    "face",
+                                    "id_document",
+                                    "contact_info",
+                                    "other_pii",
+                                ],
+                            },
+                        },
+                    },
+                    "required": [
+                        "transcription",
+                        "visual_description",
+                        "content_kind",
+                        "legibility",
+                        "pii_observed",
+                    ],
                 },
             },
         }
@@ -314,6 +469,52 @@ def parse_litellm_result(
             and isinstance(criterion.get("name"), str)
             and isinstance(criterion.get("weight"), int)
         ],
+    )
+
+
+def parse_vision_extraction_result(content: str) -> VisionExtractionResult:
+    try:
+        payload = json.loads(content)
+    except json.JSONDecodeError as exc:
+        raise LlmCallError("vision_malformed_response", True, str(exc)) from exc
+    if not isinstance(payload, dict):
+        raise LlmCallError("vision_malformed_response", True, "payload_not_object")
+
+    transcription = payload.get("transcription")
+    visual_description = payload.get("visual_description")
+    content_kind = payload.get("content_kind")
+    legibility = payload.get("legibility")
+    pii_observed = payload.get("pii_observed")
+    if not isinstance(transcription, str) or not isinstance(visual_description, str):
+        raise LlmCallError("vision_malformed_response", True, "missing_text_fields")
+    if content_kind not in {
+        "handwriting",
+        "screen_photo",
+        "code_screenshot",
+        "app_screenshot",
+        "document_photo",
+        "other",
+    }:
+        raise LlmCallError("vision_malformed_response", True, "invalid_content_kind")
+    if legibility not in {"full", "partial", "unreadable"}:
+        raise LlmCallError("vision_malformed_response", True, "invalid_legibility")
+    if not isinstance(pii_observed, list) or not all(
+        item in {"name_visible", "face", "id_document", "contact_info", "other_pii"}
+        for item in pii_observed
+    ):
+        raise LlmCallError("vision_malformed_response", True, "invalid_pii_observed")
+    if (
+        not transcription.strip()
+        and not visual_description.strip()
+        and legibility != "unreadable"
+    ):
+        raise LlmCallError("vision_malformed_response", True, "empty_readable_image")
+    return VisionExtractionResult(
+        transcription=transcription.strip(),
+        visual_description=visual_description.strip(),
+        content_kind=content_kind,
+        legibility=legibility,
+        pii_observed=pii_observed,
     )
 
 

@@ -53,6 +53,7 @@ def _ensure_grading_job_columns(target_engine: Engine) -> None:
             "rubric_text": "VARCHAR",
             "activity_description": "VARCHAR",
             "batch_mode": "VARCHAR DEFAULT 'per_submission'",
+            "include_visual_submissions": "BOOLEAN DEFAULT 0",
             "total_prompt_tokens": "INTEGER",
             "total_completion_tokens": "INTEGER",
             "total_cached_tokens": "INTEGER",
@@ -95,12 +96,14 @@ def _ensure_grading_ai_attempt_columns(target_engine: Engine) -> None:
         target_engine,
         "gradingaiattempt",
         {
+            "stage": "VARCHAR DEFAULT 'grading'",
             "prompt_tokens": "INTEGER",
             "completion_tokens": "INTEGER",
             "cached_prompt_tokens": "INTEGER",
             "cache_write_tokens": "INTEGER",
             "latency_ms": "INTEGER",
             "privacy_flags_json": "VARCHAR DEFAULT '[]'",
+            "retryable": "BOOLEAN DEFAULT 0",
         },
     )
 

@@ -439,19 +439,7 @@ export function App() {
     setSelectedGradingItem(item);
     setView("graderSetup");
     try {
-      const created = await api.createGradingJob({
-        course_id: item.course_id,
-        activity_id: item.activity_id,
-        rubric_mode: "infer",
-        teacher_loop: "approve",
-        rubric_text: "",
-      });
-      setGradingJob(created);
-      setSelectedGradingItem(gradingItemFromJob(created));
-      // Once the job exists, drop the pending placeholder for this activity.
-      setPendingQueue((current) => current.filter((row) => row.activity_id !== item.activity_id));
-      await runCriteriaStream(created);
-      setGradingProgress(null);
+      setGradingJob(null);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Falha ao preparar a correção.");
     } finally {
@@ -701,14 +689,15 @@ export function App() {
   // otherwise the teacher's mode/rubric change would be silently dropped.
   function matchingReadyJob(
     item: GradingQueueItem,
-    payload: { rubricMode: RubricMode; teacherLoop: TeacherLoopMode; rubricText: string },
+    payload: { rubricMode: RubricMode; teacherLoop: TeacherLoopMode; rubricText: string; includeVisualSubmissions: boolean },
   ): GradingJob | null {
     const reusable =
       gradingJob?.activity_id === item.activity_id &&
       gradingJob.status === "ready" &&
       gradingJob.rubric_mode === payload.rubricMode &&
       gradingJob.teacher_loop === payload.teacherLoop &&
-      (gradingJob.rubric_text ?? "") === (payload.rubricText ?? "");
+      (gradingJob.rubric_text ?? "") === (payload.rubricText ?? "") &&
+      gradingJob.include_visual_submissions === payload.includeVisualSubmissions;
     return reusable ? gradingJob : null;
   }
 
@@ -716,7 +705,7 @@ export function App() {
   // screen so the teacher can edit it before the audit runs.
   async function inferGradingCriteria(
     item: GradingQueueItem,
-    payload: { rubricMode: RubricMode; teacherLoop: TeacherLoopMode; rubricText: string },
+    payload: { rubricMode: RubricMode; teacherLoop: TeacherLoopMode; rubricText: string; includeVisualSubmissions: boolean },
   ) {
     setGraderBusy(true);
     setError(null);
@@ -740,9 +729,11 @@ export function App() {
           rubric_mode: payload.rubricMode,
           teacher_loop: payload.teacherLoop,
           rubric_text: payload.rubricText,
+          include_visual_submissions: payload.includeVisualSubmissions,
         });
         setGradingJob(target);
         setSelectedGradingItem(gradingItemFromJob(target));
+        setPendingQueue((current) => current.filter((row) => row.activity_id !== item.activity_id));
       }
       await runCriteriaStream(target);
       setGradingProgress(null);
@@ -768,6 +759,7 @@ export function App() {
       rubricMode: RubricMode;
       teacherLoop: TeacherLoopMode;
       rubricText: string;
+      includeVisualSubmissions: boolean;
       criteria?: GradingCriterionInput[];
     },
   ) {
@@ -793,10 +785,12 @@ export function App() {
           rubric_mode: payload.rubricMode,
           teacher_loop: payload.teacherLoop,
           rubric_text: payload.rubricText,
+          include_visual_submissions: payload.includeVisualSubmissions,
           criteria: payload.criteria,
         });
         setGradingJob(target);
         setSelectedGradingItem(gradingItemFromJob(target));
+        setPendingQueue((current) => current.filter((row) => row.activity_id !== item.activity_id));
       }
       if (target.rubric_mode === "infer") {
         if (payload.criteria && payload.criteria.length > 0) {
@@ -839,6 +833,7 @@ export function App() {
     rubricMode: RubricMode;
     teacherLoop: TeacherLoopMode;
     rubricText: string;
+    includeVisualSubmissions: boolean;
     criteria?: GradingCriterionInput[];
   }) {
     if (!selectedGradingItem) return;
@@ -849,6 +844,7 @@ export function App() {
     rubricMode: RubricMode;
     teacherLoop: TeacherLoopMode;
     rubricText: string;
+    includeVisualSubmissions: boolean;
   }) {
     if (!selectedGradingItem) return;
     await inferGradingCriteria(selectedGradingItem, payload);

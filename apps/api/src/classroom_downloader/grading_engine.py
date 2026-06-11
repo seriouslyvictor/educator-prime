@@ -44,6 +44,25 @@ class RubricInferenceRequest:
     description_only: bool = False
 
 
+@dataclass(frozen=True)
+class VisionExtractionRequest:
+    job_id: str
+    submission_id: str
+    activity_title: str
+    source_label: str
+    image_data: bytes
+    image_mime_type: str
+
+
+@dataclass(frozen=True)
+class VisionExtractionResult:
+    transcription: str
+    visual_description: str
+    content_kind: str
+    legibility: str
+    pii_observed: list[str]
+
+
 class GradingEngine(Protocol):
     name: str
     model: str | None
@@ -54,6 +73,11 @@ class GradingEngine(Protocol):
     def infer_rubric(
         self, request: RubricInferenceRequest
     ) -> list[dict[str, str | int | None]]:
+        ...
+
+    def extract_image(
+        self, request: VisionExtractionRequest
+    ) -> VisionExtractionResult:
         ...
 
 
@@ -134,6 +158,28 @@ class MockGradingEngine:
             {"name": "Reasoning", "weight": 25, "description": "Explains how evidence backs the claim."},
             {"name": "Mechanics", "weight": 15, "description": "Organized, readable, and correct."},
         ]
+
+    def extract_image(
+        self, request: VisionExtractionRequest
+    ) -> VisionExtractionResult:
+        log_event(
+            logger,
+            "grading_engine.mock.extract_image",
+            job_id=request.job_id,
+            submission_id=request.submission_id,
+            activity_title=request.activity_title,
+            source_label=request.source_label,
+            image_mime_type=request.image_mime_type,
+            byte_size=len(request.image_data),
+        )
+        seed = sha256(f"{request.job_id}|{request.submission_id}".encode("utf-8")).hexdigest()
+        return VisionExtractionResult(
+            transcription=f"Transcricao visual mock {seed[:8]} assinada por [student].",
+            visual_description="Folha fotografada com resposta manuscrita legivel.",
+            content_kind="handwriting",
+            legibility="full",
+            pii_observed=["name_visible"],
+        )
 
 
 DEFAULT_GRADING_ENGINE: GradingEngine = MockGradingEngine()
