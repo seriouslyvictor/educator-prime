@@ -1,6 +1,6 @@
 # Plan — Image submission grading (vision extraction stage + layered error handling)
 
-> **Status:** in execution on branch `codex/image-grading`; Phase 0 complete.
+> **Status:** implementation complete on branch `codex/image-grading`; Phases 0-6 complete.
 > **Execution progress:**
 > - Phase 0 baseline complete: `uv run pytest -q` in `apps/api` -> 123 passed; `pnpm install --frozen-lockfile; pnpm build` in `apps/web` -> build succeeded.
 > - Phase 1 error taxonomy complete: added shared LLM error classification, grading-stage retryable persistence, snapshot/frontend retry surfacing, and tests. Gate: `uv run pytest -q` in `apps/api` -> 127 passed; `pnpm build` in `apps/web` -> build succeeded.
