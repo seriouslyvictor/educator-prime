@@ -9,7 +9,7 @@ from .. import grading
 from ..google_provider import GoogleProvider, make_google_provider
 from ..grading_engine import GradingEngine
 from ..models import UserSession
-from ..observability import get_logger
+from ..observability import current_user_email, get_logger
 from ..settings import get_settings
 from .auth_errors import google_auth_http_exception
 from .session_cleanup import purge_google_session_if_needed
@@ -42,12 +42,14 @@ def get_current_session(
     db: Session = Depends(get_session),
 ) -> UserSession:
     if settings.google_provider == "mock":
-        return UserSession(
+        row = UserSession(
             id="mock-session",
             user_email="teacher@example.edu",
             google_credentials_json="{}",
             expires_at=datetime.now(UTC) + timedelta(hours=24),
         )
+        current_user_email.set(row.user_email)
+        return row
     cookie_name = settings.session_cookie_name
     session_id = request.cookies.get(cookie_name)
     if not session_id:
@@ -58,6 +60,7 @@ def get_current_session(
     row.last_seen_at = datetime.now(UTC)
     db.add(row)
     db.commit()
+    current_user_email.set(row.user_email)
     return row
 
 

@@ -52,6 +52,7 @@ class Settings(BaseSettings):
     static_dir: str | None = None
     sentry_dsn: str | None = None
     sentry_environment: str = "dev"
+    app_event_retention_days: int = 30
     grading_engine: Literal["mock", "litellm"] = "mock"
     litellm_model: str = "openai/gpt-5"
     litellm_timeout_seconds: int = 60

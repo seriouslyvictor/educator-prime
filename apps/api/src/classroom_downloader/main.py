@@ -7,13 +7,24 @@ Compat surface for tests:
 """
 from contextlib import asynccontextmanager
 from pathlib import Path
+from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
-from .database import init_db
-from .observability import _SENSITIVE_FIELDS, configure_logging, get_logger, log_event
+from sqlmodel import Session
+
+from .database import engine, init_db
+from .observability import (
+    _SENSITIVE_FIELDS,
+    configure_logging,
+    current_request_id,
+    current_user_email,
+    get_logger,
+    log_event,
+    purge_expired_observability_rows,
+)
 from .settings import get_settings
 
 # Compat re-exports — imported by tests via 'from classroom_downloader.main import …'
@@ -84,6 +95,8 @@ if settings.sentry_dsn:
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     init_db()
+    with Session(engine) as session:
+        purge_expired_observability_rows(session)
     log_event(
         logger,
         "app.startup",
@@ -106,6 +119,17 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def request_context_middleware(request, call_next):
+    request_token = current_request_id.set(uuid4().hex[:12])
+    user_token = current_user_email.set(None)
+    try:
+        return await call_next(request)
+    finally:
+        current_user_email.reset(user_token)
+        current_request_id.reset(request_token)
 
 # --- API routers (order matters — registered before the static catch-all) ----
 
