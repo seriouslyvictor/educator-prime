@@ -7,6 +7,7 @@ import type {
   GradingJob,
   GradingCriterionInput,
   GradingQueueItem,
+  QueueState,
   PrivacyAudit,
   RubricMode,
   TeacherLoopMode,
@@ -99,6 +100,9 @@ async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
     throw new Error(detail?.detail ?? `Requisição falhou com ${response.status}`);
   }
 
+  if (response.status === 204) {
+    return undefined as T;
+  }
   return response.json() as Promise<T>;
 }
 
@@ -147,8 +151,12 @@ export const api = {
       undefined,
       { ttlMs: 30_000 },
     ),
-  gradingJobs: () =>
-    request<GradingQueueItem[]>("/api/grading/jobs", undefined, { ttlMs: 15_000 }),
+  gradingJobs: (state: QueueState | "all" = "active") =>
+    request<GradingQueueItem[]>(
+      `/api/grading/jobs?state=${encodeURIComponent(state)}`,
+      undefined,
+      { ttlMs: 15_000 },
+    ),
   createGradingJob: async (payload: {
     course_id: string;
     activity_id: string;
@@ -251,6 +259,41 @@ export const api = {
       method: "DELETE",
     }).then((response) => {
       clearApiCache(`GET /api/grading/jobs/${jobId}`);
+      return response;
+    }),
+  deleteGradingJob: async (jobId: string) => {
+    await request<void>(`/api/grading/jobs/${jobId}`, {
+      method: "DELETE",
+    });
+    clearApiCache(`GET /api/grading/jobs/${jobId}`);
+    clearApiCache("GET /api/grading/jobs");
+    clearApiCache("GET /api/grading/queue");
+  },
+  archiveGradingJob: (jobId: string) =>
+    request<GradingJob>(`/api/grading/jobs/${jobId}/archive`, {
+      method: "POST",
+    }).then((response) => {
+      clearApiCache(`GET /api/grading/jobs/${jobId}`);
+      clearApiCache("GET /api/grading/jobs");
+      clearApiCache("GET /api/grading/queue");
+      return response;
+    }),
+  hideGradingJob: (jobId: string) =>
+    request<GradingJob>(`/api/grading/jobs/${jobId}/hide`, {
+      method: "POST",
+    }).then((response) => {
+      clearApiCache(`GET /api/grading/jobs/${jobId}`);
+      clearApiCache("GET /api/grading/jobs");
+      clearApiCache("GET /api/grading/queue");
+      return response;
+    }),
+  restoreGradingJob: (jobId: string) =>
+    request<GradingJob>(`/api/grading/jobs/${jobId}/restore`, {
+      method: "POST",
+    }).then((response) => {
+      clearApiCache(`GET /api/grading/jobs/${jobId}`);
+      clearApiCache("GET /api/grading/jobs");
+      clearApiCache("GET /api/grading/queue");
       return response;
     }),
   gradingCsvUrl: (jobId: string) => `${API_BASE}/api/grading/jobs/${jobId}/export.csv`,

@@ -23,6 +23,7 @@ from ..grading import (
     _criteria_match_defaults,
     _replace_job_criteria,
     default_cache_expiry,
+    delete_job,
     delete_job_cache,
     draft_grading_job,
     ensure_default_criteria,
@@ -285,6 +286,7 @@ def grading_queue(
         submission_count=len(files),
         status=latest_job.status.value if latest_job else "ready",
         latest_job_id=latest_job.id if latest_job else None,
+        queue_state=latest_job.queue_state if latest_job else "active",
         reviewed_submissions=latest_job.reviewed_submissions if latest_job else 0,
         total_submissions=latest_job.total_submissions if latest_job else len(files),
     )
@@ -294,6 +296,7 @@ def grading_queue(
 
 @router.get("/api/grading/jobs", response_model=list[GradingQueueItem])
 def list_grading_jobs(
+    state: str = "active",
     session: Session = Depends(get_session),
     user_email: str = Depends(get_current_user_email),
 ) -> list[GradingQueueItem]:
@@ -301,12 +304,18 @@ def list_grading_jobs(
     every label needed (course/activity names, counts, status) already lives on the
     GradingJob row, so this never calls the Google provider. Collapses to the newest
     job per (course_id, activity_id) and returns them most-recently-updated first."""
-    log_event(logger, "grading.jobs.list.start")
-    jobs = session.exec(
+    valid_states = {"active", "archived", "hidden", "all"}
+    if state not in valid_states:
+        raise HTTPException(status_code=422, detail="Unknown queue state.")
+    log_event(logger, "grading.jobs.list.start", state=state)
+    statement = (
         select(GradingJob)
         .where(GradingJob.user_email == user_email)
         .order_by(GradingJob.updated_at.desc())
-    ).all()
+    )
+    if state != "all":
+        statement = statement.where(GradingJob.queue_state == state)
+    jobs = session.exec(statement).all()
     newest_by_activity: dict[tuple[str, str], GradingJob] = {}
     for job in jobs:
         newest_by_activity.setdefault((job.course_id, job.activity_id), job)
@@ -331,6 +340,7 @@ def list_grading_jobs(
             submission_count=job.total_submissions,
             status=job.status.value,
             latest_job_id=job.id,
+            queue_state=job.queue_state,
             reviewed_submissions=job.reviewed_submissions,
             total_submissions=job.total_submissions,
         )
@@ -424,6 +434,63 @@ def create_grading_job(
         cache_expires_at=job.cache_expires_at,
     )
     return grading_job_snapshot(session, job)
+
+
+@router.delete("/api/grading/jobs/{job_id}", status_code=204)
+def delete_grading_job(
+    job_id: str,
+    session: Session = Depends(get_session),
+    user_email: str = Depends(get_current_user_email),
+) -> Response:
+    log_event(logger, "grading.job.delete.endpoint.start", job_id=job_id)
+    job = _get_owned_job(job_id, user_email, session)
+    delete_job(session, job)
+    log_event(logger, "grading.job.delete.endpoint.complete", job_id=job_id)
+    return Response(status_code=204)
+
+
+def _set_queue_state(
+    job_id: str,
+    queue_state: str,
+    session: Session,
+    user_email: str,
+) -> GradingJobRead:
+    log_event(logger, "grading.job.queue_state.start", job_id=job_id, queue_state=queue_state)
+    job = _get_owned_job(job_id, user_email, session)
+    job.queue_state = queue_state
+    job.updated_at = datetime.now(UTC)
+    session.add(job)
+    session.commit()
+    session.refresh(job)
+    log_event(logger, "grading.job.queue_state.complete", job_id=job_id, queue_state=queue_state)
+    return grading_job_snapshot(session, job)
+
+
+@router.post("/api/grading/jobs/{job_id}/archive", response_model=GradingJobRead)
+def archive_grading_job(
+    job_id: str,
+    session: Session = Depends(get_session),
+    user_email: str = Depends(get_current_user_email),
+) -> GradingJobRead:
+    return _set_queue_state(job_id, "archived", session, user_email)
+
+
+@router.post("/api/grading/jobs/{job_id}/hide", response_model=GradingJobRead)
+def hide_grading_job(
+    job_id: str,
+    session: Session = Depends(get_session),
+    user_email: str = Depends(get_current_user_email),
+) -> GradingJobRead:
+    return _set_queue_state(job_id, "hidden", session, user_email)
+
+
+@router.post("/api/grading/jobs/{job_id}/restore", response_model=GradingJobRead)
+def restore_grading_job(
+    job_id: str,
+    session: Session = Depends(get_session),
+    user_email: str = Depends(get_current_user_email),
+) -> GradingJobRead:
+    return _set_queue_state(job_id, "active", session, user_email)
 
 
 @router.get("/api/grading/jobs/{job_id}", response_model=GradingJobRead)

@@ -125,6 +125,7 @@ def grading_job_snapshot(session: Session, job: GradingJob) -> GradingJobRead:
         rubric_text=job.rubric_text,
         batch_mode=job.batch_mode,
         include_visual_submissions=job.include_visual_submissions,
+        queue_state=job.queue_state,
         status=job.status,
         total_submissions=job.total_submissions,
         reviewed_submissions=job.reviewed_submissions,

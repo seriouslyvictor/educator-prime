@@ -63,6 +63,8 @@ export interface ExportJob {
 }
 
 export type GradingStatus = "ready" | "drafting" | "reviewing" | "completed";
+export type QueueState = "active" | "archived" | "hidden";
+export type QueueAction = "restart" | "remove" | "archive" | "hide" | "restore";
 
 export interface GradingQueueItem {
   course_id: string;
@@ -73,6 +75,7 @@ export interface GradingQueueItem {
   submission_count: number;
   status: GradingStatus | "ready";
   latest_job_id: string | null;
+  queue_state: QueueState;
   reviewed_submissions: number;
   total_submissions: number;
 }
@@ -149,6 +152,7 @@ export interface GradingJob {
   teacher_loop: string;
   rubric_text: string | null;
   include_visual_submissions: boolean;
+  queue_state: QueueState;
   status: GradingStatus;
   total_submissions: number;
   reviewed_submissions: number;

@@ -1,16 +1,16 @@
 # Graph Report - Classroom Downloader  (2026-06-11)
 
 ## Corpus Check
-- 114 files · ~151,755 words
+- 112 files · ~79,875 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 1349 nodes · 3488 edges · 68 communities (62 shown, 6 thin omitted)
-- Extraction: 89% EXTRACTED · 11% INFERRED · 0% AMBIGUOUS · INFERRED: 387 edges (avg confidence: 0.51)
+- 1367 nodes · 3595 edges · 54 communities (50 shown, 4 thin omitted)
+- Extraction: 89% EXTRACTED · 11% INFERRED · 0% AMBIGUOUS · INFERRED: 390 edges (avg confidence: 0.51)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `1dae6996`
+- Built from commit: `3fe09293`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -48,7 +48,6 @@
 - [[_COMMUNITY_Community 33|Community 33]]
 - [[_COMMUNITY_Community 34|Community 34]]
 - [[_COMMUNITY_Community 35|Community 35]]
-- [[_COMMUNITY_Community 36|Community 36]]
 - [[_COMMUNITY_Community 37|Community 37]]
 - [[_COMMUNITY_Community 38|Community 38]]
 - [[_COMMUNITY_Community 39|Community 39]]
@@ -60,28 +59,15 @@
 - [[_COMMUNITY_Community 45|Community 45]]
 - [[_COMMUNITY_Community 46|Community 46]]
 - [[_COMMUNITY_Community 47|Community 47]]
-- [[_COMMUNITY_Community 48|Community 48]]
-- [[_COMMUNITY_Community 49|Community 49]]
 - [[_COMMUNITY_Community 50|Community 50]]
 - [[_COMMUNITY_Community 51|Community 51]]
 - [[_COMMUNITY_Community 52|Community 52]]
 - [[_COMMUNITY_Community 53|Community 53]]
-- [[_COMMUNITY_Community 54|Community 54]]
-- [[_COMMUNITY_Community 55|Community 55]]
 - [[_COMMUNITY_Community 56|Community 56]]
 - [[_COMMUNITY_Community 58|Community 58]]
-- [[_COMMUNITY_Community 59|Community 59]]
-- [[_COMMUNITY_Community 60|Community 60]]
-- [[_COMMUNITY_Community 61|Community 61]]
-- [[_COMMUNITY_Community 62|Community 62]]
-- [[_COMMUNITY_Community 63|Community 63]]
-- [[_COMMUNITY_Community 64|Community 64]]
-- [[_COMMUNITY_Community 65|Community 65]]
-- [[_COMMUNITY_Community 66|Community 66]]
-- [[_COMMUNITY_Community 67|Community 67]]
 
 ## God Nodes (most connected - your core abstractions)
-1. `log_event()` - 99 edges
+1. `log_event()` - 103 edges
 2. `get_settings()` - 97 edges
 3. `GradingJob` - 33 edges
 4. `GradingSubmission` - 33 edges
@@ -90,17 +76,17 @@
 7. `GradingStatus` - 32 edges
 8. `safe_fields()` - 30 edges
 9. `_CapturingEngine` - 29 edges
-10. `log_warning()` - 28 edges
+10. `get_logger()` - 28 edges
 
 ## Surprising Connections (you probably didn't know these)
+- `GradingFileCache` --uses--> `GradingFileCache`  [INFERRED]
+  apps/api/tests/test_zip_extraction.py → apps/api/src/classroom_downloader/models.py
 - `Graph Signature: main.py Across Six Communities` --references--> `Project Knowledge Graph (graphify-out)`  [INFERRED]
   plan.md → CLAUDE.md
 - `UserSession` --uses--> `AuthFailure`  [INFERRED]
   apps/api/src/classroom_downloader/api/session_cleanup.py → apps/api/src/classroom_downloader/api/auth_errors.py
 - `AuthFailure` --uses--> `AuthFailure`  [INFERRED]
   apps/api/src/classroom_downloader/api/session_cleanup.py → apps/api/src/classroom_downloader/api/auth_errors.py
-- `ExtractedSubmissionContent` --uses--> `GradingFileCache`  [INFERRED]
-  apps/api/src/classroom_downloader/content_extraction.py → apps/api/src/classroom_downloader/models.py
 - `GradingCriterionInput` --uses--> `ExtractedSubmissionContent`  [INFERRED]
   apps/api/src/classroom_downloader/grading/criteria.py → apps/api/src/classroom_downloader/content_extraction.py
 
@@ -110,20 +96,20 @@
 - 1-file cycle: `apps/api/src/classroom_downloader/api/common.py -> apps/api/src/classroom_downloader/api/common.py`
 - 1-file cycle: `apps/api/src/classroom_downloader/google_provider.py -> apps/api/src/classroom_downloader/google_provider.py`
 - 1-file cycle: `apps/api/src/classroom_downloader/grading/_common.py -> apps/api/src/classroom_downloader/grading/_common.py`
-- 2-file cycle: `apps/api/src/classroom_downloader/main.py -> apps/api/src/classroom_downloader/routers/exports.py -> apps/api/src/classroom_downloader/main.py`
-- 2-file cycle: `apps/api/src/classroom_downloader/api/deps.py -> apps/api/src/classroom_downloader/main.py -> apps/api/src/classroom_downloader/api/deps.py`
 - 2-file cycle: `apps/api/src/classroom_downloader/main.py -> apps/api/src/classroom_downloader/routers/courses.py -> apps/api/src/classroom_downloader/main.py`
-- 2-file cycle: `apps/api/src/classroom_downloader/main.py -> apps/api/src/classroom_downloader/routers/auth.py -> apps/api/src/classroom_downloader/main.py`
 - 2-file cycle: `apps/api/src/classroom_downloader/main.py -> apps/api/src/classroom_downloader/routers/health.py -> apps/api/src/classroom_downloader/main.py`
+- 2-file cycle: `apps/api/src/classroom_downloader/main.py -> apps/api/src/classroom_downloader/routers/auth.py -> apps/api/src/classroom_downloader/main.py`
 - 2-file cycle: `apps/api/src/classroom_downloader/main.py -> apps/api/src/classroom_downloader/routers/grading.py -> apps/api/src/classroom_downloader/main.py`
-- 3-file cycle: `apps/api/src/classroom_downloader/api/common.py -> apps/api/src/classroom_downloader/main.py -> apps/api/src/classroom_downloader/routers/exports.py -> apps/api/src/classroom_downloader/api/common.py`
-- 3-file cycle: `apps/api/src/classroom_downloader/api/deps.py -> apps/api/src/classroom_downloader/main.py -> apps/api/src/classroom_downloader/routers/exports.py -> apps/api/src/classroom_downloader/api/deps.py`
-- 3-file cycle: `apps/api/src/classroom_downloader/api/auth_errors.py -> apps/api/src/classroom_downloader/main.py -> apps/api/src/classroom_downloader/api/deps.py -> apps/api/src/classroom_downloader/api/auth_errors.py`
-- 3-file cycle: `apps/api/src/classroom_downloader/api/deps.py -> apps/api/src/classroom_downloader/main.py -> apps/api/src/classroom_downloader/routers/auth.py -> apps/api/src/classroom_downloader/api/deps.py`
-- 3-file cycle: `apps/api/src/classroom_downloader/api/deps.py -> apps/api/src/classroom_downloader/main.py -> apps/api/src/classroom_downloader/routers/courses.py -> apps/api/src/classroom_downloader/api/deps.py`
-- 3-file cycle: `apps/api/src/classroom_downloader/api/deps.py -> apps/api/src/classroom_downloader/main.py -> apps/api/src/classroom_downloader/routers/grading.py -> apps/api/src/classroom_downloader/api/deps.py`
-- 3-file cycle: `apps/api/src/classroom_downloader/api/auth_errors.py -> apps/api/src/classroom_downloader/main.py -> apps/api/src/classroom_downloader/routers/auth.py -> apps/api/src/classroom_downloader/api/auth_errors.py`
+- 2-file cycle: `apps/api/src/classroom_downloader/api/deps.py -> apps/api/src/classroom_downloader/main.py -> apps/api/src/classroom_downloader/api/deps.py`
+- 2-file cycle: `apps/api/src/classroom_downloader/main.py -> apps/api/src/classroom_downloader/routers/exports.py -> apps/api/src/classroom_downloader/main.py`
 - 3-file cycle: `apps/api/src/classroom_downloader/api/auth_errors.py -> apps/api/src/classroom_downloader/main.py -> apps/api/src/classroom_downloader/routers/courses.py -> apps/api/src/classroom_downloader/api/auth_errors.py`
+- 3-file cycle: `apps/api/src/classroom_downloader/api/common.py -> apps/api/src/classroom_downloader/main.py -> apps/api/src/classroom_downloader/routers/courses.py -> apps/api/src/classroom_downloader/api/common.py`
+- 3-file cycle: `apps/api/src/classroom_downloader/api/deps.py -> apps/api/src/classroom_downloader/main.py -> apps/api/src/classroom_downloader/routers/courses.py -> apps/api/src/classroom_downloader/api/deps.py`
+- 3-file cycle: `apps/api/src/classroom_downloader/api/common.py -> apps/api/src/classroom_downloader/main.py -> apps/api/src/classroom_downloader/routers/auth.py -> apps/api/src/classroom_downloader/api/common.py`
+- 3-file cycle: `apps/api/src/classroom_downloader/api/common.py -> apps/api/src/classroom_downloader/main.py -> apps/api/src/classroom_downloader/routers/exports.py -> apps/api/src/classroom_downloader/api/common.py`
+- 3-file cycle: `apps/api/src/classroom_downloader/api/common.py -> apps/api/src/classroom_downloader/main.py -> apps/api/src/classroom_downloader/routers/grading.py -> apps/api/src/classroom_downloader/api/common.py`
+- 3-file cycle: `apps/api/src/classroom_downloader/api/auth_errors.py -> apps/api/src/classroom_downloader/main.py -> apps/api/src/classroom_downloader/api/deps.py -> apps/api/src/classroom_downloader/api/auth_errors.py`
+- 3-file cycle: `apps/api/src/classroom_downloader/api/auth_errors.py -> apps/api/src/classroom_downloader/main.py -> apps/api/src/classroom_downloader/routers/auth.py -> apps/api/src/classroom_downloader/api/auth_errors.py`
 - 3-file cycle: `apps/api/src/classroom_downloader/api/auth_errors.py -> apps/api/src/classroom_downloader/main.py -> apps/api/src/classroom_downloader/routers/grading.py -> apps/api/src/classroom_downloader/api/auth_errors.py`
 
 ## Hyperedges (group relationships)
@@ -131,47 +117,47 @@
 - **Domain Routers by Bounded Context** — plan_routers_health, plan_routers_auth, plan_routers_courses, plan_routers_exports, plan_routers_grading [EXTRACTED 0.90]
 - **One-Way Import Chain (main to routers to deps to api-support to services)** — plan_compat_reexports, plan_routers_grading, plan_api_deps, plan_api_session_cleanup, plan_api_auth_errors [EXTRACTED 0.85]
 
-## Communities (68 total, 6 thin omitted)
+## Communities (54 total, 4 thin omitted)
 
 ### Community 0 - "Grading Domain & DB Models"
-Cohesion: 0.11
-Nodes (38): GradingFileCache, GradingAiAttempt, GradingEngine, GradingJob, GradingSubmission, Session, datetime, ExtractedSubmissionContent (+30 more)
+Cohesion: 0.05
+Nodes (111): GradingAiAttempt, GradingEngine, GradingJob, GradingSubmission, Session, ExtractedSubmissionContent, GoogleProvider, GradingEngine (+103 more)
 
 ### Community 1 - "Persistence & API Dependencies"
 Cohesion: 0.10
-Nodes (38): AuthFailure, _contains_invalid_grant(), google_auth_http_exception(), _http_403_is_hard_auth_failure(), _http_error_content(), Google auth-error → HTTP translation.  Pure, no side effects., _as_utc(), get_current_session() (+30 more)
+Nodes (36): AuthFailure, _contains_invalid_grant(), google_auth_http_exception(), _http_403_is_hard_auth_failure(), _http_error_content(), Google auth-error → HTTP translation.  Pure, no side effects., _as_utc(), get_current_session() (+28 more)
 
 ### Community 2 - "Grading Tests & Settings"
-Cohesion: 0.08
-Nodes (39): get_settings(), test_brief_mode_sends_rubric_text_and_keeps_default_criteria(), test_classroom_links_endpoint_backfills_links_and_posted_state(), test_create_job_persists_teacher_criteria(), test_defaults_used_when_no_criteria_and_engine_silent(), test_delete_cache_preserves_results_and_marks_metadata(), test_draft_auto_runs_privacy_audit_when_missing(), test_draft_blocks_when_latest_audit_has_high_risk_rows() (+31 more)
+Cohesion: 0.05
+Nodes (75): GoogleProvider, GradingCriterion, GradingEngine, GradingJob, Session, get_settings(), _collect_inference_samples(), infer_job_criteria() (+67 more)
 
 ### Community 3 - "Grading Router & Job Snapshots"
-Cohesion: 0.08
-Nodes (63): _conditional_response(), _etag(), _if_none_match(), _sse_event(), Build the grading engine, translating config failures (missing key /     disabl, resolve_grading_engine(), Request, Response (+55 more)
+Cohesion: 0.07
+Nodes (68): _as_utc(), _cache_headers(), _conditional_response(), _etag(), _if_none_match(), _is_future(), SSE + generic HTTP-cache primitives.  No domain dependencies., _sse_event() (+60 more)
 
 ### Community 4 - "LiteLLM Grading Engine"
 Cohesion: 0.06
-Nodes (75): Path, Any, GradingEngineRequest, LlmModelEntry, VisionExtractionResult, Path, GradingEngineRequest, LlmModelEntry (+67 more)
+Nodes (80): Path, Any, GradingEngineRequest, LlmModelEntry, VisionExtractionResult, Path, Path, GradingEngineRequest (+72 more)
 
 ### Community 5 - "LLM Catalog & Settings"
 Cohesion: 0.14
 Nodes (34): Any, Path, Settings, Path, Settings, BaseSettings, _bool_or_none(), _cache_is_stale() (+26 more)
 
 ### Community 6 - "Google Classroom Provider"
-Cohesion: 0.14
-Nodes (12): ClassroomActivity, ClassroomCourse, FakeClassroomService, FakeCourses, FakeCourseWork, FakeDriveFiles, FakeDriveService, FakeExecute (+4 more)
+Cohesion: 0.12
+Nodes (13): ClassroomActivity, _due_label(), FakeClassroomService, FakeCourses, FakeCourseWork, FakeDriveFiles, FakeDriveService, FakeExecute (+5 more)
 
 ### Community 7 - "LLM Model Overrides Config"
 Cohesion: 0.05
 Nodes (38): display_name, enabled, notes, rpm_limit, tpm_limit, use_cases, default_model, display_name (+30 more)
 
 ### Community 8 - "Schemas & Privacy Audit"
-Cohesion: 0.31
-Nodes (21): BaseModel, ExportStatus, GradingStatus, ActivityRead, AuthStart, AuthState, CourseRead, ExportCreate (+13 more)
+Cohesion: 0.14
+Nodes (45): GoogleProvider, GradingJob, GradingSubmission, PrivacyAuditRead, Session, SubmissionFile, BaseModel, GoogleProvider (+37 more)
 
 ### Community 9 - "Auth Flow & Token Store"
-Cohesion: 0.15
-Nodes (32): GradingCriterion, Session, GradingAiAttempt, GradingSubmission, GradingSubmissionFile, Session, Path, ExportError (+24 more)
+Cohesion: 0.12
+Nodes (43): GradingFileCache, Path, Path, GradingFileCache, Path, _decode_text(), extract_submission_content(), _extract_zip_content() (+35 more)
 
 ### Community 10 - "Workspace Views (UI)"
 Cohesion: 0.13
@@ -198,16 +184,16 @@ Cohesion: 0.16
 Nodes (16): Card(), CardContent(), CardDescription(), CardFooter(), CardHeader(), CardTitle(), cn(), RadioGroup() (+8 more)
 
 ### Community 16 - "Submission & Drive Hydration"
-Cohesion: 0.16
-Nodes (7): clear_google_provider_caches(), MockGoogleProvider, TokenStore, log_event(), safe_fields(), Shared pytest configuration for the API test suite.  Two isolation concerns ar, _reset_global_state()
+Cohesion: 0.15
+Nodes (11): ClassroomCourse, drive_files_from_submission(), _looks_like_user_id(), MockGoogleProvider, A bare numeric Google account id leaking in as a display name (e.g. when a, submission_links_from_submission(), SubmissionLink, log_event() (+3 more)
 
 ### Community 17 - "Web Package Dependencies"
 Cohesion: 0.10
 Nodes (19): dependencies, lucide-react, react, react-dom, vite, @vitejs/plugin-react, devDependencies, @types/react (+11 more)
 
 ### Community 18 - "Exports Router & File Naming"
-Cohesion: 0.31
-Nodes (13): GoogleProvider, Request, Response, Session, ExportCreate, ExportFile, ExportJobRead, _build_export_read() (+5 more)
+Cohesion: 0.19
+Nodes (17): GoogleProvider, Request, Response, Session, build_output_path(), sanitize_segment(), ExportCreate, ExportFile (+9 more)
 
 ### Community 19 - "TypeScript Config"
 Cohesion: 0.11
@@ -218,12 +204,12 @@ Cohesion: 0.18
 Nodes (17): is_valid_cpf(), Validate a Brazilian CPF by its two mod-11 check digits., Unit tests for the pt-BR privacy scrubber (`classroom_downloader.privacy`).  The, _scrub(), test_clean_text_has_no_counts(), test_combined_redactions_report_all_categories(), test_email_redacted(), test_full_name_redacted_lone_first_name_preserved() (+9 more)
 
 ### Community 21 - "Provider Sessions & Cache Logging"
-Cohesion: 0.12
-Nodes (25): datetime, AccountProfile, _cache_hit(), drive_files_from_submission(), _due_label(), get_google_provider(), GoogleApiProvider, _looks_like_user_id() (+17 more)
+Cohesion: 0.28
+Nodes (13): datetime, AccountProfile, _cache_hit(), get_google_provider(), GoogleApiProvider, Legacy single-user helper. Use make_google_provider() for multi-user flows., _ttl(), _TtlCacheEntry (+5 more)
 
 ### Community 22 - "Observability & Logging"
-Cohesion: 0.25
-Nodes (11): Any, _bounded_repr(), _bounded_text(), _format_event(), _format_value(), JsonEventFormatter, log_warning(), _safe_value() (+3 more)
+Cohesion: 0.21
+Nodes (14): Any, _bounded_repr(), _bounded_text(), _format_event(), _format_value(), JsonEventFormatter, log_debug(), log_error() (+6 more)
 
 ### Community 23 - "Grader Shell (UI)"
 Cohesion: 0.28
@@ -238,30 +224,26 @@ Cohesion: 0.39
 Nodes (6): _create_job(), Coverage for the resume/preview additions: the global grading-jobs list and the, test_jobs_list_collapses_to_newest_per_activity(), test_jobs_list_surfaces_created_job(), test_submission_preview_forces_download_for_unsafe_type(), test_submission_preview_streams_image_inline()
 
 ### Community 26 - "Courses Router"
-Cohesion: 0.21
-Nodes (13): Activity, _as_utc(), _cache_headers(), _is_fresh(), _is_future(), SSE + generic HTTP-cache primitives.  No domain dependencies., datetime, GoogleProvider (+5 more)
+Cohesion: 0.36
+Nodes (8): Activity, _is_fresh(), GoogleProvider, Session, UserSession, Course, list_activities(), list_courses()
 
 ### Community 27 - "Filesystem API Types"
 Cohesion: 0.40
 Nodes (4): FileSystemDirectoryHandle, FileSystemFileHandle, FileSystemWritableFileStream, Window
 
 ### Community 32 - "Community 32"
-Cohesion: 0.15
-Nodes (16): Request, Response, Session, AuthStart, AuthState, build_oauth_authorization_url(), DbTokenStore, Loads and refreshes Google credentials stored in the UserSession DB row. (+8 more)
+Cohesion: 0.09
+Nodes (23): Request, Response, Session, AuthStart, AuthState, build_oauth_authorization_url(), clear_google_provider_caches(), DbTokenStore (+15 more)
 
 ### Community 33 - "Community 33"
 Cohesion: 0.07
 Nodes (27): API Design, Backend Design, Bottom Line, Capture object in the engine, Cleanup, Current Findings, Existing persistence, Existing type gap (+19 more)
 
 ### Community 34 - "Community 34"
-Cohesion: 0.15
-Nodes (16): _ensure_activity_columns(), _ensure_cache_columns(), _ensure_columns(), _ensure_grading_ai_attempt_columns(), _ensure_grading_criterion_columns(), _ensure_grading_job_columns(), _ensure_grading_submission_columns(), _ensure_privacy_columns() (+8 more)
+Cohesion: 0.14
+Nodes (17): _ensure_activity_columns(), _ensure_cache_columns(), _ensure_columns(), _ensure_grading_ai_attempt_columns(), _ensure_grading_criterion_columns(), _ensure_grading_job_columns(), _ensure_grading_submission_columns(), _ensure_privacy_columns() (+9 more)
 
 ### Community 35 - "Community 35"
-Cohesion: 0.22
-Nodes (23): ExtractedSubmissionContent, GoogleProvider, GradingEngine, GradingFileCache, GradingJob, GradingSubmission, Session, SubmissionFile (+15 more)
-
-### Community 36 - "Community 36"
 Cohesion: 0.08
 Nodes (24): 0. Goal & context, 10. Known accepted limitations (document, don't fix), 1. Files touched (overview), 2.1 Where extraction happens — draft time, never audit time, 2.2 The vision extraction call (draft path), 2.3 Multi-attachment submissions, 2.4 Attempt recording & cost, 2. Pipeline design (+16 more)
 
@@ -309,14 +291,6 @@ Nodes (12): Caching Strategy, Cross-Cutting Requirements, Current Hotspots, Deci
 Cohesion: 0.20
 Nodes (9): Out of scope, Papercut ironing plan — IA grading draft, Task 1 — Separate privacy flags from grading flags ✅ DONE, Task 2 — Honor the selected rubric mode ✅ DONE, Task 3 — Make inferred criteria editable ✅ DONE, Task 4 — One student = one multi-file submission ✅ DONE (leaner variant), Task 5 — Honest, predictable draft queue ✅ DONE, Task 6 — Student-name resolution fallback ✅ DONE (+1 more)
 
-### Community 48 - "Community 48"
-Cohesion: 0.36
-Nodes (7): checkpoint(), dump_buttons(), first_visible(), rail_nav(), UI blocker audit for Classroom Downloader (mock backend).  Drives the real app f, Rail workspace nav buttons in order: 0=graderQueue, 1=workspace, 2=history., run_flow()
-
-### Community 49 - "Community 49"
-Cohesion: 0.25
-Nodes (7): Blockers (P0 — primary flow CTAs unreachable at 768px-tall screens), Detector noise to ignore in findings.json, Medium, Not found (worth knowing), Root cause (explains the "unreachable buttons" complaint), Side findings (code, not UI), UI blocker audit — findings draft (2026-06-10)
-
 ### Community 50 - "Community 50"
 Cohesion: 0.33
 Nodes (5): Coolify application setup, Coolify deployment, Google OAuth setup, Required environment variables, Smoke checks after deploy
@@ -329,61 +303,25 @@ Nodes (5): Backend Settings, Classroom Downloader, Development, Docker / Coolify
 Cohesion: 0.08
 Nodes (24): 0. Goal & context, 10. Watch-items (gotchas that will bite), 1. Files touched (overview), 2. Sentry (backend), 3.1 Structured extras (no console change), 3.2 Request/user context (contextvars), 3.3 The DB sink, 3.4 Retention (+16 more)
 
-### Community 59 - "Community 59"
-Cohesion: 0.16
-Nodes (21): GoogleProvider, GradingCriterion, GradingEngine, GradingJob, Session, _collect_inference_samples(), infer_job_criteria(), Reuse the audit's cached + scrubbed content to build a privacy-safe sample. (+13 more)
-
-### Community 60 - "Community 60"
-Cohesion: 0.37
-Nodes (18): GoogleProvider, GradingJob, GradingSubmission, PrivacyAuditRead, Session, SubmissionFile, GoogleProvider, SubmissionFile (+10 more)
-
-### Community 61 - "Community 61"
-Cohesion: 0.33
-Nodes (18): ExtractedSubmissionContent, GradingJob, GradingSubmission, Session, ExtractedSubmissionContent, GradingJob, GradingPseudonym, GradingSubmission (+10 more)
-
-### Community 62 - "Community 62"
-Cohesion: 0.26
-Nodes (14): GradingJob, GradingSubmission, GradingSubmissionFile, Session, SubmissionFile, ensure_submission_file(), _group_files(), group_key_for() (+6 more)
-
-### Community 63 - "Community 63"
-Cohesion: 0.29
-Nodes (7): _sse_payloads(), test_criteria_stream_infers_before_audit(), test_draft_stream_emits_incremental_submissions_without_criteria_phase(), test_draft_stream_emits_per_submission_progress(), test_draft_stream_seeds_full_queue_in_stable_order(), test_privacy_audit_stream_emits_progress_and_terminal_event(), test_update_criteria_replaces_and_survives_reinference()
-
-### Community 64 - "Community 64"
-Cohesion: 0.53
-Nodes (4): build_output_path(), sanitize_segment(), test_build_output_path_deduplicates_without_overwrite(), test_sanitize_segment_removes_filesystem_hostile_characters()
-
-### Community 65 - "Community 65"
-Cohesion: 0.33
-Nodes (6): _enable_litellm_engine(), Point settings at a local single-model catalog with litellm selected.     conft, test_draft_returns_503_when_provider_key_missing(), test_grading_health_ready_when_provider_key_present(), test_grading_health_reports_missing_provider_key(), test_grading_health_reports_model_not_enabled()
-
-### Community 66 - "Community 66"
-Cohesion: 0.50
-Nodes (4): inspect_grading_readiness(), _probe_valid_key(), Live check via litellm.check_valid_key. Returns (ok, detail); ok is None     wh, Non-raising readiness report for the configured grading engine. Used by     the
-
-### Community 67 - "Community 67"
-Cohesion: 0.67
-Nodes (3): _seed_preview_cache(), test_preview_binary_still_attachment(), test_preview_code_file_served_inline_as_text_plain()
-
 ## Knowledge Gaps
-- **369 isolated node(s):** `findings`, `flow_failures`, `schema_version`, `default_model`, `enabled` (+364 more)
+- **361 isolated node(s):** `schema_version`, `default_model`, `enabled`, `display_name`, `use_cases` (+356 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **6 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **4 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `log_event()` connect `Submission & Drive Hydration` to `Grading Domain & DB Models`, `Community 32`, `Persistence & API Dependencies`, `Community 35`, `LiteLLM Grading Engine`, `LLM Catalog & Settings`, `Grading Router & Job Snapshots`, `Auth Flow & Token Store`, `Exports Router & File Naming`, `Provider Sessions & Cache Logging`, `Observability & Logging`, `Courses Router`, `Community 59`, `Community 60`, `Community 61`, `Community 62`?**
-  _High betweenness centrality (0.069) - this node is a cross-community bridge._
-- **Why does `get_settings()` connect `Grading Tests & Settings` to `Grading Domain & DB Models`, `Persistence & API Dependencies`, `Community 34`, `Community 66`, `LiteLLM Grading Engine`, `LLM Catalog & Settings`, `Community 35`, `Grading Router & Job Snapshots`, `Community 65`, `Auth Flow & Token Store`, `Provider Sessions & Cache Logging`, `Observability & Logging`, `Community 59`, `Community 63`?**
-  _High betweenness centrality (0.051) - this node is a cross-community bridge._
-- **Why does `GoogleProvider` connect `Community 60` to `Grading Domain & DB Models`, `Persistence & API Dependencies`, `Community 35`, `Grading Router & Job Snapshots`, `Google Classroom Provider`, `Auth Flow & Token Store`, `Submission & Drive Hydration`, `Provider Sessions & Cache Logging`?**
-  _High betweenness centrality (0.019) - this node is a cross-community bridge._
+- **Why does `log_event()` connect `Submission & Drive Hydration` to `Grading Domain & DB Models`, `Community 32`, `Persistence & API Dependencies`, `Grading Tests & Settings`, `LiteLLM Grading Engine`, `LLM Catalog & Settings`, `Google Classroom Provider`, `Grading Router & Job Snapshots`, `Schemas & Privacy Audit`, `Auth Flow & Token Store`, `Exports Router & File Naming`, `Provider Sessions & Cache Logging`, `Observability & Logging`, `Courses Router`?**
+  _High betweenness centrality (0.078) - this node is a cross-community bridge._
+- **Why does `get_settings()` connect `Grading Tests & Settings` to `Community 32`, `Persistence & API Dependencies`, `Community 34`, `Grading Domain & DB Models`, `LiteLLM Grading Engine`, `LLM Catalog & Settings`, `Grading Router & Job Snapshots`, `Provider Sessions & Cache Logging`, `Observability & Logging`?**
+  _High betweenness centrality (0.055) - this node is a cross-community bridge._
+- **Why does `GoogleProvider` connect `Schemas & Privacy Audit` to `Community 32`, `Persistence & API Dependencies`, `Grading Domain & DB Models`, `Grading Router & Job Snapshots`, `Submission & Drive Hydration`, `Provider Sessions & Cache Logging`?**
+  _High betweenness centrality (0.011) - this node is a cross-community bridge._
 - **Are the 20 inferred relationships involving `GradingJob` (e.g. with `GoogleProvider` and `GradingJob`) actually correct?**
   _`GradingJob` has 20 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 20 inferred relationships involving `GradingSubmission` (e.g. with `GoogleProvider` and `GradingJob`) actually correct?**
   _`GradingSubmission` has 20 INFERRED edges - model-reasoned connections that need verification._
-- **What connects `UI blocker audit for Classroom Downloader (mock backend).  Drives the real app f`, `Rail workspace nav buttons in order: 0=graderQueue, 1=workspace, 2=history.`, `Dump console + network activity for the first 15s of app load.` to the rest of the system?**
-  _412 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **What connects `schema_version`, `default_model`, `enabled` to the rest of the system?**
+  _402 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Grading Domain & DB Models` be split into smaller, more focused modules?**
-  _Cohesion score 0.10801393728222997 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.054857142857142854 - nodes in this community are weakly interconnected._

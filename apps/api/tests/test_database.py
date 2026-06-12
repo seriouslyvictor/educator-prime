@@ -10,6 +10,30 @@ def test_sqlite_dev_migration_adds_cache_and_grading_metadata_columns(tmp_path) 
         connection.execute(
             text(
                 """
+                CREATE TABLE gradingjob (
+                    id VARCHAR PRIMARY KEY,
+                    course_id VARCHAR NOT NULL,
+                    course_name VARCHAR NOT NULL,
+                    activity_id VARCHAR NOT NULL,
+                    user_email VARCHAR NOT NULL DEFAULT '',
+                    activity_title VARCHAR NOT NULL,
+                    rubric_mode VARCHAR NOT NULL,
+                    teacher_loop VARCHAR NOT NULL,
+                    batch_mode VARCHAR NOT NULL DEFAULT 'per_submission',
+                    include_visual_submissions BOOLEAN NOT NULL DEFAULT 0,
+                    status VARCHAR NOT NULL,
+                    total_submissions INTEGER NOT NULL DEFAULT 0,
+                    reviewed_submissions INTEGER NOT NULL DEFAULT 0,
+                    flagged_submissions INTEGER NOT NULL DEFAULT 0,
+                    created_at DATETIME NOT NULL,
+                    updated_at DATETIME NOT NULL
+                )
+                """
+            )
+        )
+        connection.execute(
+            text(
+                """
                 CREATE TABLE gradingsubmission (
                     id VARCHAR PRIMARY KEY,
                     job_id VARCHAR NOT NULL,
@@ -174,6 +198,10 @@ def test_sqlite_dev_migration_adds_cache_and_grading_metadata_columns(tmp_path) 
         "posted_to_classroom",
         "posted_at",
     }.issubset(submission_columns)
+    job_columns = {
+        column["name"] for column in inspect(engine).get_columns("gradingjob")
+    }
+    assert "queue_state" in job_columns
     scrub_columns = {
         column["name"] for column in inspect(engine).get_columns("gradingscrubcache")
     }

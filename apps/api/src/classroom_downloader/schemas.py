@@ -94,6 +94,7 @@ class GradingQueueItem(BaseModel):
     submission_count: int
     status: str
     latest_job_id: str | None = None
+    queue_state: str = "active"
     reviewed_submissions: int = 0
     total_submissions: int = 0
 
@@ -233,6 +234,7 @@ class GradingJobRead(BaseModel):
     rubric_text: str | None = None
     batch_mode: str = "per_submission"
     include_visual_submissions: bool = False
+    queue_state: str = "active"
     status: GradingStatus
     total_submissions: int
     reviewed_submissions: int
