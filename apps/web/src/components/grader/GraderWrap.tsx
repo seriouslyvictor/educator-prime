@@ -1,11 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { api } from "../../lib/api";
 import type { GradingJob, GradingSubmission } from "../../types";
 import { AppIcon } from "../icons";
+import { Button } from "../ui/button";
 import { GraderTopbar } from "./GraderTopbar";
 import { safeStatusLabel } from "./graderStatus";
 import graderStyles from "./Grader.module.css";
+import { PostingPiP } from "./pip/PostingPiP";
+import { useDocumentPiP } from "./pip/useDocumentPiP";
 void graderStyles;
 
 function scoreOf(submission: GradingSubmission): number | null {
@@ -23,6 +26,12 @@ function classroomActivityUrl(job: GradingJob): string {
 function postingClipboardText(submission: GradingSubmission): string {
   return `Nota: ${scoreOf(submission)}/100\n\n${submission.feedback ?? ""}`;
 }
+
+// Feedback-only clipboard text for the PiP card (no "Nota:" prefix — teacher types grade by hand)
+function postingFeedbackText(submission: GradingSubmission): string {
+  return submission.feedback ?? "";
+}
+void postingFeedbackText; // used inside PostingPiP; defined here to document the split
 
 export function GraderWrap({
   job,
@@ -43,6 +52,11 @@ export function GraderWrap({
   const [postingBusyId, setPostingBusyId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [postingError, setPostingError] = useState<string | null>(null);
+
+  // Document PiP companion
+  const { isSupported: pipSupported, isOpen: pipOpen, pipWindow, open: openPiP, close: closePiP } = useDocumentPiP();
+  // Queue snapshot: captured when PiP opens so auto-marking doesn't reshuffle under the card
+  const pipQueueRef = useRef<GradingSubmission[]>([]);
 
   const grades = job.submissions
     .map(scoreOf)
@@ -117,6 +131,28 @@ export function GraderWrap({
       setPostingError(caught instanceof Error ? caught.message : "Falha ao marcar postagem.");
     } finally {
       setPostingBusyId(null);
+    }
+  }
+
+  // PiP helpers
+  const pipQueue = useMemo(
+    () => gradedSubmissions.filter((s) => !s.posted_to_classroom),
+    [gradedSubmissions],
+  );
+
+  async function handleOpenPiP() {
+    // Snapshot queue at open time so auto-marking doesn't reshuffle mid-session
+    pipQueueRef.current = pipQueue;
+    await openPiP();
+  }
+
+  async function handlePiPMarkPosted(submission: GradingSubmission) {
+    setPostingError(null);
+    try {
+      const updated = await api.markSubmissionPosted(job.id, submission.id, true);
+      onJobUpdate(updated);
+    } catch (caught) {
+      setPostingError(caught instanceof Error ? caught.message : "Falha ao marcar postagem via PiP.");
     }
   }
 
@@ -214,6 +250,22 @@ export function GraderWrap({
                 <AppIcon name={preparingLinks ? "loader" : "refresh"} className={preparingLinks ? "ico spin" : "ico"} />
                 Preparar postagem
               </button>
+              <Button
+                variant="default"
+                size="default"
+                onClick={() => void handleOpenPiP()}
+                disabled={!pipSupported || pipQueue.length === 0}
+                title={
+                  !pipSupported
+                    ? "Requer Chrome ou Edge 116+"
+                    : pipQueue.length === 0
+                    ? "Nenhum aluno pendente de postagem"
+                    : undefined
+                }
+              >
+                <AppIcon name="pictureInPicture" />
+                Postagem guiada
+              </Button>
             </div>
             {gradedSubmissions.length ? (
               <div className="classroom-post-list">
@@ -281,6 +333,17 @@ export function GraderWrap({
           </div>
         </aside>
       </div>
+
+      {/* PiP posting companion portal */}
+      {pipOpen && pipWindow && pipQueueRef.current.length > 0 && (
+        <PostingPiP
+          job={job}
+          queue={pipQueueRef.current}
+          pipWindow={pipWindow}
+          onMarkPosted={(submission) => void handlePiPMarkPosted(submission)}
+          onClose={closePiP}
+        />
+      )}
     </div>
   );
 }
