@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ConnectView, InlineError } from "./components/ConnectView";
+import { AdminView } from "./components/admin/AdminView";
 import { DoneView } from "./components/DoneView";
 import { DryRunDrawer } from "./components/DryRunDrawer";
 import {
@@ -1084,6 +1085,8 @@ export function App() {
             onConnect={connectClassroom}
           />
         ) : null}
+
+        {view === "admin" ? <AdminView /> : null}
 
         {view === "workspace" ? (
           <>
