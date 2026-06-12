@@ -225,8 +225,8 @@
     "semantic_hash": "cefe806f8e18243e34f09b672751b825"
   },
   "apps/web/src/components/grader/GraderWrap.tsx": {
-    "mtime": 1781305108.8266249,
-    "ast_hash": "6815eda7f268713e88d6fb53bb268571",
+    "mtime": 1781307494.0770237,
+    "ast_hash": "58b2d0813400752095a095204e7996c7",
     "semantic_hash": ""
   },
   "apps/web/src/components/grader/graderStatus.ts": {
@@ -260,8 +260,8 @@
     "semantic_hash": "70e63faa6e7ebcb073ec6ccca7fed3c6"
   },
   "apps/web/src/components/workspace/TurmasView.tsx": {
-    "mtime": 1781284492.649718,
-    "ast_hash": "92e8e5f4257fa23f726bf8446bf4ca96",
+    "mtime": 1781306900.021055,
+    "ast_hash": "3ce8cc35d8f4780b40a76e82b0ddec22",
     "semantic_hash": ""
   },
   "apps/web/src/components/workspace/index.ts": {
@@ -770,8 +770,8 @@
     "semantic_hash": ""
   },
   "apps/web/src/components/grader/pip/PostingPiP.tsx": {
-    "mtime": 1781306017.2990873,
-    "ast_hash": "c8edea270cc21dc6a9289fb9c872954a",
+    "mtime": 1781308494.965512,
+    "ast_hash": "f48b4fb4cfb91814e2a01efee95ec1d0",
     "semantic_hash": ""
   },
   "apps/web/src/components/grader/pip/useDocumentPiP.ts": {

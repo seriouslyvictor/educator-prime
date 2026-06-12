@@ -151,28 +151,7 @@
   font-family: inherit;
 }
 
-/* No-link warning chip */
-.nolink-chip {
-  margin-top: 8px;
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  padding: 7px 10px;
-  border-radius: 7px;
-  background: var(--warning-soft);
-  border: 1px solid rgba(184, 116, 11, 0.25);
-  font-size: 11px;
-  color: var(--warning);
-  line-height: 1.4;
-}
-
-.nolink-icon {
-  width: 13px;
-  height: 13px;
-  flex-shrink: 0;
-}
-
-/* Clipboard error chip (danger variant of warning chip layout) */
+/* Clipboard error chip (danger variant of the mockup warning-chip layout) */
 .error-chip {
   margin-top: 8px;
   display: flex;
@@ -253,6 +232,28 @@
   /* mockup hides "← Anterior" via color: transparent at full opacity */
   cursor: default;
   opacity: 1;
+}
+
+/* First-session hint (shown at idx 0): shortcut + Classroom sort tip */
+.hint {
+  font-size: 10.5px;
+  color: var(--muted-2);
+  line-height: 1.5;
+}
+
+.hint-kbd {
+  display: inline-block;
+  padding: 0 4px;
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  background: var(--surface);
+  font-family: inherit;
+  font-size: 9.5px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 /* ── Queue ("A seguir", ported from PiPC in docs/UI/grader/pip.jsx) ───────── */

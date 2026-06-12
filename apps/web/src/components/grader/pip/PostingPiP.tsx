@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import type { GradingJob, GradingSubmission } from "../../../types";
@@ -23,6 +23,10 @@ function scoreColor(g: number | null): string {
 
 function postingFeedbackText(submission: GradingSubmission): string {
   return submission.feedback ?? "";
+}
+
+function classroomActivityUrl(job: GradingJob): string {
+  return `https://classroom.google.com/c/${job.course_id}/a/${job.activity_id}/details`;
 }
 
 // ── component props ───────────────────────────────────────────────────────────
@@ -86,11 +90,14 @@ function PostingPiPCard({
   const [phase, setPhase] = useState<Phase>("idle");
   const [expanded, setExpanded] = useState(false);
   const [clipError, setClipError] = useState<string | null>(null);
+  // Classroom full-reloads on every external navigation (it's only SPA-fast
+  // internally), so we navigate the named tab ONCE to land in the activity and
+  // let the teacher use Classroom's own student switcher from there.
+  const [hasNavigated, setHasNavigated] = useState(false);
 
   const cur = queue[Math.min(idx, queue.length - 1)];
   const nextUp = queue.slice(idx + 1, idx + 4);
   const grade = scoreOf(cur);
-  const isNoLink = !cur.alternate_link;
   const feedText = cur.feedback ?? "";
   const feedShort =
     feedText.length > PREVIEW ? feedText.slice(0, PREVIEW) + "…" : feedText;
@@ -131,9 +138,11 @@ function PostingPiPCard({
       }
     }
 
-    // 2. Navigate Classroom tab (named tab reuse) when link exists
-    if (cur.alternate_link) {
-      pipWindow.open(cur.alternate_link, "classroom-posting");
+    // 2. First click only: open the named Classroom tab (deep link when
+    //    available, activity page otherwise). Subsequent clicks never navigate.
+    if (!hasNavigated) {
+      pipWindow.open(cur.alternate_link ?? classroomActivityUrl(job), "classroom-posting");
+      setHasNavigated(true);
     }
 
     // 3. Mark posted (fire-and-forget; errors surface via onMarkPosted callback)
@@ -143,6 +152,34 @@ function PostingPiPCard({
     setPhase("copied");
     setTimeout(advance, 1350);
   };
+
+  // Keyboard shortcuts — listen on the PiP document so they only fire while
+  // the PiP window is focused (Space in the Classroom tab keeps typing spaces).
+  // preventDefault on keydown also stops a focused button's native Space
+  // activation, so actions never double-fire.
+  const keyActions = useRef({ handleCTA, advance, goBack, onClose, phase, idx });
+  keyActions.current = { handleCTA, advance, goBack, onClose, phase, idx };
+
+  useEffect(() => {
+    const doc = pipWindow.document;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.repeat) return;
+      const a = keyActions.current;
+      if (event.code === "Space") {
+        event.preventDefault();
+        if (a.phase === "done") a.onClose();
+        else if (a.phase === "idle") void a.handleCTA();
+      } else if (event.key === "ArrowRight") {
+        event.preventDefault();
+        if (a.phase === "idle") a.advance();
+      } else if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        if (a.phase === "idle" && a.idx > 0) a.goBack();
+      }
+    };
+    doc.addEventListener("keydown", onKeyDown);
+    return () => doc.removeEventListener("keydown", onKeyDown);
+  }, [pipWindow]);
 
   if (phase === "done") {
     return (
@@ -207,14 +244,6 @@ function PostingPiPCard({
           )}
         </div>
 
-        {/* No-link warning chip */}
-        {isNoLink && (
-          <div className={styles["nolink-chip"]}>
-            <AppIcon name="triangleAlert" className={styles["nolink-icon"]} />
-            Link direto ausente — abra o Classroom manualmente
-          </div>
-        )}
-
         {/* Clipboard failure error chip */}
         {clipError && (
           <div className={styles["error-chip"]}>
@@ -239,11 +268,6 @@ function PostingPiPCard({
             <>
               <AppIcon name="check" className={styles["cta-icon"]} />
               Copiado ✓
-            </>
-          ) : isNoLink ? (
-            <>
-              <AppIcon name="paperclip" className={styles["cta-icon"]} />
-              Copiar feedback
             </>
           ) : (
             <>
@@ -271,8 +295,15 @@ function PostingPiPCard({
               onClick={advance}
               style={{ color: "var(--muted)" }}
             >
-              {isNoLink ? "Avançar sem copiar →" : "Pular →"}
+              Pular →
             </button>
+          </div>
+        )}
+
+        {idx === 0 && (
+          <div className={styles["hint"]}>
+            <kbd className={styles["hint-kbd"]}>espaço</kbd> copia e avança ·
+            no Classroom, ordene a lista por nome para seguir a fila
           </div>
         )}
       </div>
