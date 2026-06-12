@@ -310,6 +310,8 @@ def _extract_visual_submission(
             cache_write_tokens=metadata["cache_write_tokens"],
             cost_cents=metadata["cost_cents"],
             latency_ms=metadata["latency_ms"],
+            prompt_text=getattr(vision_extractor, "last_prompt_text", None),
+            response_text=getattr(vision_extractor, "last_response_text", None),
         )
         return ExtractedSubmissionContent(
             status="failed",
@@ -342,6 +344,8 @@ def _extract_visual_submission(
         cache_write_tokens=metadata["cache_write_tokens"],
         cost_cents=metadata["cost_cents"],
         latency_ms=metadata["latency_ms"],
+        prompt_text=getattr(vision_extractor, "last_prompt_text", None),
+        response_text=getattr(vision_extractor, "last_response_text", None),
     )
     return extracted
 

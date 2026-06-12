@@ -8,16 +8,25 @@ actions are start, complete, failed, hit, miss, write, and skip.
 """
 
 from collections.abc import Mapping, Sequence
+import contextvars
 from dataclasses import asdict, is_dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 import json
 import logging
 from typing import Any
+from uuid import uuid4
+
+from sqlalchemy import delete
+from sqlmodel import Session
 
 from .settings import get_settings
 
 
 _CONFIGURED = False
+_DB_EVENT_HANDLER_ATTACHED = False
+_persisting_event = contextvars.ContextVar("persisting_app_event", default=False)
+current_request_id = contextvars.ContextVar("current_request_id", default=None)
+current_user_email = contextvars.ContextVar("current_user_email", default=None)
 _REDACTED = "<redacted>"
 _SENSITIVE_FIELDS = {
     "access_token",
@@ -44,8 +53,58 @@ class JsonEventFormatter(logging.Formatter):
         return json.dumps(payload, ensure_ascii=True, default=str)
 
 
+class DbEventHandler(logging.Handler):
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            if _persisting_event.get():
+                return
+            if record.name.startswith(("sqlalchemy", "sentry_sdk")):
+                return
+            cd_event = getattr(record, "cd_event", None)
+            if cd_event:
+                should_persist = (
+                    record.levelno >= logging.WARNING
+                    or str(cd_event).startswith("auth.")
+                    or cd_event == "app.startup"
+                )
+            else:
+                should_persist = record.levelno >= logging.ERROR
+                cd_event = record.name
+            if not should_persist:
+                return
+
+            token = _persisting_event.set(True)
+            try:
+                from .database import engine
+                from .models import AppEvent
+
+                fields = getattr(record, "cd_fields", {}) or {}
+                if not isinstance(fields, Mapping):
+                    fields = {}
+                exc_text = None
+                if record.exc_info:
+                    exc_text = self.format(record)
+                row = AppEvent(
+                    id=uuid4().hex,
+                    level=record.levelname,
+                    event=str(cd_event),
+                    logger_name=record.name,
+                    user_email=current_user_email.get(),
+                    request_id=current_request_id.get(),
+                    fields_json=json.dumps(fields, ensure_ascii=True, default=str),
+                    exc_text=exc_text,
+                )
+                with Session(engine) as session:
+                    session.add(row)
+                    session.commit()
+            finally:
+                _persisting_event.reset(token)
+        except Exception:
+            pass
+
+
 def configure_logging() -> None:
-    global _CONFIGURED
+    global _CONFIGURED, _DB_EVENT_HANDLER_ATTACHED
     if _CONFIGURED:
         return
 
@@ -84,6 +143,9 @@ def configure_logging() -> None:
     )
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("googleapiclient.discovery_cache").setLevel(logging.WARNING)
+    if not _DB_EVENT_HANDLER_ATTACHED:
+        logging.getLogger().addHandler(DbEventHandler())
+        _DB_EVENT_HANDLER_ATTACHED = True
     _CONFIGURED = True
 
 
@@ -93,19 +155,31 @@ def get_logger(name: str) -> logging.Logger:
 
 
 def log_event(logger: logging.Logger, event: str, **fields: Any) -> None:
-    logger.info(_format_event(event, fields))
+    logger.info(
+        _format_event(event, fields),
+        extra={"cd_event": event, "cd_fields": _safe_payload(fields)},
+    )
 
 
 def log_debug(logger: logging.Logger, event: str, **fields: Any) -> None:
-    logger.debug(_format_event(event, fields))
+    logger.debug(
+        _format_event(event, fields),
+        extra={"cd_event": event, "cd_fields": _safe_payload(fields)},
+    )
 
 
 def log_warning(logger: logging.Logger, event: str, **fields: Any) -> None:
-    logger.warning(_format_event(event, fields))
+    logger.warning(
+        _format_event(event, fields),
+        extra={"cd_event": event, "cd_fields": _safe_payload(fields)},
+    )
 
 
 def log_error(logger: logging.Logger, event: str, **fields: Any) -> None:
-    logger.exception(_format_event(event, fields))
+    logger.exception(
+        _format_event(event, fields),
+        extra={"cd_event": event, "cd_fields": _safe_payload(fields)},
+    )
 
 
 def log_cache_hit(logger: logging.Logger, cache: str, key: str, **fields: Any) -> None:
@@ -168,6 +242,10 @@ def _format_event(event: str, fields: dict[str, Any]) -> str:
     return " ".join(parts)
 
 
+def _safe_payload(fields: dict[str, Any]) -> dict[str, Any]:
+    return {str(key): _safe_value(value, key=str(key)) for key, value in fields.items()}
+
+
 def _format_value(value: Any) -> str:
     if isinstance(value, str):
         return repr(value)
@@ -215,3 +293,18 @@ def _bounded_repr(value: Any) -> str:
     if len(rendered) <= limit:
         return rendered
     return f"{rendered[:limit]}... <truncated {len(rendered) - limit} chars>"
+
+
+def purge_expired_observability_rows(session: Session) -> None:
+    from .models import AppEvent, GradingAiAttemptPayload
+
+    settings = get_settings()
+    event_cutoff = datetime.now(UTC) - timedelta(days=settings.app_event_retention_days)
+    payload_cutoff = datetime.now(UTC) - timedelta(days=settings.llm_payload_retention_days)
+    session.exec(delete(AppEvent).where(AppEvent.created_at < event_cutoff))  # type: ignore[arg-type]
+    session.exec(
+        delete(GradingAiAttemptPayload).where(
+            GradingAiAttemptPayload.created_at < payload_cutoff
+        )
+    )  # type: ignore[arg-type]
+    session.commit()

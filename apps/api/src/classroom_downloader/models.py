@@ -212,6 +212,26 @@ class GradingAiAttempt(SQLModel, table=True):
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
+class AppEvent(SQLModel, table=True):
+    id: str = Field(primary_key=True)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC), index=True)
+    level: str = Field(index=True)
+    event: str = Field(index=True)
+    logger_name: str
+    user_email: str | None = Field(default=None, index=True)
+    request_id: str | None = None
+    fields_json: str = "{}"
+    exc_text: str | None = None
+
+
+class GradingAiAttemptPayload(SQLModel, table=True):
+    attempt_id: str = Field(primary_key=True)
+    job_id: str = Field(index=True)
+    prompt_text: str
+    response_text: str | None = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC), index=True)
+
+
 class GradingScrubCache(SQLModel, table=True):
     id: str = Field(primary_key=True)
     job_id: str = Field(index=True)

@@ -1,5 +1,6 @@
 import type { AppView, AuthState, LocalExportHistoryItem } from "../types";
 import { AppIcon } from "./icons";
+import { ShieldCheck } from "lucide-react";
 import { ThemeToggle } from "./ThemeToggle";
 import type { ThemeMode } from "../types";
 import railStyles from "./Rail.module.css";
@@ -36,6 +37,15 @@ export function Rail({
 
       <div className="rail-nav-label">Área de trabalho</div>
       <nav className="rail-nav">
+        {auth?.is_admin ? (
+          <button
+            className={`nav-item ${view === "admin" ? "active" : ""}`}
+            onClick={() => onNavigate("admin")}
+          >
+            <ShieldCheck data-icon="inline-start" />
+            Admin
+          </button>
+        ) : null}
         <button
           className={`nav-item ${view.startsWith("grader") ? "active" : ""}`}
           onClick={() => onNavigate("graderQueue")}

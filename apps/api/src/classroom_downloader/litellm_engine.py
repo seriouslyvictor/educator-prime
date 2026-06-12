@@ -47,9 +47,15 @@ class LiteLlmGradingEngine:
         self.last_usage: dict[str, int] = {}
         self.last_latency_ms: int | None = None
         self.last_response: Any | None = None
+        self.last_prompt_text: str | None = None
+        self.last_response_text: str | None = None
 
     def grade(self, request: GradingEngineRequest) -> GradingEngineResult:
         messages = _build_messages(request)
+        self.last_prompt_text = request.content
+        self.last_response_text = None
+        self.last_response = None
+        self.last_usage = {}
         log_event(
             logger,
             "grading_engine.litellm.request",
@@ -90,8 +96,9 @@ class LiteLlmGradingEngine:
         self.last_response = response
         self.last_latency_ms = int((time.monotonic() - started) * 1000)
         self.last_usage = _usage_dict(getattr(response, "usage", None))
+        self.last_response_text = _response_content(response)
         result = parse_litellm_result(
-            _response_content(response),
+            self.last_response_text,
             request_score=request.request_score,
         )
 
@@ -151,6 +158,10 @@ class LiteLlmGradingEngine:
         self, request: VisionExtractionRequest
     ) -> VisionExtractionResult:
         messages = _build_vision_messages(request)
+        self.last_prompt_text = _safe_messages_text(messages)
+        self.last_response_text = None
+        self.last_response = None
+        self.last_usage = {}
         log_event(
             logger,
             "grading_engine.litellm.extract_image.request",
@@ -176,7 +187,8 @@ class LiteLlmGradingEngine:
             self.last_response = response
             self.last_latency_ms = int((time.monotonic() - started) * 1000)
             self.last_usage = _usage_dict(getattr(response, "usage", None))
-            result = parse_vision_extraction_result(_response_content(response))
+            self.last_response_text = _response_content(response)
+            result = parse_vision_extraction_result(self.last_response_text)
         except LlmCallError:
             self.last_latency_ms = int((time.monotonic() - started) * 1000)
             raise
@@ -565,6 +577,26 @@ def _build_messages(request: GradingEngineRequest) -> list[dict[str, str]]:
             "content": json.dumps(user_payload, ensure_ascii=True),
         },
     ]
+
+
+def _safe_messages_text(messages: list[dict[str, Any]]) -> str:
+    def scrub(value: Any) -> Any:
+        if isinstance(value, dict):
+            if "image_url" in value:
+                image_url = value.get("image_url")
+                if isinstance(image_url, dict):
+                    url = str(image_url.get("url", ""))
+                    return {
+                        "type": value.get("type", "image_url"),
+                        "image_url": "<image bytes>" if url else "<image>",
+                    }
+                return {"type": value.get("type", "image_url"), "image_url": "<image>"}
+            return {key: scrub(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [scrub(item) for item in value]
+        return value
+
+    return json.dumps(scrub(messages), ensure_ascii=True)
 
 
 def _response_format(model: LlmModelEntry) -> dict[str, Any]:

@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel
 
 from .models import ExportStatus, GradingStatus
@@ -65,6 +67,7 @@ class AuthState(BaseModel):
     name: str | None = None
     picture: str | None = None
     provider: str
+    is_admin: bool = False
 
 
 class AuthStart(BaseModel):
@@ -252,3 +255,52 @@ class GradingJobRead(BaseModel):
     criteria: list[GradingCriterionRead] = []
     submissions: list[GradingSubmissionRead] = []
     cache_files: list[GradingFileCacheRead] = []
+
+
+class AppEventRead(BaseModel):
+    id: str
+    created_at: datetime
+    level: str
+    event: str
+    logger_name: str
+    user_email: str | None = None
+    request_id: str | None = None
+    fields_json: str
+    exc_text: str | None = None
+
+
+class AiAttemptAdminRead(BaseModel):
+    id: str
+    job_id: str
+    submission_id: str
+    stage: str
+    engine: str
+    model: str | None = None
+    status: str
+    extraction_status: str
+    privacy_status: str
+    safe_error: str | None = None
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
+    token_count: int | None = None
+    cached_prompt_tokens: int | None = None
+    cache_write_tokens: int | None = None
+    cost_cents: float | None = None
+    latency_ms: int | None = None
+    retryable: bool = False
+    retry_count: int = 0
+    created_at: datetime
+    has_payload: bool = False
+
+
+class AiAttemptPayloadRead(BaseModel):
+    attempt_id: str
+    prompt_text: str
+    response_text: str | None = None
+
+
+class AdminStats(BaseModel):
+    events_24h_by_level: dict[str, int]
+    attempts_7d: int
+    failures_7d: int
+    cost_cents_7d: float

@@ -7,6 +7,7 @@ export interface AuthState {
   name: string | null;
   picture: string | null;
   provider: string;
+  is_admin?: boolean;
 }
 
 export interface GradingHealth {
@@ -128,6 +129,13 @@ export interface GradingSubmission {
   ai_safe_error: string | null;
   ai_flags: string[];
   privacy_flags: string[];
+  ai_prompt_tokens?: number | null;
+  ai_completion_tokens?: number | null;
+  ai_token_count?: number | null;
+  ai_cached_prompt_tokens?: number | null;
+  ai_cache_write_tokens?: number | null;
+  ai_cost_cents?: number | null;
+  ai_latency_ms?: number | null;
 }
 
 export interface GradingFileCache {
@@ -199,6 +207,7 @@ export type RubricMode = "infer" | "brief" | "structured" | "saved" | "calibrate
 export type TeacherLoopMode = "auto" | "approve" | "cowrite" | "off";
 
 export type AppView =
+  | "admin"
   | "connect"
   | "workspace"
   | "progress"
@@ -218,4 +227,53 @@ export interface LocalExportHistoryItem {
   fileCount: number;
   completedAt: string;
   outputLabel: string;
+}
+
+export interface AppEventItem {
+  id: string;
+  created_at: string;
+  level: string;
+  event: string;
+  logger_name: string;
+  user_email: string | null;
+  request_id: string | null;
+  fields_json: string;
+  exc_text: string | null;
+}
+
+export interface AiAttemptItem {
+  id: string;
+  job_id: string;
+  submission_id: string;
+  stage: string;
+  engine: string;
+  model: string | null;
+  status: string;
+  extraction_status: string;
+  privacy_status: string;
+  safe_error: string | null;
+  prompt_tokens: number | null;
+  completion_tokens: number | null;
+  token_count: number | null;
+  cached_prompt_tokens: number | null;
+  cache_write_tokens: number | null;
+  cost_cents: number | null;
+  latency_ms: number | null;
+  retryable: boolean;
+  retry_count: number;
+  created_at: string;
+  has_payload: boolean;
+}
+
+export interface AiAttemptPayload {
+  attempt_id: string;
+  prompt_text: string;
+  response_text: string | null;
+}
+
+export interface AdminStats {
+  events_24h_by_level: Record<string, number>;
+  attempts_7d: number;
+  failures_7d: number;
+  cost_cents_7d: number;
 }

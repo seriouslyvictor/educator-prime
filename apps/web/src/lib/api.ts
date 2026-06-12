@@ -1,5 +1,9 @@
 import type {
   Activity,
+  AdminStats,
+  AiAttemptItem,
+  AiAttemptPayload,
+  AppEventItem,
   AuthState,
   Course,
   ExportJob,
@@ -42,6 +46,17 @@ function clearApiCache(prefix?: string) {
   for (const key of inFlight.keys()) {
     if (!prefix || key.startsWith(prefix)) inFlight.delete(key);
   }
+}
+
+function queryString(params: Record<string, string | number | boolean | null | undefined>) {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && value !== "") {
+      search.set(key, String(value));
+    }
+  }
+  const rendered = search.toString();
+  return rendered ? `?${rendered}` : "";
 }
 
 async function request<T>(
@@ -107,6 +122,34 @@ async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  adminListEvents: (params: {
+    level?: string;
+    event_prefix?: string;
+    user_email?: string;
+    q?: string;
+    before?: string;
+    limit?: number;
+  } = {}) =>
+    request<AppEventItem[]>(`/api/admin/events${queryString(params)}`, undefined, {
+      ttlMs: 5_000,
+    }),
+  adminListAttempts: (params: {
+    job_id?: string;
+    status?: string;
+    stage?: string;
+    retryable?: boolean;
+    model?: string;
+    before?: string;
+    limit?: number;
+  } = {}) =>
+    request<AiAttemptItem[]>(`/api/admin/llm/attempts${queryString(params)}`, undefined, {
+      ttlMs: 5_000,
+    }),
+  adminGetAttemptPayload: (id: string) =>
+    request<AiAttemptPayload>(`/api/admin/llm/attempts/${encodeURIComponent(id)}/payload`, undefined, {
+      ttlMs: 5_000,
+    }),
+  adminGetStats: () => request<AdminStats>("/api/admin/stats", undefined, { ttlMs: 5_000 }),
   authMe: () => request<AuthState>("/api/auth/me", undefined, { ttlMs: 15_000 }),
   logoutGoogle: async () => {
     const response = await request<AuthState>("/api/auth/google/logout", {

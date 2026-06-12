@@ -50,6 +50,12 @@ class Settings(BaseSettings):
     export_cache_path: str = ".cache/exports"
     export_cache_ttl_hours: int = 24
     static_dir: str | None = None
+    sentry_dsn: str | None = None
+    sentry_environment: str = "dev"
+    admin_emails: str = ""
+    app_event_retention_days: int = 30
+    llm_payload_logging: bool = True
+    llm_payload_retention_days: int = 14
     grading_engine: Literal["mock", "litellm"] = "mock"
     litellm_model: str = "openai/gpt-5"
     litellm_timeout_seconds: int = 60

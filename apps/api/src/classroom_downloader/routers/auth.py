@@ -10,7 +10,7 @@ from sqlmodel import Session, delete
 
 from ..api.auth_errors import google_auth_http_exception
 from ..api.common import _as_utc
-from ..api.deps import get_current_session
+from ..api.deps import get_current_session, is_admin_email
 from ..api.session_cleanup import purge_cached_classroom_state_for_user, purge_google_session_if_needed
 from ..database import get_session
 from ..google_provider import DbTokenStore, build_oauth_authorization_url, make_google_provider
@@ -54,6 +54,7 @@ def auth_me(
             name=profile.name,
             picture=profile.picture,
             provider="mock",
+            is_admin=is_admin_email(profile.email),
         )
     session_id = request.cookies.get(settings.session_cookie_name)
     if not session_id:
@@ -109,6 +110,7 @@ def auth_me(
         name=name,
         picture=picture,
         provider=settings.google_provider,
+        is_admin=is_admin_email(email),
     )
 
 

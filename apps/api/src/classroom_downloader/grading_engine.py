@@ -84,8 +84,12 @@ class GradingEngine(Protocol):
 class MockGradingEngine:
     name = "mock"
     model = None
+    last_prompt_text: str | None = None
+    last_response_text: str | None = None
 
     def grade(self, request: GradingEngineRequest) -> GradingEngineResult:
+        self.last_prompt_text = request.content
+        self.last_response_text = None
         log_event(
             logger,
             "grading_engine.mock.request",
@@ -127,6 +131,10 @@ class MockGradingEngine:
             flags=flags,
             criterion_notes=[],
         )
+        self.last_response_text = (
+            f"score={result.score}; confidence={result.confidence}; "
+            f"feedback={result.feedback}; flags={result.flags}"
+        )
         log_event(
             logger,
             "grading_engine.mock.response",
@@ -162,6 +170,13 @@ class MockGradingEngine:
     def extract_image(
         self, request: VisionExtractionRequest
     ) -> VisionExtractionResult:
+        self.last_prompt_text = (
+            f"activity_title={request.activity_title}\n"
+            f"source_label={request.source_label}\n"
+            f"image_mime_type={request.image_mime_type}\n"
+            f"image_data=<image bytes {len(request.image_data)}>"
+        )
+        self.last_response_text = None
         log_event(
             logger,
             "grading_engine.mock.extract_image",
@@ -173,13 +188,20 @@ class MockGradingEngine:
             byte_size=len(request.image_data),
         )
         seed = sha256(f"{request.job_id}|{request.submission_id}".encode("utf-8")).hexdigest()
-        return VisionExtractionResult(
+        result = VisionExtractionResult(
             transcription=f"Transcricao visual mock {seed[:8]} assinada por [student].",
             visual_description="Folha fotografada com resposta manuscrita legivel.",
             content_kind="handwriting",
             legibility="full",
             pii_observed=["name_visible"],
         )
+        self.last_response_text = (
+            f"transcription={result.transcription}; "
+            f"visual_description={result.visual_description}; "
+            f"content_kind={result.content_kind}; legibility={result.legibility}; "
+            f"pii_observed={result.pii_observed}"
+        )
+        return result
 
 
 DEFAULT_GRADING_ENGINE: GradingEngine = MockGradingEngine()
