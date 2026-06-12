@@ -6,8 +6,14 @@ import litellm
 from sqlmodel import Session
 
 from ..grading_engine import GradingEngine
-from ..models import GradingAiAttempt, GradingJob, GradingSubmission
+from ..models import (
+    GradingAiAttempt,
+    GradingAiAttemptPayload,
+    GradingJob,
+    GradingSubmission,
+)
 from ..observability import get_logger, log_event
+from ..settings import get_settings
 from ._common import _int_or_none, _sum_optional, _sum_float_optional
 
 logger = get_logger(__name__)
@@ -34,6 +40,9 @@ def _record_attempt(
     cost_cents: float | None = None,
     latency_ms: int | None = None,
     retryable: bool = False,
+    *,
+    prompt_text: str | None = None,
+    response_text: str | None = None,
 ) -> GradingAiAttempt:
     attempt = GradingAiAttempt(
         id=str(uuid4()),
@@ -59,6 +68,15 @@ def _record_attempt(
         retry_count=retry_count,
     )
     session.add(attempt)
+    if get_settings().llm_payload_logging and prompt_text is not None:
+        session.add(
+            GradingAiAttemptPayload(
+                attempt_id=attempt.id,
+                job_id=job.id,
+                prompt_text=prompt_text,
+                response_text=response_text,
+            )
+        )
     session.commit()
     session.refresh(attempt)
     log_event(

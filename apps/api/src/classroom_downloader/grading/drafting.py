@@ -247,6 +247,8 @@ def _draft_submission(
             engine=grading_engine.name,
             safe_error=exc.code,
             retryable=exc.retryable,
+            prompt_text=combined_content,
+            response_text=getattr(grading_engine, "last_response_text", None),
         )
         attempt = _record_attempt(
             session=session,
@@ -301,6 +303,8 @@ def _draft_submission(
         cache_write_tokens=attempt_metadata["cache_write_tokens"],
         cost_cents=attempt_metadata["cost_cents"],
         latency_ms=attempt_metadata["latency_ms"],
+        prompt_text=combined_content,
+        response_text=getattr(grading_engine, "last_response_text", None),
     )
     _apply_criterion_notes(session, criteria, result.criterion_notes or [])
     cowrite = job.teacher_loop == "cowrite"

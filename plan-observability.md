@@ -5,6 +5,7 @@
 > - Phase 0 baseline complete: prerequisite verified in `archive/plan-image-grading.md` as implementation complete/validated; `uv run --extra dev pytest -q` in `apps/api` -> 160 passed, 4 skipped; `pnpm build` in `apps/web` -> build succeeded.
 > - Phase 1 Sentry complete: added `CD_SENTRY_DSN`/`CD_SENTRY_ENVIRONMENT`, DSN-gated backend Sentry init with error-only settings and total sensitive-field scrubber, plus light import/scrubber tests. Gate: `uv run --extra dev pytest -q` in `apps/api` -> 163 passed, 4 skipped; `pnpm build` in `apps/web` -> build succeeded.
 > - Phase 2 event persistence complete: added structured `cd_event`/`cd_fields` extras without changing formatted output, request/user contextvars, `AppEvent`, guarded lazy DB logging handler, startup/admin-shareable retention purge, and sink tests. Gate: `uv run --extra dev pytest -q` in `apps/api` -> 169 passed, 4 skipped; `pnpm build` in `apps/web` -> build succeeded.
+> - Phase 3 LLM payloads complete: added gated `GradingAiAttemptPayload` storage, payload TTL purge, prompt/response capture for mock and LiteLLM grading/extraction calls, attempt write-through for grading and extraction stages, and payload tests. Gate: `uv run --extra dev pytest -q` in `apps/api` -> 173 passed, 4 skipped; `pnpm build` in `apps/web` -> build succeeded.
 > **Audience:** an executing agent with no prior context. Read §0–§8 before touching code.
 > **Line numbers / symbol locations are as-of-writing guides — re-derive every location with
 > `grep -n` at execution time.**

@@ -224,6 +224,14 @@ class AppEvent(SQLModel, table=True):
     exc_text: str | None = None
 
 
+class GradingAiAttemptPayload(SQLModel, table=True):
+    attempt_id: str = Field(primary_key=True)
+    job_id: str = Field(index=True)
+    prompt_text: str
+    response_text: str | None = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC), index=True)
+
+
 class GradingScrubCache(SQLModel, table=True):
     id: str = Field(primary_key=True)
     job_id: str = Field(index=True)

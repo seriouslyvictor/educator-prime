@@ -296,9 +296,15 @@ def _bounded_repr(value: Any) -> str:
 
 
 def purge_expired_observability_rows(session: Session) -> None:
-    from .models import AppEvent
+    from .models import AppEvent, GradingAiAttemptPayload
 
     settings = get_settings()
     event_cutoff = datetime.now(UTC) - timedelta(days=settings.app_event_retention_days)
+    payload_cutoff = datetime.now(UTC) - timedelta(days=settings.llm_payload_retention_days)
     session.exec(delete(AppEvent).where(AppEvent.created_at < event_cutoff))  # type: ignore[arg-type]
+    session.exec(
+        delete(GradingAiAttemptPayload).where(
+            GradingAiAttemptPayload.created_at < payload_cutoff
+        )
+    )  # type: ignore[arg-type]
     session.commit()
