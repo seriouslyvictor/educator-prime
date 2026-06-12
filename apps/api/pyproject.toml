@@ -16,6 +16,7 @@ dependencies = [
   "litellm>=1.80.0",
   "python-dotenv>=1.0.0",
   "pillow>=12.2.0",
+  "sentry-sdk[fastapi]>=2.27.0",
 ]
 
 [project.optional-dependencies]

@@ -3,6 +3,7 @@
 > **Status:** implementation in progress on branch `codex/observability-admin`.
 > **Execution progress:**
 > - Phase 0 baseline complete: prerequisite verified in `archive/plan-image-grading.md` as implementation complete/validated; `uv run --extra dev pytest -q` in `apps/api` -> 160 passed, 4 skipped; `pnpm build` in `apps/web` -> build succeeded.
+> - Phase 1 Sentry complete: added `CD_SENTRY_DSN`/`CD_SENTRY_ENVIRONMENT`, DSN-gated backend Sentry init with error-only settings and total sensitive-field scrubber, plus light import/scrubber tests. Gate: `uv run --extra dev pytest -q` in `apps/api` -> 163 passed, 4 skipped; `pnpm build` in `apps/web` -> build succeeded.
 > **Audience:** an executing agent with no prior context. Read §0–§8 before touching code.
 > **Line numbers / symbol locations are as-of-writing guides — re-derive every location with
 > `grep -n` at execution time.**

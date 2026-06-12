@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
 from .database import init_db
-from .observability import configure_logging, get_logger, log_event
+from .observability import _SENSITIVE_FIELDS, configure_logging, get_logger, log_event
 from .settings import get_settings
 
 # Compat re-exports — imported by tests via 'from classroom_downloader.main import …'
@@ -27,6 +27,58 @@ from .routers import grading as _grading_router
 settings = get_settings()
 configure_logging()
 logger = get_logger(__name__)
+
+
+def _scrub_sentry_event(event: dict, hint: object) -> dict:
+    def scrub(value: object, key: str | None = None) -> object:
+        try:
+            if key in _SENSITIVE_FIELDS:
+                return "<redacted>"
+            if isinstance(value, dict):
+                return {
+                    str(item_key): scrub(item_value, str(item_key))
+                    for item_key, item_value in value.items()
+                }
+            if isinstance(value, list):
+                return [scrub(item) for item in value]
+            if isinstance(value, tuple):
+                return [scrub(item) for item in value]
+            return value
+        except Exception:
+            return value
+
+    try:
+        extra = event.get("extra")
+        if isinstance(extra, dict):
+            event["extra"] = scrub(extra)
+        contexts = event.get("contexts")
+        if isinstance(contexts, dict):
+            event["contexts"] = scrub(contexts)
+        breadcrumbs = event.get("breadcrumbs")
+        if isinstance(breadcrumbs, dict):
+            values = breadcrumbs.get("values")
+            if isinstance(values, list):
+                for breadcrumb in values:
+                    if isinstance(breadcrumb, dict) and isinstance(
+                        breadcrumb.get("data"), dict
+                    ):
+                        breadcrumb["data"] = scrub(breadcrumb["data"])
+    except Exception:
+        return event
+    return event
+
+
+if settings.sentry_dsn:
+    import sentry_sdk
+
+    sentry_sdk.init(
+        dsn=settings.sentry_dsn,
+        environment=settings.sentry_environment,
+        send_default_pii=False,
+        max_request_body_size="never",
+        traces_sample_rate=0.0,
+        before_send=_scrub_sentry_event,
+    )
 
 
 @asynccontextmanager
