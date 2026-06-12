@@ -115,8 +115,8 @@
     "semantic_hash": "8e554179f0a186c03e67e5fc658019ab"
   },
   "apps/api/tests/test_grading.py": {
-    "mtime": 1781279811.3526282,
-    "ast_hash": "c2fd920b6ced6085f5a2b9d172a03ec4",
+    "mtime": 1781283775.5109868,
+    "ast_hash": "e1f65a0ad383c8f63cebbc3a5b3b348c",
     "semantic_hash": ""
   },
   "apps/api/tests/test_grading_resume.py": {
@@ -160,8 +160,8 @@
     "semantic_hash": ""
   },
   "apps/web/src/App.tsx": {
-    "mtime": 1781280919.8752556,
-    "ast_hash": "87e388fb3a53ea66b9e0dd22491d749a",
+    "mtime": 1781283641.311937,
+    "ast_hash": "859f9ac96e8c16bd76d974649e79d2fa",
     "semantic_hash": ""
   },
   "apps/web/src/components/ActionBar.tsx": {
@@ -250,8 +250,8 @@
     "semantic_hash": ""
   },
   "apps/web/src/components/workspace/ActivityList.tsx": {
-    "mtime": 1781280768.5097697,
-    "ast_hash": "89134555cb98f613c6a894128ead21b0",
+    "mtime": 1781282985.4389608,
+    "ast_hash": "c07bebdaaafc880ea53fe0c4c56bdade",
     "semantic_hash": ""
   },
   "apps/web/src/components/workspace/ClassroomList.tsx": {
@@ -260,8 +260,8 @@
     "semantic_hash": "70e63faa6e7ebcb073ec6ccca7fed3c6"
   },
   "apps/web/src/components/workspace/TurmasView.tsx": {
-    "mtime": 1781280768.5117733,
-    "ast_hash": "003706ab947fe8cb2ea865d0b67a35b5",
+    "mtime": 1781282987.3310852,
+    "ast_hash": "06a4b757fe6056539752cab4af739c82",
     "semantic_hash": ""
   },
   "apps/web/src/components/workspace/index.ts": {
@@ -380,8 +380,8 @@
     "semantic_hash": "1d8793c3039f0084f474752b643eccbf"
   },
   "apps/api/src/classroom_downloader/routers/grading.py": {
-    "mtime": 1781279685.8356514,
-    "ast_hash": "54a22552c776fa171b91dcf7123119ca",
+    "mtime": 1781283634.1709092,
+    "ast_hash": "e6571a211a52a87e36170fc7c60a70c4",
     "semantic_hash": ""
   },
   "apps/api/src/classroom_downloader/routers/health.py": {
@@ -705,8 +705,8 @@
     "semantic_hash": ""
   },
   "apps/web/src/components/ui/sonner.tsx": {
-    "mtime": 1781279241.127726,
-    "ast_hash": "68fc198c1830896f36a2dccdda3af1d2",
+    "mtime": 1781283683.7669632,
+    "ast_hash": "7d0b9f25415bc63b95815e971a31ba5f",
     "semantic_hash": ""
   },
   "apps/web/src/components/ui/spinner.tsx": {
@@ -735,8 +735,8 @@
     "semantic_hash": ""
   },
   "plan-error-screens.md": {
-    "mtime": 1781280838.3519702,
-    "ast_hash": "6cba8345e12d238de5c3ce615655e9b6",
+    "mtime": 1781281347.1718543,
+    "ast_hash": "9b341bb13304dd93abaa9a32ee3f6e9a",
     "semantic_hash": ""
   },
   "apps/api/src/classroom_downloader/api/errors.py": {

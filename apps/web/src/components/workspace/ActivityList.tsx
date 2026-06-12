@@ -51,7 +51,15 @@ export function ActivityList({
       <div className="assign-list">
         {loading ? <SkeletonRows count={7} /> : null}
         {!loading && filtered.length === 0 ? (
-          <EmptyState icon="file" title="Nenhuma atividade" copy="Nenhuma entrega ainda - isso não é um erro." />
+          <EmptyState
+            icon="file"
+            title="Nenhuma atividade"
+            copy={
+              query
+                ? "Nenhuma atividade corresponde à busca."
+                : "Esta turma ainda não tem atividades - isso não é um erro."
+            }
+          />
         ) : null}
         {!loading
           ? filtered.map((activity) => {

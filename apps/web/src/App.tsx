@@ -657,7 +657,7 @@ export function App() {
 
       await loadGradingQueue();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Falha ao gerenciar a fila de correÃ§Ã£o.");
+      setError(appError(caught, "Falha ao gerenciar a fila de correção."));
     } finally {
       setGraderBusy(false);
     }
@@ -704,7 +704,7 @@ export function App() {
       }
       setView(nextJob.status === "completed" ? "graderWrap" : "graderReview");
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Falha ao abrir a correção.");
+      setError(appError(caught, "Falha ao abrir a correção."));
     } finally {
       setGraderBusy(false);
     }
@@ -1081,7 +1081,7 @@ export function App() {
       setDraftingSubmissionId(null);
       void loadGradingQueue();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Falha ao gerar rascunhos de notas.");
+      setError(appError(caught, "Falha ao gerar rascunhos de notas."));
     } finally {
       setDraftingSubmissionId(null);
       setGraderBusy(false);
@@ -1111,7 +1111,7 @@ export function App() {
         setView("graderWrap");
       }
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Falha ao salvar a revisão.");
+      setError(appError(caught, "Falha ao salvar a revisão."));
     } finally {
       setGraderBusy(false);
     }
@@ -1126,7 +1126,7 @@ export function App() {
       setGradingJob(updated);
       setActiveGradingSubmissionId(submission.id);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Falha ao corrigir a entrega novamente.");
+      setError(appError(caught, "Falha ao corrigir a entrega novamente."));
     } finally {
       setGraderBusy(false);
     }
@@ -1139,7 +1139,7 @@ export function App() {
     try {
       setGradingJob(await api.deleteGradingCache(gradingJob.id));
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Falha ao apagar arquivos em cache.");
+      setError(appError(caught, "Falha ao apagar arquivos em cache."));
     } finally {
       setGraderBusy(false);
     }
@@ -1172,7 +1172,7 @@ export function App() {
           <ConnectView
             connecting={busy}
             deliveryMode={deliveryMode}
-            error={error ? appErrorSummary(error) : null}
+            error={error}
             onConnect={connectClassroom}
           />
         ) : null}
@@ -1215,7 +1215,14 @@ export function App() {
                 onDownload={(activity) => void startExport([activity.id])}
                 onSendToQueue={sendActivitiesToQueue}
               />
-            {error ? <InlineError message={error} /> : null}
+            {error ? (
+              <InlineError
+                message={error}
+                onAction={() =>
+                  selectedCourseId ? void loadActivities(selectedCourseId) : void bootstrap()
+                }
+              />
+            ) : null}
             {dryRunOpen && previewTree ? (
               <DryRunDrawer
                 tree={previewTree}
@@ -1264,7 +1271,15 @@ export function App() {
               onAction={(action, items) => void runQueueAction(action, items)}
               onDownloadInstead={() => setView("workspace")}
             />
-            {error ? <InlineError message={error} /> : null}
+            {error ? (
+              <InlineError
+                message={error}
+                onAction={() => {
+                  setError(null);
+                  void loadGradingQueue();
+                }}
+              />
+            ) : null}
           </>
         ) : null}
 
@@ -1282,7 +1297,16 @@ export function App() {
               onContinue={() => void continueToGradingDraft()}
               onRerun={() => void rerunGradingPrivacyAudit()}
             />
-            {error ? <InlineError message={error} /> : null}
+            {error ? (
+              <InlineError
+                message={error}
+                onAction={() =>
+                  gradingJob
+                    ? void openGradingJob(gradingJob.id)
+                    : void beginGradingSetup(selectedGradingItem)
+                }
+              />
+            ) : null}
           </>
         ) : null}
 
@@ -1303,7 +1327,9 @@ export function App() {
               }
               onRetry={(submission) => void retryGradingDraft(submission)}
             />
-            {error ? <InlineError message={error} /> : null}
+            {error ? (
+              <InlineError message={error} onAction={() => void openGradingJob(gradingJob.id)} />
+            ) : null}
           </>
         ) : null}
 
@@ -1313,11 +1339,13 @@ export function App() {
               job={gradingJob}
               busy={graderBusy}
               onBack={() => setView("graderReview")}
-              onQueue={() => setView("workspace")}
+              onQueue={() => navigate("graderQueue")}
               onDeleteCache={() => void deleteGradingCache()}
               onJobUpdate={setGradingJob}
             />
-            {error ? <InlineError message={error} /> : null}
+            {error ? (
+              <InlineError message={error} onAction={() => void openGradingJob(gradingJob.id)} />
+            ) : null}
           </>
         ) : null}
           </>

@@ -969,11 +969,15 @@ def test_draft_stream_seeds_full_queue_in_stable_order(tmp_path) -> None:
             payloads = _sse_payloads(response)
 
     queued_events = [payload for payload in payloads if payload.get("queued")]
-    assert len(queued_events) == 1
-    queued = queued_events[0]["queued"]
-    # Every student is published up front, alphabetical by name (not cache-warmth order).
-    assert [row["student_name"] for row in queued] == ["Ana Silva", "Bruno Costa"]
+    # The queue is seeded as the very first event (from the audit's submissions,
+    # before the slow file listing), then re-published authoritatively. Every
+    # seed lists all students, alphabetical by name (not cache-warmth order).
+    assert queued_events
+    assert payloads[0].get("queued"), "queue must be seeded before any drafting work"
+    for event in queued_events:
+        assert [row["student_name"] for row in event["queued"]] == ["Ana Silva", "Bruno Costa"]
     # Each submission is announced when its drafting starts.
+    queued = queued_events[-1]["queued"]
     drafting_ids = [payload["drafting_id"] for payload in payloads if payload.get("drafting_id")]
     assert set(drafting_ids) == {row["id"] for row in queued}
 

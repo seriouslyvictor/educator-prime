@@ -30,6 +30,7 @@ from ..grading import (
     ensure_default_criteria,
     grading_csv,
     grading_job_snapshot,
+    grading_submission_snapshot,
     infer_job_criteria,
     retry_submission,
 )
@@ -829,6 +830,39 @@ def stream_draft_job(
                 if job is None or job.user_email != user_email:
                     events.put({"phase": "draft", "error": "Grading job not found."})
                     return
+                # Seed the queue from submissions the privacy audit already materialized:
+                # the Google file listing below takes seconds, and the review screen
+                # should show every student "na fila" before that round-trip, not after.
+                existing = list(
+                    stream_session.exec(
+                        select(GradingSubmission).where(GradingSubmission.job_id == job.id)
+                    ).all()
+                )
+                if existing:
+                    existing.sort(
+                        key=lambda row: (row.student_name or row.student_email or "~").casefold()
+                    )
+                    events.put(
+                        {
+                            "phase": "draft",
+                            "processed": 0,
+                            "total": len(existing),
+                            "current": "Na fila",
+                            "queued": [
+                                grading_submission_snapshot(stream_session, row).model_dump(mode="json")
+                                for row in existing
+                            ],
+                        }
+                    )
+                else:
+                    events.put(
+                        {
+                            "phase": "draft",
+                            "processed": 0,
+                            "total": 0,
+                            "current": "Preparando a lista de alunos...",
+                        }
+                    )
                 grading_engine = resolve_grading_engine()
                 ensure_privacy_audit_allows_draft(job, stream_session, provider)
 
