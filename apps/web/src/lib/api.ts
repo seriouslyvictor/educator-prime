@@ -35,8 +35,10 @@ type CacheEntry<T> = {
 const responseCache = new Map<string, CacheEntry<unknown>>();
 const inFlight = new Map<string, Promise<unknown>>();
 const connectivityListeners = new Set<(offline: boolean) => void>();
+const versionSkewListeners = new Set<(skewed: boolean) => void>();
 let revalidationFailures = 0;
 let offline = false;
+let versionSkewNotified = false;
 
 export class ApiError extends Error {
   constructor(
@@ -61,6 +63,12 @@ export function subscribeConnectivity(listener: (offline: boolean) => void): () 
   return () => connectivityListeners.delete(listener);
 }
 
+export function subscribeVersionSkew(listener: (skewed: boolean) => void): () => void {
+  versionSkewListeners.add(listener);
+  listener(versionSkewNotified);
+  return () => versionSkewListeners.delete(listener);
+}
+
 function setOffline(nextOffline: boolean) {
   if (offline === nextOffline) return;
   offline = nextOffline;
@@ -75,6 +83,13 @@ function markConnectivitySuccess() {
 function markConnectivityFailure() {
   revalidationFailures += 1;
   if (revalidationFailures >= 1) setOffline(true);
+}
+
+function checkAppVersion(response: Response) {
+  const serverVersion = response.headers.get("X-App-Version");
+  if (!serverVersion || serverVersion === __APP_VERSION__ || versionSkewNotified) return;
+  versionSkewNotified = true;
+  for (const listener of versionSkewListeners) listener(true);
 }
 
 function cacheKey(path: string) {
@@ -183,6 +198,8 @@ async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
       typeof payload === "string" ? payload : `Request failed with ${response.status}`,
     );
   }
+
+  checkAppVersion(response);
 
   if (response.status === 204) {
     return undefined as T;

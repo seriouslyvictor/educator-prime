@@ -13,7 +13,13 @@ import { HistoryView } from "./components/HistoryView";
 import { ProgressView, type ProgressLogItem } from "./components/ProgressView";
 import { Rail } from "./components/Rail";
 import { TurmasView } from "./components/workspace";
-import { ApiError, api, apiErrorFromUnknown, subscribeConnectivity } from "./lib/api";
+import {
+  ApiError,
+  api,
+  apiErrorFromUnknown,
+  subscribeConnectivity,
+  subscribeVersionSkew,
+} from "./lib/api";
 import { resolveError } from "./lib/errorCatalog";
 import appStyles from "./components/App.module.css";
 void appStyles;
@@ -151,6 +157,7 @@ export function App() {
   const [lastResult, setLastResult] = useState<LocalExportHistoryItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [apiOffline, setApiOffline] = useState(false);
+  const [versionSkew, setVersionSkew] = useState(false);
   const [activitiesLoading, setActivitiesLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<ApiError | string | null>(null);
@@ -208,6 +215,8 @@ export function App() {
   }, []);
 
   useEffect(() => subscribeConnectivity(setApiOffline), []);
+
+  useEffect(() => subscribeVersionSkew(setVersionSkew), []);
 
   useEffect(() => {
     if (connected && view === "connect") {
@@ -1153,6 +1162,12 @@ export function App() {
           <Gate error={gateError} onAction={handleGateAction} />
         ) : (
           <>
+            {versionSkew ? (
+              <InlineError
+                error={new ApiError(0, "version_skew", "Frontend and backend versions differ.")}
+                onAction={() => window.location.reload()}
+              />
+            ) : null}
         {view === "connect" ? (
           <ConnectView
             connecting={busy}

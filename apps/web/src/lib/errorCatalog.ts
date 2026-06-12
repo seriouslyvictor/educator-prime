@@ -119,6 +119,14 @@ const entries: Record<string, Omit<ErrorEntry, "technicalDetail">> = {
     body: "Este navegador ainda não consegue salvar os arquivos direto em uma pasta.",
     action: { label: "Entendi", kind: "none" },
   },
+  version_skew: {
+    tier: "banner",
+    tone: "info",
+    icon: "refresh",
+    title: "Nova versão disponível",
+    body: "Recarregue a página para usar a versão mais recente do app.",
+    action: { label: "Recarregar", kind: "reload" },
+  },
 };
 
 export function resolveError(err: unknown): ErrorEntry {

@@ -1,6 +1,7 @@
 # Plan — Error communication: contract, catalog, screens (shadcn-aware)
 
-> **Status:** in progress. Phase 0 complete on `codex/error-screens`: baseline API
+> **Status:** complete on `codex/error-screens`; ready for PR review. Phase 0
+> complete: baseline API
 > `CD_GOOGLE_PROVIDER=mock uv run pytest -q` = 178 passed, 4 skipped; baseline web
 > `pnpm build` = passed. Phase 0 decision: shadcn is present (`components.json` and
 > `src/components/ui/*`), so `components/errors/` will use shadcn primitives per §4.1.
@@ -27,6 +28,12 @@
 > is normal rather than an error. Verification: `pnpm build` = passed;
 > `CD_GOOGLE_PROVIDER=mock uv run pytest -q` = 188 passed, 4 skipped;
 > `graphify update .` = passed.
+> Phase 5 complete: Vite `__APP_VERSION__` define, backend/frontend version-skew
+> banner, copy/acceptance pass, and final smoke are complete. Verification:
+> `pnpm build` = passed; `CD_GOOGLE_PROVIDER=mock uv run pytest -q` = 188 passed,
+> 4 skipped; `graphify update .` = passed. Browser smoke on mock pair
+> `API 127.0.0.1:8014` + `web 127.0.0.1:5181` loaded `workspace` with mock course
+> data, no offline pill, and no raw `Request failed` / `Requisição falhou` text.
 > **Audience:** an executing agent with no prior context. Read §0–§8 before touching code.
 > **Line numbers / symbol locations are as-of-writing guides — re-derive every location with
 > `grep -n` at execution time.**
