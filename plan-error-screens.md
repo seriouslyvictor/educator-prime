@@ -21,6 +21,12 @@
 > persistent unsupported-browser export notice are implemented. Verification:
 > `pnpm build` = passed; `CD_GOOGLE_PROVIDER=mock uv run pytest -q` = 188 passed,
 > 4 skipped; `graphify update .` = passed.
+> Phase 4 complete: SSE streams retry 3 times with reconnecting progress copy
+> before surfacing resume guidance, folder export skips per-file failures and
+> summarizes them in `DoneView`, and empty states now explicitly say the condition
+> is normal rather than an error. Verification: `pnpm build` = passed;
+> `CD_GOOGLE_PROVIDER=mock uv run pytest -q` = 188 passed, 4 skipped;
+> `graphify update .` = passed.
 > **Audience:** an executing agent with no prior context. Read §0–§8 before touching code.
 > **Line numbers / symbol locations are as-of-writing guides — re-derive every location with
 > `grep -n` at execution time.**

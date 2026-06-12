@@ -151,7 +151,7 @@ export function TurmasView({
 
           {loadingActivities ? <SkeletonRows count={7} /> : null}
           {!loadingActivities && filteredActivities.length === 0 ? (
-            <EmptyState icon="file" title="Nenhuma atividade" copy="Esta turma não tem atividades correspondentes." />
+            <EmptyState icon="file" title="Nenhuma atividade" copy="Nenhuma entrega ainda - isso não é um erro." />
           ) : null}
 
           {!loadingActivities

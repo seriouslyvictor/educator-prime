@@ -56,7 +56,41 @@
 }
 
 .done-stats {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+}
+
+.done-failures {
+  margin-top: 18px;
+  text-align: left;
+}
+
+.done-failures summary {
+  cursor: pointer;
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.done-failures ul {
+  display: grid;
+  gap: 8px;
+  max-height: 180px;
+  margin: 10px 0 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.done-failures li {
+  display: grid;
+  gap: 3px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.done-failures small {
+  color: var(--muted);
 }
 
 .done-actions {

@@ -80,7 +80,7 @@ export function GraderQueue({
           <div className="g-subtitle">
             {hasItems || hasRecoverableItems
               ? `${items.length} atividades ativas pela IA`
-              : "Envie uma atividade pela tela de Turmas para preparar a correção com IA."}
+              : "Envie uma atividade pela tela de Turmas para preparar a correção com IA. Isso não é um erro."}
           </div>
         </div>
         <div className="g-topbar-actions">

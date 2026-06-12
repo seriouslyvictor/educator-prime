@@ -395,18 +395,23 @@ export function App() {
       setProgress({ completed: 0, total: exportJob.files.length, currentPath: "Preparando arquivos..." });
       setView("progress");
 
-      await exportJobToFolder(exportJob, root, (completed, total, currentPath) => {
+      const exportSummary = await exportJobToFolder(exportJob, root, (completed, total, currentPath) => {
         setProgress({ completed, total, currentPath });
         setProgressLog((current) => [
           ...current.slice(-80),
-          { id: `${completed}-${currentPath}`, kind: "ok", text: currentPath },
+          {
+            id: `${completed}-${currentPath}`,
+            kind: currentPath.startsWith("Falhou:") ? "err" : "ok",
+            text: currentPath,
+          },
         ]);
       });
 
       const historyItem = {
         courseName: selectedCourse.name,
         activityCount: activityIds.length,
-        fileCount: exportJob.files.length,
+        fileCount: exportSummary.completed,
+        failedFiles: exportSummary.failed,
         outputLabel: `${root.name}/${selectedCourse.name}`,
       };
       addHistoryItem(historyItem);
@@ -712,17 +717,23 @@ export function App() {
     });
 
     return new Promise((resolve, reject) => {
-      const source = new EventSource(url);
+      let source: EventSource | null = null;
       let settled = false;
+      let reconnectAttempt = 0;
+      const reconnectDelays = [2_000, 5_000, 10_000];
 
       const finish = (callback: () => void) => {
         if (settled) return;
         settled = true;
-        source.close();
+        source?.close();
         callback();
       };
 
-      source.onmessage = (event) => {
+      const connect = () => {
+        source?.close();
+        source = new EventSource(url);
+
+        source.onmessage = (event) => {
         let payload: GradingStreamPayload;
         try {
           payload = JSON.parse(event.data) as GradingStreamPayload;
@@ -758,19 +769,41 @@ export function App() {
         if (payload.done) {
           finish(() => resolve(payload));
         }
+        };
+
+        source.onerror = () => {
+          source?.close();
+          const delay = reconnectDelays[reconnectAttempt];
+          if (delay !== undefined) {
+            reconnectAttempt += 1;
+            setGradingProgress((current) => ({
+              phase,
+              processed: current?.processed ?? 0,
+              total: current?.total ?? 0,
+              current: `Reconectando... tentativa ${reconnectAttempt}/3`,
+              done: false,
+              error: null,
+            }));
+            window.setTimeout(() => {
+              if (!settled) connect();
+            }, delay);
+            return;
+          }
+          const resumeMessage =
+            "O processamento foi interrompido, mas pode continuar de onde parou. Use Retomar na fila.";
+          setGradingProgress((current) => ({
+            phase,
+            processed: current?.processed ?? 0,
+            total: current?.total ?? 0,
+            current: current?.current ?? "",
+            done: true,
+            error: resumeMessage,
+          }));
+          finish(() => reject(new Error(resumeMessage || fallbackError)));
+        };
       };
 
-      source.onerror = () => {
-        setGradingProgress((current) => ({
-          phase,
-          processed: current?.processed ?? 0,
-          total: current?.total ?? 0,
-          current: current?.current ?? "",
-          done: true,
-          error: fallbackError,
-        }));
-        finish(() => reject(new Error(fallbackError)));
-      };
+      connect();
     });
   }
 

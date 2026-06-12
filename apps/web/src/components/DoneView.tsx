@@ -21,6 +21,7 @@ export function DoneView({
         <h1 className="done-title">Exportação concluída</h1>
         <p className="done-sub">
           {result.fileCount} arquivos de {result.activityCount} atividades foram gravados na pasta escolhida.
+          {result.failedFiles?.length ? ` ${result.failedFiles.length} falharam.` : ""}
         </p>
         <div className="done-path">
           <AppIcon name="folderOpen" />
@@ -30,7 +31,23 @@ export function DoneView({
           <DoneStat label="Turma" value={result.courseName} />
           <DoneStat label="Atividades" value={result.activityCount.toString()} />
           <DoneStat label="Arquivos" value={result.fileCount.toString()} />
+          {result.failedFiles?.length ? (
+            <DoneStat label="Falhas" value={result.failedFiles.length.toString()} />
+          ) : null}
         </div>
+        {result.failedFiles?.length ? (
+          <details className="done-failures">
+            <summary>Arquivos que não foram exportados</summary>
+            <ul>
+              {result.failedFiles.map((file) => (
+                <li key={file.path}>
+                  <span>{file.path}</span>
+                  <small>{file.reason || "O aluno pode ter excluído o arquivo do Drive."}</small>
+                </li>
+              ))}
+            </ul>
+          </details>
+        ) : null}
         <div className="done-actions">
           <button className="btn btn-primary" onClick={onDownloadAnother}>
             <AppIcon name="download" />

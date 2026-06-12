@@ -160,8 +160,8 @@
     "semantic_hash": ""
   },
   "apps/web/src/App.tsx": {
-    "mtime": 1781280533.8044329,
-    "ast_hash": "0f23881972c399d72938367972323fa9",
+    "mtime": 1781280754.2858937,
+    "ast_hash": "3c3c00fd2c85bf38333d63cfece7c92f",
     "semantic_hash": ""
   },
   "apps/web/src/components/ActionBar.tsx": {
@@ -175,9 +175,9 @@
     "semantic_hash": ""
   },
   "apps/web/src/components/DoneView.tsx": {
-    "mtime": 1780630756.7334616,
-    "ast_hash": "9bd35b73cc32d0faea4bceb58ec3924a",
-    "semantic_hash": "9bd35b73cc32d0faea4bceb58ec3924a"
+    "mtime": 1781280698.5195074,
+    "ast_hash": "eb401aff26acdf5c930471ce28462a8f",
+    "semantic_hash": ""
   },
   "apps/web/src/components/DryRunDrawer.tsx": {
     "mtime": 1780630756.7357268,
@@ -205,8 +205,8 @@
     "semantic_hash": "ed446cf4d4da31021e40248e51d3cbf1"
   },
   "apps/web/src/components/grader/GraderQueue.tsx": {
-    "mtime": 1781231081.0270164,
-    "ast_hash": "272b3b7bab0e0ff44a840f946984f15c",
+    "mtime": 1781280768.5137756,
+    "ast_hash": "6ca2b289be91f51d5862f337cc0ba9a4",
     "semantic_hash": ""
   },
   "apps/web/src/components/grader/GraderReview.tsx": {
@@ -250,9 +250,9 @@
     "semantic_hash": ""
   },
   "apps/web/src/components/workspace/ActivityList.tsx": {
-    "mtime": 1780714168.6586466,
-    "ast_hash": "64ec08a090542ffc5beee9a3a42d6086",
-    "semantic_hash": "64ec08a090542ffc5beee9a3a42d6086"
+    "mtime": 1781280768.5097697,
+    "ast_hash": "89134555cb98f613c6a894128ead21b0",
+    "semantic_hash": ""
   },
   "apps/web/src/components/workspace/ClassroomList.tsx": {
     "mtime": 1780784012.9218807,
@@ -260,9 +260,9 @@
     "semantic_hash": "70e63faa6e7ebcb073ec6ccca7fed3c6"
   },
   "apps/web/src/components/workspace/TurmasView.tsx": {
-    "mtime": 1780857058.7100449,
-    "ast_hash": "819df2ffc986e29fab5054778fcb771d",
-    "semantic_hash": "819df2ffc986e29fab5054778fcb771d"
+    "mtime": 1781280768.5117733,
+    "ast_hash": "003706ab947fe8cb2ea865d0b67a35b5",
+    "semantic_hash": ""
   },
   "apps/web/src/components/workspace/index.ts": {
     "mtime": 1780784143.555186,
@@ -275,9 +275,9 @@
     "semantic_hash": ""
   },
   "apps/web/src/lib/folder-export.ts": {
-    "mtime": 1780612249.1067848,
-    "ast_hash": "e813e7827c2248f5a8d5b89cc81c056c",
-    "semantic_hash": "e813e7827c2248f5a8d5b89cc81c056c"
+    "mtime": 1781280698.5195074,
+    "ast_hash": "94d19d828703604c871403f5277de006",
+    "semantic_hash": ""
   },
   "apps/web/src/lib/local-history.ts": {
     "mtime": 1779807775.99094,
@@ -300,8 +300,8 @@
     "semantic_hash": ""
   },
   "apps/web/src/types.ts": {
-    "mtime": 1781279241.135732,
-    "ast_hash": "f016cc784e574ea823f39650e44c58ae",
+    "mtime": 1781280698.5195074,
+    "ast_hash": "cd083fca795987ad9d9049c4d30ff7b7",
     "semantic_hash": ""
   },
   "apps/web/src/vite-env.d.ts": {
@@ -735,8 +735,8 @@
     "semantic_hash": ""
   },
   "plan-error-screens.md": {
-    "mtime": 1781280415.216218,
-    "ast_hash": "4f7be2c24be6aa9b58e454a53595216a",
+    "mtime": 1781280600.0684261,
+    "ast_hash": "dd8cffc1763f1be3f9f11282036ef35d",
     "semantic_hash": ""
   },
   "apps/api/src/classroom_downloader/api/errors.py": {

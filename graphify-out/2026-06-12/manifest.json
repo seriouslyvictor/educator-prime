@@ -160,8 +160,8 @@
     "semantic_hash": ""
   },
   "apps/web/src/App.tsx": {
-    "mtime": 1781280341.007334,
-    "ast_hash": "0cec753a2edf5e0669a6dcdcbcf9d840",
+    "mtime": 1781280533.8044329,
+    "ast_hash": "0f23881972c399d72938367972323fa9",
     "semantic_hash": ""
   },
   "apps/web/src/components/ActionBar.tsx": {
@@ -270,8 +270,8 @@
     "semantic_hash": "c1c1f24b137a843c1c837f21bc14ed85"
   },
   "apps/web/src/lib/api.ts": {
-    "mtime": 1781280109.3684292,
-    "ast_hash": "20f1ab085e1c381edb61b8ed4fcb0829",
+    "mtime": 1781280503.8491395,
+    "ast_hash": "90358879e42b3b3fd51d382d7cf051fb",
     "semantic_hash": ""
   },
   "apps/web/src/lib/folder-export.ts": {
@@ -735,8 +735,8 @@
     "semantic_hash": ""
   },
   "plan-error-screens.md": {
-    "mtime": 1781279948.2211294,
-    "ast_hash": "ee2a236c4ec65a3d13f18d7ec27c499c",
+    "mtime": 1781280415.216218,
+    "ast_hash": "4f7be2c24be6aa9b58e454a53595216a",
     "semantic_hash": ""
   },
   "apps/api/src/classroom_downloader/api/errors.py": {
@@ -765,13 +765,23 @@
     "semantic_hash": ""
   },
   "apps/web/src/components/errors/index.ts": {
-    "mtime": 1781280109.3684292,
-    "ast_hash": "6dcbd84d15245568f71be011b4b6ef09",
+    "mtime": 1781280503.8531766,
+    "ast_hash": "1c30b413794076fc9a61c8ac8f9fe0a9",
     "semantic_hash": ""
   },
   "apps/web/src/lib/errorCatalog.ts": {
     "mtime": 1781280109.3684292,
     "ast_hash": "e7dde46183d1017e67aaf090367787c8",
+    "semantic_hash": ""
+  },
+  "apps/web/src/components/errors/Gate.tsx": {
+    "mtime": 1781280503.852173,
+    "ast_hash": "44623de45ca14435d959faae5dcff36c",
+    "semantic_hash": ""
+  },
+  "apps/web/src/components/errors/OfflinePill.tsx": {
+    "mtime": 1781280503.8501425,
+    "ast_hash": "fb3e9d351ff1872dd4ed37f33cd36059",
     "semantic_hash": ""
   }
 }

@@ -1,6 +1,11 @@
 import { api } from "./api";
 import type { ExportFile, ExportJob } from "../types";
 
+export type ExportFolderSummary = {
+  completed: number;
+  failed: Array<{ path: string; reason: string }>;
+};
+
 export function isFolderExportSupported(): boolean {
   return typeof window.showDirectoryPicker === "function";
 }
@@ -49,15 +54,34 @@ async function writeExportFile(
   await writable.close();
 }
 
+function isFatalExportError(error: unknown): boolean {
+  if (error instanceof DOMException) {
+    return error.name === "NotAllowedError" || error.name === "QuotaExceededError";
+  }
+  return false;
+}
+
+function errorReason(error: unknown): string {
+  return error instanceof Error ? error.message : "Falha ao baixar o arquivo.";
+}
+
 export async function exportJobToFolder(
   job: ExportJob,
   root: FileSystemDirectoryHandle,
   onProgress: (completed: number, total: number, currentPath: string) => void,
-): Promise<void> {
+): Promise<ExportFolderSummary> {
   let completed = 0;
+  const failed: ExportFolderSummary["failed"] = [];
   for (const file of job.files) {
-    await writeExportFile(root, job.id, file);
-    completed += 1;
-    onProgress(completed, job.files.length, file.output_path);
+    try {
+      await writeExportFile(root, job.id, file);
+      completed += 1;
+      onProgress(completed, job.files.length, file.output_path);
+    } catch (error) {
+      if (isFatalExportError(error)) throw error;
+      failed.push({ path: file.output_path, reason: errorReason(error) });
+      onProgress(completed, job.files.length, `Falhou: ${file.output_path}`);
+    }
   }
+  return { completed, failed };
 }

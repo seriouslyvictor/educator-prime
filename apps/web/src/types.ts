@@ -225,6 +225,7 @@ export interface LocalExportHistoryItem {
   courseName: string;
   activityCount: number;
   fileCount: number;
+  failedFiles?: Array<{ path: string; reason: string }>;
   completedAt: string;
   outputLabel: string;
 }
