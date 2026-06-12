@@ -13,7 +13,7 @@ import { HistoryView } from "./components/HistoryView";
 import { ProgressView, type ProgressLogItem } from "./components/ProgressView";
 import { Rail } from "./components/Rail";
 import { TurmasView } from "./components/workspace";
-import { ApiError, api, apiErrorFromUnknown } from "./lib/api";
+import { ApiError, api, apiErrorFromUnknown, subscribeConnectivity } from "./lib/api";
 import { resolveError } from "./lib/errorCatalog";
 import appStyles from "./components/App.module.css";
 void appStyles;
@@ -27,6 +27,7 @@ import { buildPreviewTree } from "./lib/preview-tree";
 import { useThemePreference } from "./lib/theme";
 import { AppIcon } from "./components/icons";
 import { InlineError } from "./components/ui";
+import { Gate, OfflinePill } from "./components/errors";
 import type {
   Activity,
   AppView,
@@ -149,6 +150,7 @@ export function App() {
   const [job, setJob] = useState<ExportJob | null>(null);
   const [lastResult, setLastResult] = useState<LocalExportHistoryItem | null>(null);
   const [loading, setLoading] = useState(true);
+  const [apiOffline, setApiOffline] = useState(false);
   const [activitiesLoading, setActivitiesLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<ApiError | string | null>(null);
@@ -169,6 +171,9 @@ export function App() {
   const [gradingProgress, setGradingProgress] = useState<GradingInlineProgress | null>(null);
 
   const connected = Boolean(auth?.signed_in && auth.classroom_scopes && auth.drive_scopes);
+  const partialConsent = Boolean(
+    auth?.signed_in && (!auth.classroom_scopes || !auth.drive_scopes),
+  );
   const selectedCourse = useMemo(
     () => courses.find((course) => course.id === selectedCourseId),
     [courses, selectedCourseId],
@@ -201,6 +206,8 @@ export function App() {
   useEffect(() => {
     void bootstrap();
   }, []);
+
+  useEffect(() => subscribeConnectivity(setApiOffline), []);
 
   useEffect(() => {
     if (connected && view === "connect") {
@@ -278,6 +285,20 @@ export function App() {
       setLoading(false);
     }
   }
+
+  const partialConsentError = partialConsent
+    ? new ApiError(401, "google_auth_denied", "Missing required Google scopes.")
+    : null;
+  const gateError =
+    partialConsentError ?? (error && resolveError(error).tier === "gate" ? error : null);
+  const handleGateAction = () => {
+    const action = resolveError(gateError).action?.kind;
+    if (action === "reconnect-google") {
+      void connectClassroom();
+      return;
+    }
+    void bootstrap();
+  };
 
   async function loadCourses() {
     const courseList = await api.courses();
@@ -1095,6 +1116,10 @@ export function App() {
       />
 
       <main className="main">
+        {gateError ? (
+          <Gate error={gateError} onAction={handleGateAction} />
+        ) : (
+          <>
         {view === "connect" ? (
           <ConnectView
             connecting={busy}
@@ -1110,6 +1135,17 @@ export function App() {
           <>
             {gradingHealth && !gradingHealth.ready ? (
               <GradingHealthBanner health={gradingHealth} />
+            ) : null}
+            {!folderSupported ? (
+              <InlineError
+                error={
+                  new ApiError(
+                    0,
+                    "unsupported_browser",
+                    "Folder export is not available in this browser.",
+                  )
+                }
+              />
             ) : null}
             <TurmasView
                 courses={courses}
@@ -1236,6 +1272,9 @@ export function App() {
             {error ? <InlineError message={error} /> : null}
           </>
         ) : null}
+          </>
+        )}
+        {apiOffline && !gateError ? <OfflinePill /> : null}
       </main>
     </div>
   );

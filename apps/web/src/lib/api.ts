@@ -34,6 +34,9 @@ type CacheEntry<T> = {
 
 const responseCache = new Map<string, CacheEntry<unknown>>();
 const inFlight = new Map<string, Promise<unknown>>();
+const connectivityListeners = new Set<(offline: boolean) => void>();
+let revalidationFailures = 0;
+let offline = false;
 
 export class ApiError extends Error {
   constructor(
@@ -50,6 +53,28 @@ export function apiErrorFromUnknown(caught: unknown, fallback: string): ApiError
   if (caught instanceof ApiError) return caught;
   if (caught instanceof Error) return new ApiError(0, undefined, caught.message || fallback);
   return new ApiError(0, undefined, fallback);
+}
+
+export function subscribeConnectivity(listener: (offline: boolean) => void): () => void {
+  connectivityListeners.add(listener);
+  listener(offline);
+  return () => connectivityListeners.delete(listener);
+}
+
+function setOffline(nextOffline: boolean) {
+  if (offline === nextOffline) return;
+  offline = nextOffline;
+  for (const listener of connectivityListeners) listener(offline);
+}
+
+function markConnectivitySuccess() {
+  revalidationFailures = 0;
+  setOffline(false);
+}
+
+function markConnectivityFailure() {
+  revalidationFailures += 1;
+  if (revalidationFailures >= 1) setOffline(true);
 }
 
 function cacheKey(path: string) {
@@ -90,7 +115,11 @@ async function request<T>(
   }
   if (!options.force && cached && now < cached.staleUntil) {
     if (key && !inFlight.has(key)) {
-      void request<T>(path, init, { ...options, force: true }).catch(() => undefined);
+      void request<T>(path, init, { ...options, force: true }).catch((error) => {
+        if (error instanceof ApiError && error.code === "unreachable") {
+          markConnectivityFailure();
+        }
+      });
     }
     return cached.value as T;
   }
@@ -100,6 +129,7 @@ async function request<T>(
 
   const fetchPromise = fetchJson<T>(path, init)
     .then((value) => {
+      markConnectivitySuccess();
       if (key) {
         const ttlMs = options.ttlMs ?? 30_000;
         const staleMs = options.staleMs ?? ttlMs * 4;
@@ -129,6 +159,7 @@ async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
       ...init,
     });
   } catch (error) {
+    markConnectivityFailure();
     throw new ApiError(
       0,
       "unreachable",

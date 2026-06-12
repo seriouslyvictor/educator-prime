@@ -16,6 +16,11 @@
 > instead of raw strings. Verification: `pnpm build` = passed;
 > `CD_GOOGLE_PROVIDER=mock uv run pytest -q` = 188 passed, 4 skipped;
 > `graphify update .` = passed.
+> Phase 3 complete: shadcn-backed `Gate`/`FullError`, partial-consent gate,
+> gate-tier replacement rendering, API connectivity tracking, offline pill, and
+> persistent unsupported-browser export notice are implemented. Verification:
+> `pnpm build` = passed; `CD_GOOGLE_PROVIDER=mock uv run pytest -q` = 188 passed,
+> 4 skipped; `graphify update .` = passed.
 > **Audience:** an executing agent with no prior context. Read §0–§8 before touching code.
 > **Line numbers / symbol locations are as-of-writing guides — re-derive every location with
 > `grep -n` at execution time.**
