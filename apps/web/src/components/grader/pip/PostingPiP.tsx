@@ -88,6 +88,7 @@ function PostingPiPCard({
   const [clipError, setClipError] = useState<string | null>(null);
 
   const cur = queue[Math.min(idx, queue.length - 1)];
+  const nextUp = queue.slice(idx + 1, idx + 4);
   const grade = scoreOf(cur);
   const isNoLink = !cur.alternate_link;
   const feedText = cur.feedback ?? "";
@@ -275,6 +276,32 @@ function PostingPiPCard({
           </div>
         )}
       </div>
+
+      {/* Queue — "A seguir" (ported from PiPC) */}
+      {nextUp.length > 0 && (
+        <div>
+          <div className={styles["queue-head"]}>A seguir</div>
+          {nextUp.map((s, i) => {
+            const g = scoreOf(s);
+            return (
+              <div
+                key={s.id}
+                className={styles["queue-row"]}
+                style={{ opacity: Math.max(0.22, 1 - i * 0.28) }}
+              >
+                <span className={styles["queue-num"]}>{idx + i + 2}</span>
+                <span className={styles["queue-name"]}>{studentLabel(s)}</span>
+                <span
+                  className={styles["queue-grade"]}
+                  style={{ color: scoreColor(g) }}
+                >
+                  {g ?? "—"}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

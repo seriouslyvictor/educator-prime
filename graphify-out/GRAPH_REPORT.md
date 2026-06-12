@@ -1,7 +1,7 @@
 # Graph Report - Classroom Downloader  (2026-06-12)
 
 ## Corpus Check
-- 137 files · ~71,489 words
+- 137 files · ~71,563 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
@@ -10,7 +10,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `63621e54`
+- Built from commit: `8abc035f`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -143,19 +143,19 @@
 - 1-file cycle: `apps/api/src/classroom_downloader/google_provider.py -> apps/api/src/classroom_downloader/google_provider.py`
 - 1-file cycle: `apps/api/src/classroom_downloader/routers/admin.py -> apps/api/src/classroom_downloader/routers/admin.py`
 - 1-file cycle: `apps/api/src/classroom_downloader/grading/_common.py -> apps/api/src/classroom_downloader/grading/_common.py`
+- 2-file cycle: `apps/api/src/classroom_downloader/main.py -> apps/api/src/classroom_downloader/routers/health.py -> apps/api/src/classroom_downloader/main.py`
 - 2-file cycle: `apps/api/src/classroom_downloader/main.py -> apps/api/src/classroom_downloader/routers/admin.py -> apps/api/src/classroom_downloader/main.py`
 - 2-file cycle: `apps/api/src/classroom_downloader/main.py -> apps/api/src/classroom_downloader/routers/courses.py -> apps/api/src/classroom_downloader/main.py`
-- 2-file cycle: `apps/api/src/classroom_downloader/main.py -> apps/api/src/classroom_downloader/routers/exports.py -> apps/api/src/classroom_downloader/main.py`
-- 2-file cycle: `apps/api/src/classroom_downloader/main.py -> apps/api/src/classroom_downloader/routers/auth.py -> apps/api/src/classroom_downloader/main.py`
 - 2-file cycle: `apps/api/src/classroom_downloader/api/deps.py -> apps/api/src/classroom_downloader/main.py -> apps/api/src/classroom_downloader/api/deps.py`
-- 2-file cycle: `apps/api/src/classroom_downloader/api/errors.py -> apps/api/src/classroom_downloader/main.py -> apps/api/src/classroom_downloader/api/errors.py`
 - 2-file cycle: `apps/api/src/classroom_downloader/main.py -> apps/api/src/classroom_downloader/routers/grading.py -> apps/api/src/classroom_downloader/main.py`
-- 2-file cycle: `apps/api/src/classroom_downloader/main.py -> apps/api/src/classroom_downloader/routers/health.py -> apps/api/src/classroom_downloader/main.py`
-- 3-file cycle: `apps/api/src/classroom_downloader/api/deps.py -> apps/api/src/classroom_downloader/main.py -> apps/api/src/classroom_downloader/routers/admin.py -> apps/api/src/classroom_downloader/api/deps.py`
-- 3-file cycle: `apps/api/src/classroom_downloader/api/deps.py -> apps/api/src/classroom_downloader/api/google_errors.py -> apps/api/src/classroom_downloader/main.py -> apps/api/src/classroom_downloader/api/deps.py`
-- 3-file cycle: `apps/api/src/classroom_downloader/api/google_errors.py -> apps/api/src/classroom_downloader/main.py -> apps/api/src/classroom_downloader/routers/courses.py -> apps/api/src/classroom_downloader/api/google_errors.py`
-- 3-file cycle: `apps/api/src/classroom_downloader/api/google_errors.py -> apps/api/src/classroom_downloader/main.py -> apps/api/src/classroom_downloader/routers/grading.py -> apps/api/src/classroom_downloader/api/google_errors.py`
+- 2-file cycle: `apps/api/src/classroom_downloader/api/errors.py -> apps/api/src/classroom_downloader/main.py -> apps/api/src/classroom_downloader/api/errors.py`
+- 2-file cycle: `apps/api/src/classroom_downloader/main.py -> apps/api/src/classroom_downloader/routers/auth.py -> apps/api/src/classroom_downloader/main.py`
+- 2-file cycle: `apps/api/src/classroom_downloader/main.py -> apps/api/src/classroom_downloader/routers/exports.py -> apps/api/src/classroom_downloader/main.py`
+- 3-file cycle: `apps/api/src/classroom_downloader/api/auth_errors.py -> apps/api/src/classroom_downloader/main.py -> apps/api/src/classroom_downloader/api/deps.py -> apps/api/src/classroom_downloader/api/auth_errors.py`
+- 3-file cycle: `apps/api/src/classroom_downloader/api/auth_errors.py -> apps/api/src/classroom_downloader/main.py -> apps/api/src/classroom_downloader/routers/auth.py -> apps/api/src/classroom_downloader/api/auth_errors.py`
 - 3-file cycle: `apps/api/src/classroom_downloader/api/auth_errors.py -> apps/api/src/classroom_downloader/main.py -> apps/api/src/classroom_downloader/routers/courses.py -> apps/api/src/classroom_downloader/api/auth_errors.py`
+- 3-file cycle: `apps/api/src/classroom_downloader/api/auth_errors.py -> apps/api/src/classroom_downloader/main.py -> apps/api/src/classroom_downloader/routers/grading.py -> apps/api/src/classroom_downloader/api/auth_errors.py`
+- 3-file cycle: `apps/api/src/classroom_downloader/api/deps.py -> apps/api/src/classroom_downloader/main.py -> apps/api/src/classroom_downloader/routers/admin.py -> apps/api/src/classroom_downloader/api/deps.py`
 - 3-file cycle: `apps/api/src/classroom_downloader/api/common.py -> apps/api/src/classroom_downloader/main.py -> apps/api/src/classroom_downloader/routers/courses.py -> apps/api/src/classroom_downloader/api/common.py`
 
 ## Hyperedges (group relationships)
@@ -331,7 +331,7 @@ Nodes (3): _scrub_sentry_event(), test_scrub_sentry_event_never_raises_on_weird_
 
 ### Community 45 - "Community 45"
 Cohesion: 0.08
-Nodes (23): required, title, type, components, schemas, enum, title, type (+15 more)
+Nodes (23): required, title, type, components, schemas, required, title, type (+15 more)
 
 ### Community 46 - "Community 46"
 Cohesion: 0.30
@@ -378,12 +378,12 @@ Cohesion: 0.18
 Nodes (11): title, type, properties, required, title, type, course_state, section (+3 more)
 
 ### Community 61 - "Community 61"
-Cohesion: 0.07
-Nodes (27): title, type, anyOf, title, anyOf, title, properties, required (+19 more)
+Cohesion: 0.08
+Nodes (26): title, type, anyOf, title, anyOf, title, properties, required (+18 more)
 
 ### Community 62 - "Community 62"
 Cohesion: 0.08
-Nodes (25): title, type, title, type, anyOf, title, title, type (+17 more)
+Nodes (26): title, type, title, type, anyOf, title, title, type (+18 more)
 
 ### Community 63 - "Community 63"
 Cohesion: 0.22
@@ -541,7 +541,7 @@ _Questions this graph is uniquely positioned to answer:_
   _High betweenness centrality (0.041) - this node is a cross-community bridge._
 - **Why does `get_settings()` connect `Grading Tests & Settings` to `Persistence & API Dependencies`, `Community 66`, `Community 67`, `LiteLLM Grading Engine`, `LLM Catalog & Settings`, `Google Classroom Provider`, `Community 37`, `Schemas & Privacy Audit`, `Community 39`, `Community 38`, `Community 34`, `Grading Router & Job Snapshots`, `Community 109`, `Community 84`, `Provider Sessions & Cache Logging`, `Community 87`, `Navigation Rail & Theme`, `Community 58`?**
   _High betweenness centrality (0.025) - this node is a cross-community bridge._
-- **Why does `schemas` connect `Community 45` to `Community 70`, `Community 73`, `Community 43`, `Community 47`, `Community 49`, `Community 83`, `Privacy Redaction (PII)`, `Community 54`, `Community 55`, `Community 59`, `Community 60`, `Community 61`, `Community 63`?**
+- **Why does `schemas` connect `Community 45` to `Community 70`, `Community 73`, `Community 43`, `Community 47`, `Community 49`, `Privacy Redaction (PII)`, `Community 54`, `Community 55`, `Community 59`, `Community 60`, `Community 61`, `Community 62`, `Community 63`?**
   _High betweenness centrality (0.023) - this node is a cross-community bridge._
 - **Are the 94 inferred relationships involving `TestClient` (e.g. with `GradingAiAttempt` and `GradingCriterion`) actually correct?**
   _`TestClient` has 94 INFERRED edges - model-reasoned connections that need verification._

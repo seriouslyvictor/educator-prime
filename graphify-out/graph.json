@@ -1557,7 +1557,7 @@
       "source_location": "L224",
       "_origin": "ast",
       "id": "api_openapi_snapshot_properties_status",
-      "community": 61,
+      "community": 83,
       "norm_label": "status"
     },
     {
@@ -1567,7 +1567,7 @@
       "source_location": "L225",
       "_origin": "ast",
       "id": "api_openapi_snapshot_status_title",
-      "community": 61,
+      "community": 83,
       "norm_label": "title"
     },
     {
@@ -1577,7 +1577,7 @@
       "source_location": "L226",
       "_origin": "ast",
       "id": "api_openapi_snapshot_status_type",
-      "community": 61,
+      "community": 83,
       "norm_label": "type"
     },
     {
@@ -3027,7 +3027,7 @@
       "source_location": "L588",
       "_origin": "ast",
       "id": "api_openapi_snapshot_properties_mime_type",
-      "community": 62,
+      "community": 61,
       "norm_label": "mime_type"
     },
     {
@@ -3037,7 +3037,7 @@
       "source_location": "L589",
       "_origin": "ast",
       "id": "api_openapi_snapshot_mime_type_title",
-      "community": 62,
+      "community": 61,
       "norm_label": "title"
     },
     {
@@ -3047,7 +3047,7 @@
       "source_location": "L590",
       "_origin": "ast",
       "id": "api_openapi_snapshot_mime_type_type",
-      "community": 62,
+      "community": 61,
       "norm_label": "type"
     },
     {
@@ -3207,7 +3207,7 @@
       "source_location": "L642",
       "_origin": "ast",
       "id": "api_openapi_snapshot_schemas_exportjobread",
-      "community": 83,
+      "community": 45,
       "norm_label": "exportjobread"
     },
     {
@@ -3397,7 +3397,7 @@
       "source_location": "L677",
       "_origin": "ast",
       "id": "api_openapi_snapshot_status_ref",
-      "community": 61,
+      "community": 83,
       "norm_label": "$ref"
     },
     {
@@ -3437,7 +3437,7 @@
       "source_location": "L684",
       "_origin": "ast",
       "id": "api_openapi_snapshot_exportjobread_required",
-      "community": 83,
+      "community": 45,
       "norm_label": "required"
     },
     {
@@ -3447,7 +3447,7 @@
       "source_location": "L692",
       "_origin": "ast",
       "id": "api_openapi_snapshot_exportjobread_title",
-      "community": 83,
+      "community": 45,
       "norm_label": "title"
     },
     {
@@ -3457,7 +3457,7 @@
       "source_location": "L693",
       "_origin": "ast",
       "id": "api_openapi_snapshot_exportjobread_type",
-      "community": 83,
+      "community": 45,
       "norm_label": "type"
     },
     {
@@ -3757,7 +3757,7 @@
       "source_location": "L795",
       "_origin": "ast",
       "id": "api_openapi_snapshot_schemas_gradingfilecacheread",
-      "community": 45,
+      "community": 62,
       "norm_label": "gradingfilecacheread"
     },
     {
@@ -3927,7 +3927,7 @@
       "source_location": "L841",
       "_origin": "ast",
       "id": "api_openapi_snapshot_gradingfilecacheread_required",
-      "community": 45,
+      "community": 62,
       "norm_label": "required"
     },
     {
@@ -3937,7 +3937,7 @@
       "source_location": "L851",
       "_origin": "ast",
       "id": "api_openapi_snapshot_gradingfilecacheread_title",
-      "community": 45,
+      "community": 62,
       "norm_label": "title"
     },
     {
@@ -3947,7 +3947,7 @@
       "source_location": "L852",
       "_origin": "ast",
       "id": "api_openapi_snapshot_gradingfilecacheread_type",
-      "community": 45,
+      "community": 62,
       "norm_label": "type"
     },
     {
@@ -15654,7 +15654,7 @@
       "label": "PostingPiP()",
       "file_type": "code",
       "source_file": "apps/web/src/components/grader/pip/PostingPiP.tsx",
-      "source_location": "L284",
+      "source_location": "L311",
       "_origin": "ast",
       "id": "pip_postingpip_postingpip",
       "community": 16,
@@ -68118,5 +68118,5 @@
       "source_file": "plan.md"
     }
   ],
-  "built_at_commit": "63621e54804df219fc8249fb4bb0f49534a58a96"
+  "built_at_commit": "8abc035f6130f1d3f0a3b0f7036ef9b03ced0771"
 }
