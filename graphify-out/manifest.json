@@ -160,8 +160,8 @@
     "semantic_hash": ""
   },
   "apps/web/src/App.tsx": {
-    "mtime": 1781279241.107785,
-    "ast_hash": "ea6d62dd7717c397c2e9cc70e62fde66",
+    "mtime": 1781280341.007334,
+    "ast_hash": "0cec753a2edf5e0669a6dcdcbcf9d840",
     "semantic_hash": ""
   },
   "apps/web/src/components/ActionBar.tsx": {
@@ -170,9 +170,9 @@
     "semantic_hash": "f44f87b10a27fe73fd72499f13afd9c9"
   },
   "apps/web/src/components/ConnectView.tsx": {
-    "mtime": 1780630756.732434,
-    "ast_hash": "85183cfed737ae4bbec6ac633d483270",
-    "semantic_hash": "85183cfed737ae4bbec6ac633d483270"
+    "mtime": 1781280134.3341954,
+    "ast_hash": "3ad1c12fa34edde2fcb1ed01fcd46cc8",
+    "semantic_hash": ""
   },
   "apps/web/src/components/DoneView.tsx": {
     "mtime": 1780630756.7334616,
@@ -230,8 +230,8 @@
     "semantic_hash": "f7ca02d6fec9f5760e79ec2d0046b045"
   },
   "apps/web/src/components/grader/graderStatus.ts": {
-    "mtime": 1781192241.941525,
-    "ast_hash": "75385468512e740cf9a416fba16c7296",
+    "mtime": 1781280309.1538208,
+    "ast_hash": "cb7e113146e326f56b9b66582034ef23",
     "semantic_hash": ""
   },
   "apps/web/src/components/grader/index.ts": {
@@ -245,9 +245,9 @@
     "semantic_hash": ""
   },
   "apps/web/src/components/ui.tsx": {
-    "mtime": 1780630756.7533395,
-    "ast_hash": "d7e67cca74b1075a86d713ebae75b317",
-    "semantic_hash": "d7e67cca74b1075a86d713ebae75b317"
+    "mtime": 1781280309.1516862,
+    "ast_hash": "ac26123eac8c65da8918d78e2d3d0d95",
+    "semantic_hash": ""
   },
   "apps/web/src/components/workspace/ActivityList.tsx": {
     "mtime": 1780714168.6586466,
@@ -270,8 +270,8 @@
     "semantic_hash": "c1c1f24b137a843c1c837f21bc14ed85"
   },
   "apps/web/src/lib/api.ts": {
-    "mtime": 1781279241.1337357,
-    "ast_hash": "102a0538623b40589a4af5fd1808f594",
+    "mtime": 1781280109.3684292,
+    "ast_hash": "20f1ab085e1c381edb61b8ed4fcb0829",
     "semantic_hash": ""
   },
   "apps/web/src/lib/folder-export.ts": {
@@ -295,8 +295,8 @@
     "semantic_hash": "53a30aa88ccd5636accd67409c02692a"
   },
   "apps/web/src/main.tsx": {
-    "mtime": 1781279241.135732,
-    "ast_hash": "b83f734b8d5b58ceec6235cb9dea5be6",
+    "mtime": 1781280134.3356128,
+    "ast_hash": "e13ed54b1711775ef3a130bb2779156e",
     "semantic_hash": ""
   },
   "apps/web/src/types.ts": {
@@ -735,8 +735,8 @@
     "semantic_hash": ""
   },
   "plan-error-screens.md": {
-    "mtime": 1781279431.2713852,
-    "ast_hash": "64ade9aa3c53432d3bc736b1385cd114",
+    "mtime": 1781279948.2211294,
+    "ast_hash": "ee2a236c4ec65a3d13f18d7ec27c499c",
     "semantic_hash": ""
   },
   "apps/api/src/classroom_downloader/api/errors.py": {
@@ -752,6 +752,26 @@
   "apps/api/tests/test_error_contract.py": {
     "mtime": 1781279738.3754005,
     "ast_hash": "d274d6d3594b5983d93d893a077af8dd",
+    "semantic_hash": ""
+  },
+  "apps/web/src/components/errors/ErrorBoundary.tsx": {
+    "mtime": 1781280109.3684292,
+    "ast_hash": "f7075c6c79a52d0f91f3d7abbaae1e0a",
+    "semantic_hash": ""
+  },
+  "apps/web/src/components/errors/FullError.tsx": {
+    "mtime": 1781280109.3684292,
+    "ast_hash": "27b2b0bf05e79af168e14078ee74ae04",
+    "semantic_hash": ""
+  },
+  "apps/web/src/components/errors/index.ts": {
+    "mtime": 1781280109.3684292,
+    "ast_hash": "6dcbd84d15245568f71be011b4b6ef09",
+    "semantic_hash": ""
+  },
+  "apps/web/src/lib/errorCatalog.ts": {
+    "mtime": 1781280109.3684292,
+    "ast_hash": "e7dde46183d1017e67aaf090367787c8",
     "semantic_hash": ""
   }
 }

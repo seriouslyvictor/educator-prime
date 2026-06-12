@@ -35,6 +35,23 @@ type CacheEntry<T> = {
 const responseCache = new Map<string, CacheEntry<unknown>>();
 const inFlight = new Map<string, Promise<unknown>>();
 
+export class ApiError extends Error {
+  constructor(
+    readonly status: number,
+    readonly code: string | undefined,
+    message: string,
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
+export function apiErrorFromUnknown(caught: unknown, fallback: string): ApiError {
+  if (caught instanceof ApiError) return caught;
+  if (caught instanceof Error) return new ApiError(0, undefined, caught.message || fallback);
+  return new ApiError(0, undefined, fallback);
+}
+
 function cacheKey(path: string) {
   return `GET ${path}`;
 }
@@ -102,17 +119,38 @@ async function request<T>(
 }
 
 async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, {
-    headers: {
-      "Content-Type": "application/json",
-      ...init?.headers,
-    },
-    ...init,
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      headers: {
+        "Content-Type": "application/json",
+        ...init?.headers,
+      },
+      ...init,
+    });
+  } catch (error) {
+    throw new ApiError(
+      0,
+      "unreachable",
+      error instanceof Error ? error.message : "The API could not be reached.",
+    );
+  }
 
   if (!response.ok) {
     const detail = await response.json().catch(() => undefined);
-    throw new Error(detail?.detail ?? `Requisição falhou com ${response.status}`);
+    const payload = detail?.detail;
+    if (payload && typeof payload === "object") {
+      throw new ApiError(
+        response.status,
+        typeof payload.code === "string" ? payload.code : undefined,
+        typeof payload.message === "string" ? payload.message : `Request failed with ${response.status}`,
+      );
+    }
+    throw new ApiError(
+      response.status,
+      undefined,
+      typeof payload === "string" ? payload : `Request failed with ${response.status}`,
+    );
   }
 
   if (response.status === 204) {

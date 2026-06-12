@@ -145,7 +145,7 @@
 
 .inline-error {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 9px;
   margin: 12px 18px;
   padding: 12px;
@@ -153,4 +153,31 @@
   border-radius: 9px;
   background: var(--danger-soft);
   color: var(--danger);
+}
+
+.inline-error-warning {
+  border-color: color-mix(in oklab, var(--warning) 36%, transparent);
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.inline-error-info {
+  border-color: color-mix(in oklab, var(--info) 36%, transparent);
+  background: var(--info-soft);
+  color: var(--info);
+}
+
+.inline-error-copy {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.inline-error-copy strong {
+  color: var(--ink);
+}
+
+.inline-error-copy code {
+  white-space: normal;
+  word-break: break-word;
 }

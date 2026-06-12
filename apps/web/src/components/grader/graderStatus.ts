@@ -66,6 +66,7 @@ export function safeStatusLabel(value?: string | null) {
   const labels: Record<string, string> = {
     api_unavailable: "IA indisponivel - tente novamente",
     api_rate_limited: "limite de requisicoes - tente novamente em instantes",
+    api_budget_exhausted: "creditos da IA esgotados - avise o administrador",
     api_timeout: "tempo esgotado na IA - tente novamente",
     api_connection: "falha de conexao com a IA - tente novamente",
     api_auth_failed: "autenticacao da IA falhou",

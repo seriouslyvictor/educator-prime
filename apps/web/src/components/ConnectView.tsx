@@ -1,4 +1,5 @@
 import { AppIcon } from "./icons";
+import { InlineError } from "./ui";
 import connectStyles from "./ConnectView.module.css";
 void connectStyles;
 
@@ -10,7 +11,7 @@ export function ConnectView({
 }: {
   connecting: boolean;
   deliveryMode: "folder" | "zip";
-  error: string | null;
+  error: unknown;
   onConnect: () => void;
 }) {
   return (
@@ -40,7 +41,7 @@ export function ConnectView({
           }
         />
 
-        {error ? <InlineError message={error} /> : null}
+        {error ? <InlineError error={error} onAction={onConnect} /> : null}
 
         <div className="connect-actions">
           <button className="btn btn-primary" onClick={onConnect} disabled={connecting}>
@@ -52,15 +53,6 @@ export function ConnectView({
           Nunca modificamos nem apagamos nada no Google Classroom ou Drive. O app apenas lê e exporta.
         </p>
       </section>
-    </div>
-  );
-}
-
-export function InlineError({ message }: { message: string }) {
-  return (
-    <div className="inline-error">
-      <AppIcon name="triangleAlert" />
-      <span>{message}</span>
     </div>
   );
 }

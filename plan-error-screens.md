@@ -9,6 +9,13 @@
 > superseded `scripts/route_snapshot.py` removal are implemented. Verification:
 > `CD_GOOGLE_PROVIDER=mock uv run pytest -q` = 188 passed, 4 skipped; `pnpm build` =
 > passed; `graphify update .` = passed.
+> Phase 2 complete: `ApiError`, structured fetch parsing, network `unreachable`,
+> PT-BR catalog, upgraded shared `InlineError`, render `ErrorBoundary`, and
+> `api_budget_exhausted` row copy are implemented. Compatibility note: legacy local
+> string errors are still accepted by the UI shim, but catalog fallback copy renders
+> instead of raw strings. Verification: `pnpm build` = passed;
+> `CD_GOOGLE_PROVIDER=mock uv run pytest -q` = 188 passed, 4 skipped;
+> `graphify update .` = passed.
 > **Audience:** an executing agent with no prior context. Read §0–§8 before touching code.
 > **Line numbers / symbol locations are as-of-writing guides — re-derive every location with
 > `grep -n` at execution time.**

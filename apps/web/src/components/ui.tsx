@@ -1,4 +1,5 @@
 import type { ButtonHTMLAttributes, HTMLAttributes } from "react";
+import { resolveError } from "../lib/errorCatalog";
 import { AppIcon } from "./icons";
 import uiStyles from "./ui.module.css";
 void uiStyles;
@@ -119,5 +120,38 @@ export function SkeletonRows({ count }: { count: number }) {
         <div className={uiStyles["skeleton-row"]} key={index} />
       ))}
     </>
+  );
+}
+
+export function InlineError({
+  error,
+  message,
+  onAction,
+}: {
+  error?: unknown;
+  message?: unknown;
+  onAction?: () => void;
+}) {
+  const entry = resolveError(error ?? message);
+  return (
+    <div className={`inline-error inline-error-${entry.tone}`} role="alert">
+      <AppIcon name={entry.icon} />
+      <div className="inline-error-copy">
+        <strong>{entry.title}</strong>
+        <span>{entry.body}</span>
+        {entry.adminHint ? <span>Se persistir, avise o administrador.</span> : null}
+        {entry.technicalDetail ? (
+          <details>
+            <summary>detalhes técnicos</summary>
+            <code>{entry.technicalDetail}</code>
+          </details>
+        ) : null}
+      </div>
+      {entry.action && entry.action.kind !== "none" && onAction ? (
+        <button className="btn btn-ghost" type="button" onClick={onAction}>
+          {entry.action.label}
+        </button>
+      ) : null}
+    </div>
   );
 }

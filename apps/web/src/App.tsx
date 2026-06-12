@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ConnectView, InlineError } from "./components/ConnectView";
+import { ConnectView } from "./components/ConnectView";
 import { AdminView } from "./components/admin/AdminView";
 import { DoneView } from "./components/DoneView";
 import { DryRunDrawer } from "./components/DryRunDrawer";
@@ -13,7 +13,8 @@ import { HistoryView } from "./components/HistoryView";
 import { ProgressView, type ProgressLogItem } from "./components/ProgressView";
 import { Rail } from "./components/Rail";
 import { TurmasView } from "./components/workspace";
-import { api } from "./lib/api";
+import { ApiError, api, apiErrorFromUnknown } from "./lib/api";
+import { resolveError } from "./lib/errorCatalog";
 import appStyles from "./components/App.module.css";
 void appStyles;
 import {
@@ -25,6 +26,7 @@ import { useLocalExportHistory } from "./lib/local-history";
 import { buildPreviewTree } from "./lib/preview-tree";
 import { useThemePreference } from "./lib/theme";
 import { AppIcon } from "./components/icons";
+import { InlineError } from "./components/ui";
 import type {
   Activity,
   AppView,
@@ -60,6 +62,15 @@ const classroomScopes = [
 // the same job instead of an empty workspace — the job itself is already persisted
 // server-side, this is just the pointer to it.
 const ACTIVE_JOB_STORAGE_KEY = "cd.grading.activeJobId";
+
+function appError(caught: unknown, fallback: string): ApiError {
+  return apiErrorFromUnknown(caught, fallback);
+}
+
+function appErrorSummary(error: unknown): string {
+  const entry = resolveError(error);
+  return `${entry.title}: ${entry.body}`;
+}
 
 type GradingStreamPayload = {
   phase?: "audit" | "criteria" | "draft";
@@ -140,7 +151,7 @@ export function App() {
   const [loading, setLoading] = useState(true);
   const [activitiesLoading, setActivitiesLoading] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ApiError | string | null>(null);
   const [progress, setProgress] = useState({ completed: 0, total: 0, currentPath: "" });
   const [progressLog, setProgressLog] = useState<ProgressLogItem[]>([]);
   const [selectedGradingItem, setSelectedGradingItem] = useState<GradingQueueItem | null>(null);
@@ -250,7 +261,7 @@ export function App() {
       try {
         await loadCourses();
       } catch (caught) {
-        setError(caught instanceof Error ? caught.message : "Falha ao carregar o estado do app.");
+        setError(appError(caught, "Falha ao carregar o estado do app."));
         setView("connect");
         return;
       }
@@ -289,7 +300,7 @@ export function App() {
       await loadGradingQueue();
     } catch (caught) {
       setActivities([]);
-      setError(caught instanceof Error ? caught.message : "Falha ao carregar atividades.");
+      setError(appError(caught, "Falha ao carregar atividades."));
     } finally {
       setActivitiesLoading(false);
     }
@@ -307,7 +318,7 @@ export function App() {
       }
       await bootstrap();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Falha ao conectar o Google.");
+      setError(appError(caught, "Falha ao conectar o Google."));
     } finally {
       setBusy(false);
     }
@@ -331,7 +342,7 @@ export function App() {
       setJob(null);
       setView("connect");
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Falha ao sair da conta Google.");
+      setError(appError(caught, "Falha ao sair da conta Google."));
     } finally {
       setBusy(false);
     }
@@ -340,7 +351,13 @@ export function App() {
   async function startExport(activityIds = selectedActivityIds) {
     if (!selectedCourse || activityIds.length === 0 || busy) return;
     if (deliveryMode === "zip") {
-      setError("A entrega por zip ainda é placeholder nesta versão. Use Chrome ou Edge para exportar para uma pasta.");
+      setError(
+        new ApiError(
+          0,
+          "unsupported_browser",
+          "Folder export is not available in this browser.",
+        ),
+      );
       return;
     }
 
@@ -379,8 +396,9 @@ export function App() {
       });
       setView("done");
     } catch (caught) {
-      const message = caught instanceof Error ? caught.message : "Falha na exportação.";
-      setError(message);
+      const exportError = appError(caught, "Falha na exportação.");
+      const message = appErrorSummary(exportError);
+      setError(exportError);
       setProgressLog((current) => [
         ...current,
         { id: `error-${Date.now()}`, kind: "err", text: message },
@@ -446,7 +464,7 @@ export function App() {
     try {
       setGradingJob(null);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Falha ao preparar a correção.");
+      setError(appError(caught, "Falha ao preparar a correção."));
     } finally {
       setGraderBusy(false);
     }
@@ -1081,7 +1099,7 @@ export function App() {
           <ConnectView
             connecting={busy}
             deliveryMode={deliveryMode}
-            error={error}
+            error={error ? appErrorSummary(error) : null}
             onConnect={connectClassroom}
           />
         ) : null}
@@ -1134,7 +1152,7 @@ export function App() {
             failed={job?.errors.length ?? 0}
             currentPath={progress.currentPath}
             log={progressLog}
-            error={error}
+            error={error ? appErrorSummary(error) : null}
             deliveryMode={deliveryMode}
             onCancel={() => setView("workspace")}
           />
