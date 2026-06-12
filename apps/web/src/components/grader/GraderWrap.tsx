@@ -27,12 +27,6 @@ function postingClipboardText(submission: GradingSubmission): string {
   return `Nota: ${scoreOf(submission)}/100\n\n${submission.feedback ?? ""}`;
 }
 
-// Feedback-only clipboard text for the PiP card (no "Nota:" prefix — teacher types grade by hand)
-function postingFeedbackText(submission: GradingSubmission): string {
-  return submission.feedback ?? "";
-}
-void postingFeedbackText; // used inside PostingPiP; defined here to document the split
-
 export function GraderWrap({
   job,
   busy,

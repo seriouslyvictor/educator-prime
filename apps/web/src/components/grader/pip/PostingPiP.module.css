@@ -35,6 +35,13 @@
   /* cursor set inline based on idx */
 }
 
+.back-arrow:disabled {
+  /* base.css dims disabled buttons (opacity 0.58, not-allowed); mockup keeps
+     full opacity with color var(--border) and a default cursor */
+  cursor: default;
+  opacity: 1;
+}
+
 .back-icon {
   width: 14px;
   height: 14px;
@@ -240,6 +247,12 @@
   align-items: center;
   gap: 3px;
   transition: color 140ms;
+}
+
+.secondary-btn:disabled {
+  /* mockup hides "← Anterior" via color: transparent at full opacity */
+  cursor: default;
+  opacity: 1;
 }
 
 /* ── Done screen ──────────────────────────────────────────────────────────── */
