@@ -7,14 +7,17 @@ Compat surface for tests:
 """
 from contextlib import asynccontextmanager
 from pathlib import Path
+import sqlite3
 from uuid import uuid4
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
+from sqlalchemy.exc import OperationalError as SqlAlchemyOperationalError
 
 from sqlmodel import Session
 
+from .api.errors import api_error
 from .database import engine, init_db
 from .observability import (
     _SENSITIVE_FIELDS,
@@ -127,10 +130,39 @@ async def request_context_middleware(request, call_next):
     request_token = current_request_id.set(uuid4().hex[:12])
     user_token = current_user_email.set(None)
     try:
-        return await call_next(request)
+        response = await call_next(request)
+        response.headers["X-App-Version"] = app.version
+        return response
     finally:
         current_user_email.reset(user_token)
         current_request_id.reset(request_token)
+
+
+def _is_database_locked(error: Exception) -> bool:
+    haystack = f"{error} {' '.join(str(part) for part in getattr(error, 'args', ()))}"
+    return "database is locked" in haystack.lower()
+
+
+@app.exception_handler(sqlite3.OperationalError)
+async def sqlite_operational_error_handler(
+    request: Request,
+    exc: sqlite3.OperationalError,
+) -> JSONResponse:
+    if _is_database_locked(exc):
+        error = api_error(503, "busy_retry", "Database is locked; retry shortly.")
+        return JSONResponse(status_code=error.status_code, content={"detail": error.detail})
+    raise exc
+
+
+@app.exception_handler(SqlAlchemyOperationalError)
+async def sqlalchemy_operational_error_handler(
+    request: Request,
+    exc: SqlAlchemyOperationalError,
+) -> JSONResponse:
+    if _is_database_locked(exc):
+        error = api_error(503, "busy_retry", "Database is locked; retry shortly.")
+        return JSONResponse(status_code=error.status_code, content={"detail": error.detail})
+    raise exc
 
 # --- API routers (order matters — registered before the static catch-all) ----
 

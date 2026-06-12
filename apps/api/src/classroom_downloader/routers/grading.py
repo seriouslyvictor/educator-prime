@@ -11,6 +11,7 @@ from sqlmodel import Session, select
 
 from ..api.auth_errors import google_auth_http_exception
 from ..api.common import _conditional_response, _sse_event
+from ..api.google_errors import google_api_http_exception
 from ..api.deps import (
     get_current_session,
     get_current_user_email,
@@ -566,6 +567,8 @@ def prepare_classroom_links(
                 purge_token=auth_failure.purge_token,
             )
             purge_google_session_if_needed(auth_failure, current_session, session)
+        elif google_api_http_exception(error):
+            log_warning(logger, "grading.classroom_links.google_unavailable", job_id=job.id)
         else:
             log_warning(logger, "grading.classroom_links.failed", job_id=job.id)
         return grading_job_snapshot(session, job)

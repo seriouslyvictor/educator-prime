@@ -11,6 +11,7 @@ from sqlmodel import Session, delete
 from ..api.auth_errors import google_auth_http_exception
 from ..api.common import _as_utc
 from ..api.deps import get_current_session, is_admin_email
+from ..api.errors import api_error
 from ..api.session_cleanup import purge_cached_classroom_state_for_user, purge_google_session_if_needed
 from ..database import get_session
 from ..google_provider import DbTokenStore, build_oauth_authorization_url, make_google_provider
@@ -146,7 +147,11 @@ def auth_start(scopes: list[str], db: Session = Depends(get_session)) -> AuthSta
         return AuthStart(mock_connected=True, scopes=scopes)
     if not settings.google_client_id or not settings.google_client_secret:
         log_warning(logger, "auth.google.not_configured")
-        raise HTTPException(status_code=503, detail="Google OAuth is not configured.")
+        raise api_error(
+            503,
+            "oauth_not_configured",
+            "Google OAuth is not configured.",
+        )
     state = token_urlsafe(24)
     now = datetime.now(UTC)
     db.add(OAuthState(
@@ -195,7 +200,11 @@ def auth_callback(
     log_event(logger, "auth.google.callback.start", state=state, has_code=bool(code))
     if not settings.google_client_id or not settings.google_client_secret:
         log_warning(logger, "auth.google.callback.not_configured")
-        raise HTTPException(status_code=503, detail="Google OAuth is not configured.")
+        raise api_error(
+            503,
+            "oauth_not_configured",
+            "Google OAuth is not configured.",
+        )
 
     oauth_state = db.get(OAuthState, state)
     if oauth_state is None or _as_utc(oauth_state.expires_at) < datetime.now(UTC):

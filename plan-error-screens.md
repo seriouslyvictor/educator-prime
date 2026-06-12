@@ -4,6 +4,11 @@
 > `CD_GOOGLE_PROVIDER=mock uv run pytest -q` = 178 passed, 4 skipped; baseline web
 > `pnpm build` = passed. Phase 0 decision: shadcn is present (`components.json` and
 > `src/components/ui/*`), so `components/errors/` will use shadcn primitives per §4.1.
+> Phase 1 complete: backend structured error contract, Google transient classifier,
+> LLM budget code, busy-db handler, `X-App-Version`, OpenAPI snapshot, and
+> superseded `scripts/route_snapshot.py` removal are implemented. Verification:
+> `CD_GOOGLE_PROVIDER=mock uv run pytest -q` = 188 passed, 4 skipped; `pnpm build` =
+> passed; `graphify update .` = passed.
 > **Audience:** an executing agent with no prior context. Read §0–§8 before touching code.
 > **Line numbers / symbol locations are as-of-writing guides — re-derive every location with
 > `grep -n` at execution time.**

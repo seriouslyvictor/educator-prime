@@ -178,7 +178,8 @@ def test_courses_reports_expired_google_session_as_unauthorized() -> None:
         app.dependency_overrides.pop(provider_dependency, None)
 
     assert response.status_code == 401
-    assert "connect your Google account again" in response.json()["detail"]
+    assert response.json()["detail"]["code"] == "google_session_expired"
+    assert "connect your Google account again" in response.json()["detail"]["message"]
 
 
 def test_grading_queue_missing_token_returns_401(monkeypatch) -> None:
@@ -191,7 +192,8 @@ def test_grading_queue_missing_token_returns_401(monkeypatch) -> None:
         )
 
     assert response.status_code == 401
-    assert "Not signed in" in response.json()["detail"]
+    assert response.json()["detail"]["code"] == "not_signed_in"
+    assert "Not signed in" in response.json()["detail"]["message"]
 
 
 def test_transient_403_keeps_token(monkeypatch, tmp_path) -> None:

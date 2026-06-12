@@ -26,6 +26,8 @@ def classify_llm_exception(exc: Exception) -> LlmCallError:
         return LlmCallError("api_unavailable", True, _detail(exc))
     if isinstance(exc, litellm_exceptions.RateLimitError):
         return LlmCallError("api_rate_limited", True, _detail(exc))
+    if isinstance(exc, litellm_exceptions.BudgetExceededError):
+        return LlmCallError("api_budget_exhausted", False, _detail(exc))
     if isinstance(exc, litellm_exceptions.Timeout):
         return LlmCallError("api_timeout", True, _detail(exc))
     if isinstance(exc, litellm_exceptions.APIConnectionError):

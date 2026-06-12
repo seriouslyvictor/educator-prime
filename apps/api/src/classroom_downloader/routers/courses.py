@@ -7,6 +7,7 @@ from sqlmodel import Session, select
 from ..api.auth_errors import google_auth_http_exception
 from ..api.common import _is_fresh
 from ..api.deps import get_current_session, provider_dependency
+from ..api.google_errors import google_api_http_exception
 from ..api.session_cleanup import purge_google_session_if_needed
 from ..database import get_session
 from ..google_provider import GoogleProvider
@@ -48,6 +49,9 @@ def list_courses(
         if auth_failure:
             purge_google_session_if_needed(auth_failure, current_session, session)
             raise auth_failure.http from error
+        google_failure = google_api_http_exception(error)
+        if google_failure:
+            raise google_failure from error
         if cached_rows:
             log_warning(logger, "classroom.courses.stale_fallback", stored_count=len(cached_rows))
             return cached_rows
@@ -106,6 +110,9 @@ def list_activities(
         if auth_failure:
             purge_google_session_if_needed(auth_failure, current_session, session)
             raise auth_failure.http from error
+        google_failure = google_api_http_exception(error)
+        if google_failure:
+            raise google_failure from error
         if cached_rows:
             log_warning(logger, "classroom.activities.stale_fallback", course_id=course_id, stored_count=len(cached_rows))
             return cached_rows

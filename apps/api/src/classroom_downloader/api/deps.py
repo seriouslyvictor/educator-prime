@@ -12,6 +12,8 @@ from ..models import UserSession
 from ..observability import current_user_email, get_logger
 from ..settings import get_settings
 from .auth_errors import google_auth_http_exception
+from .errors import api_error
+from .google_errors import google_api_http_exception
 from .session_cleanup import purge_google_session_if_needed
 
 settings = get_settings()
@@ -53,10 +55,10 @@ def get_current_session(
     cookie_name = settings.session_cookie_name
     session_id = request.cookies.get(cookie_name)
     if not session_id:
-        raise HTTPException(status_code=401, detail="Not signed in.")
+        raise api_error(401, "not_signed_in", "Not signed in.")
     row = db.get(UserSession, session_id)
     if row is None or _as_utc(row.expires_at) < datetime.now(UTC):
-        raise HTTPException(status_code=401, detail="Session expired. Please sign in again.")
+        raise api_error(401, "session_expired", "Session expired. Please sign in again.")
     row.last_seen_at = datetime.now(UTC)
     db.add(row)
     db.commit()
@@ -105,6 +107,9 @@ def provider_dependency(
         if auth_failure:
             purge_google_session_if_needed(auth_failure, current_session, db)
             raise auth_failure.http from error
+        google_failure = google_api_http_exception(error)
+        if google_failure:
+            raise google_failure from error
         raise
 
 
@@ -115,6 +120,12 @@ def resolve_grading_engine() -> GradingEngine:
     try:
         return grading.get_grading_engine()
     except ValueError as error:
+        if str(error) == "grading_provider_key_missing":
+            raise api_error(
+                503,
+                "llm_not_configured",
+                "AI grading is unavailable: the provider API key is missing.",
+            ) from error
         status_code, detail = _GRADING_ENGINE_ERRORS.get(
             str(error), (500, "AI grading engine error.")
         )

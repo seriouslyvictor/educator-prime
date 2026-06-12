@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from fastapi import HTTPException
 
 from ..observability import get_logger, log_warning
+from .errors import api_error
 
 logger = get_logger(__name__)
 
@@ -42,9 +43,10 @@ def google_auth_http_exception(error: Exception) -> AuthFailure | None:
     if isinstance(error, FileNotFoundError):
         log_warning(logger, "google.auth.token_missing")
         return AuthFailure(
-            HTTPException(
-                status_code=401,
-                detail="Google session missing. Please connect your Google account again.",
+            api_error(
+                401,
+                "google_session_missing",
+                "Google session missing. Please connect your Google account again.",
             ),
             purge_token=False,
         )
@@ -58,9 +60,10 @@ def google_auth_http_exception(error: Exception) -> AuthFailure | None:
         purge_token = _contains_invalid_grant(error)
         log_warning(logger, "google.auth.refresh_failed", purge_token=purge_token)
         return AuthFailure(
-            HTTPException(
-                status_code=401,
-                detail="Google session expired. Please connect your Google account again.",
+            api_error(
+                401,
+                "google_session_expired",
+                "Google session expired. Please connect your Google account again.",
             ),
             purge_token=purge_token,
         )
@@ -74,9 +77,10 @@ def google_auth_http_exception(error: Exception) -> AuthFailure | None:
             purge_token=purge_token,
         )
         return AuthFailure(
-            HTTPException(
-                status_code=401,
-                detail="Google authorization failed. Please connect your Google account again.",
+            api_error(
+                401,
+                "google_auth_denied",
+                "Google authorization failed. Please connect your Google account again.",
             ),
             purge_token=purge_token,
         )

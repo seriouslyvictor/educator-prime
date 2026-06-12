@@ -123,7 +123,8 @@ def test_draft_returns_503_when_provider_key_missing(tmp_path, monkeypatch) -> N
         response = client.post(f"/api/grading/jobs/{job['id']}/draft")
 
     assert response.status_code == 503
-    assert "provider API key" in response.json()["detail"]
+    assert response.json()["detail"]["code"] == "llm_not_configured"
+    assert "provider API key" in response.json()["detail"]["message"]
 
 
 def test_grading_queue_rejects_global_scans() -> None:
