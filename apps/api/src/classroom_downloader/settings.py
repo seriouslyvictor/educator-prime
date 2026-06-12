@@ -52,6 +52,7 @@ class Settings(BaseSettings):
     static_dir: str | None = None
     sentry_dsn: str | None = None
     sentry_environment: str = "dev"
+    admin_emails: str = ""
     app_event_retention_days: int = 30
     llm_payload_logging: bool = True
     llm_payload_retention_days: int = 14

@@ -70,6 +70,30 @@ def get_current_user_email(
     return current_session.user_email
 
 
+def admin_email_set() -> set[str]:
+    return {
+        email.strip().lower()
+        for email in settings.admin_emails.split(",")
+        if email.strip()
+    }
+
+
+def is_admin_email(email: str | None) -> bool:
+    if not email:
+        return False
+    return email.lower() in admin_email_set()
+
+
+def require_admin(
+    current_session: UserSession = Depends(get_current_session),
+) -> UserSession:
+    if settings.google_provider == "mock":
+        return current_session
+    if not is_admin_email(current_session.user_email):
+        raise HTTPException(status_code=403, detail="Admin access required.")
+    return current_session
+
+
 def provider_dependency(
     current_session: UserSession = Depends(get_current_session),
     db: Session = Depends(get_session),

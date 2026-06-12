@@ -31,6 +31,7 @@ from .settings import get_settings
 from .api.deps import provider_dependency  # noqa: F401 — re-exported for test compat
 from .routers import health as _health_router
 from .routers import auth as _auth_router
+from .routers import admin as _admin_router
 from .routers import courses as _courses_router
 from .routers import exports as _exports_router
 from .routers import grading as _grading_router
@@ -135,6 +136,7 @@ async def request_context_middleware(request, call_next):
 
 app.include_router(_health_router.router)
 app.include_router(_auth_router.router)
+app.include_router(_admin_router.router)
 app.include_router(_courses_router.router)
 app.include_router(_exports_router.router)
 app.include_router(_grading_router.router)
