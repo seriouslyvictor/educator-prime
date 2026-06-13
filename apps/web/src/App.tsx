@@ -17,8 +17,6 @@ import {
   ApiError,
   api,
   apiErrorFromUnknown,
-  subscribeConnectivity,
-  subscribeVersionSkew,
 } from "./lib/api";
 import { resolveError } from "./lib/errorCatalog";
 import appStyles from "./components/App.module.css";
@@ -31,13 +29,13 @@ import {
 import { useLocalExportHistory } from "./lib/local-history";
 import { buildPreviewTree } from "./lib/preview-tree";
 import { useThemePreference } from "./lib/theme";
+import { useConnection } from "./hooks/useConnection";
 import { AppIcon } from "./components/icons";
 import { InlineError } from "./components/ui";
 import { Gate, OfflinePill } from "./components/errors";
 import type {
   Activity,
   AppView,
-  AuthState,
   Course,
   ExportJob,
   GradingHealth,
@@ -51,19 +49,6 @@ import type {
   RubricMode,
   TeacherLoopMode,
 } from "./types";
-
-const classroomScopes = [
-  "openid",
-  "email",
-  "profile",
-  "https://www.googleapis.com/auth/classroom.courses.readonly",
-  "https://www.googleapis.com/auth/classroom.coursework.students.readonly",
-  "https://www.googleapis.com/auth/classroom.rosters.readonly",
-  "https://www.googleapis.com/auth/classroom.student-submissions.students.readonly",
-  "https://www.googleapis.com/auth/classroom.profile.emails",
-  "https://www.googleapis.com/auth/classroom.profile.photos",
-  "https://www.googleapis.com/auth/drive.readonly",
-];
 
 // Remembering the active grading job lets a page reload drop the teacher back into
 // the same job instead of an empty workspace — the job itself is already persisted
@@ -144,8 +129,6 @@ export function App() {
   const deliveryMode: "folder" | "zip" = folderSupported ? "folder" : "zip";
 
   const [view, setView] = useState<AppView>("connect");
-  const [auth, setAuth] = useState<AuthState | null>(null);
-  const [gradingHealth, setGradingHealth] = useState<GradingHealth | null>(null);
   const [courses, setCourses] = useState<Course[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [selectedCourseId, setSelectedCourseId] = useState("");
@@ -155,9 +138,6 @@ export function App() {
   const [dryRunOpen, setDryRunOpen] = useState(false);
   const [job, setJob] = useState<ExportJob | null>(null);
   const [lastResult, setLastResult] = useState<LocalExportHistoryItem | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [apiOffline, setApiOffline] = useState(false);
-  const [versionSkew, setVersionSkew] = useState(false);
   const [activitiesLoading, setActivitiesLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<ApiError | string | null>(null);
@@ -177,10 +157,28 @@ export function App() {
   const [graderBusy, setGraderBusy] = useState(false);
   const [gradingProgress, setGradingProgress] = useState<GradingInlineProgress | null>(null);
 
-  const connected = Boolean(auth?.signed_in && auth.classroom_scopes && auth.drive_scopes);
-  const partialConsent = Boolean(
-    auth?.signed_in && (!auth.classroom_scopes || !auth.drive_scopes),
-  );
+  const {
+    auth,
+    loading,
+    apiOffline,
+    versionSkew,
+    gradingHealth,
+    connected,
+    partialConsent,
+    bootstrap,
+    connectClassroom,
+    logoutClassroom,
+  } = useConnection({
+    setView,
+    setBusy,
+    setError,
+    loadCourses,
+    loadGradingQueue,
+    restoreGradingJob,
+    readStoredJobId,
+    resetWorkspace,
+  });
+
   const selectedCourse = useMemo(
     () => courses.find((course) => course.id === selectedCourseId),
     [courses, selectedCourseId],
@@ -209,14 +207,6 @@ export function App() {
     const pending = pendingQueue.filter((item) => !serverActivityIds.has(item.activity_id));
     return [...pending, ...gradingQueue];
   }, [gradingQueue, pendingQueue]);
-
-  useEffect(() => {
-    void bootstrap();
-  }, []);
-
-  useEffect(() => subscribeConnectivity(setApiOffline), []);
-
-  useEffect(() => subscribeVersionSkew(setVersionSkew), []);
 
   useEffect(() => {
     if (connected && view === "connect") {
@@ -261,40 +251,6 @@ export function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, [dryRunOpen, view]);
 
-  async function bootstrap() {
-    setLoading(true);
-    setError(null);
-    try {
-      const authState = await api.authMe();
-      setAuth(authState);
-      const hasConnection = authState.signed_in && authState.classroom_scopes && authState.drive_scopes;
-      if (!hasConnection) {
-        setView("connect");
-        return;
-      }
-      // Checked right after login: AI grading depends on a configured provider key.
-      void api.gradingHealth().then(setGradingHealth).catch(() => setGradingHealth(null));
-      try {
-        await loadCourses();
-      } catch (caught) {
-        setError(appError(caught, "Falha ao carregar o estado do app."));
-        setView("connect");
-        return;
-      }
-      await loadGradingQueue();
-      const restoredJobId = readStoredJobId();
-      if (restoredJobId && (await restoreGradingJob(restoredJobId))) {
-        return;
-      }
-      setView("workspace");
-    } catch {
-      setAuth(null);
-      setView("connect");
-    } finally {
-      setLoading(false);
-    }
-  }
-
   const partialConsentError = partialConsent
     ? new ApiError(401, "google_auth_denied", "Missing required Google scopes.")
     : null;
@@ -308,6 +264,19 @@ export function App() {
     }
     void bootstrap();
   };
+
+  function resetWorkspace() {
+    setCourses([]);
+    setActivities([]);
+    setSelectedCourseId("");
+    setSelectedActivityIds([]);
+    setSelectedGradingItem(null);
+    setGradingJob(null);
+    setGradingQueue([]);
+    writeStoredJobId(null);
+    setPrivacyAudit(null);
+    setJob(null);
+  }
 
   async function loadCourses() {
     const courseList = await api.courses();
@@ -336,47 +305,6 @@ export function App() {
     }
   }
 
-
-  async function connectClassroom() {
-    setBusy(true);
-    setError(null);
-    try {
-      const authStart = await api.connectGoogle(classroomScopes);
-      if (authStart.authorization_url) {
-        window.location.href = authStart.authorization_url;
-        return;
-      }
-      await bootstrap();
-    } catch (caught) {
-      setError(appError(caught, "Falha ao conectar o Google."));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function logoutClassroom() {
-    setBusy(true);
-    setError(null);
-    try {
-      const nextAuth = await api.logoutGoogle();
-      setAuth(nextAuth);
-      setCourses([]);
-      setActivities([]);
-      setSelectedCourseId("");
-      setSelectedActivityIds([]);
-      setSelectedGradingItem(null);
-      setGradingJob(null);
-      setGradingQueue([]);
-      writeStoredJobId(null);
-      setPrivacyAudit(null);
-      setJob(null);
-      setView("connect");
-    } catch (caught) {
-      setError(appError(caught, "Falha ao sair da conta Google."));
-    } finally {
-      setBusy(false);
-    }
-  }
 
   async function startExport(activityIds = selectedActivityIds) {
     if (!selectedCourse || activityIds.length === 0 || busy) return;
