@@ -51,7 +51,7 @@ function DoneScreen({
   onClose(): void;
 }) {
   return (
-    <div className={styles["done"]}>
+    <div className={styles["pip-done"]}>
       <div className={styles["done-circle"]}>
         <AppIcon name="checkCircle" className={styles["done-icon"]} />
       </div>
@@ -214,10 +214,10 @@ function PostingPiPCard({
       </div>
 
       {/* Student name — NUCLEAR */}
-      <div className={styles["student-section"]}>
-        <div className={styles["student-label"]}>Aluno atual</div>
-        <div className={styles["student-row"]}>
-          <h2 className={styles["student-name"]}>{studentLabel(cur)}</h2>
+      <div className={styles["pip-student-section"]}>
+        <div className={styles["pip-student-label"]}>Aluno atual</div>
+        <div className={styles["pip-student-row"]}>
+          <h2 className={styles["pip-student-name"]}>{studentLabel(cur)}</h2>
           <div className={styles["grade-block"]}>
             <div
               className={styles["grade-value"]}

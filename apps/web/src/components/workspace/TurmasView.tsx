@@ -7,7 +7,7 @@ import turmasStyles from "./Turmas.module.css";
 
 const palette = ["#2A2FE0", "#1F8A5B", "#B8740B", "#6b3fe0", "#c7421e", "#0e7490"];
 
-type ActivityGroup = "todo" | "review" | "done";
+type ActivityGroup = "todo" | "review" | "finished";
 
 type GroupConfig = {
   id: ActivityGroup;
@@ -18,7 +18,7 @@ type GroupConfig = {
 const groups: GroupConfig[] = [
   { id: "todo", title: "A corrigir", icon: "listChecks" },
   { id: "review", title: "Em revisão", icon: "sparkle" },
-  { id: "done", title: "Concluídas", icon: "checkCircle" },
+  { id: "finished", title: "Concluídas", icon: "checkCircle" },
 ];
 
 export function TurmasView({
@@ -71,7 +71,7 @@ export function TurmasView({
   );
 
   const grouped = useMemo(() => {
-    const rows: Record<ActivityGroup, Activity[]> = { todo: [], review: [], done: [] };
+    const rows: Record<ActivityGroup, Activity[]> = { todo: [], review: [], finished: [] };
     for (const activity of filteredActivities) {
       rows[groupFor(activity, gradingByActivity.get(activity.id))].push(activity);
     }
@@ -257,7 +257,7 @@ export function TurmasView({
 
 function groupFor(_activity: Activity, grading: GradingQueueItem | undefined): ActivityGroup {
   if (!grading || grading.status === "ready") return "todo";
-  if (grading.status === "completed") return "done";
+  if (grading.status === "completed") return "finished";
   return "review";
 }
 

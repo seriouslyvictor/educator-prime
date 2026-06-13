@@ -2,7 +2,6 @@
   display: grid;
   grid-template-columns: 240px minmax(0, 1fr);
   height: 100vh;
-  overflow: hidden;
   background: var(--bg);
 }
 
@@ -13,7 +12,6 @@
   min-width: 0;
   min-height: 0;
   height: 100vh;
-  overflow: hidden;
 }
 
 
