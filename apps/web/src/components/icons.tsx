@@ -1,6 +1,7 @@
 import {
   Archive,
   AlertCircle,
+  ArrowLeft,
   ArrowRight,
   BookOpenCheck,
   BookOpen,
@@ -28,6 +29,7 @@ import {
   MoreHorizontal,
   Moon,
   Paperclip,
+  PictureInPicture2,
   Plus,
   RefreshCw,
   Search,
@@ -49,6 +51,7 @@ import {
 export const icons = {
   archive: Archive,
   alertCircle: AlertCircle,
+  arrowLeft: ArrowLeft,
   arrowRight: ArrowRight,
   book: BookOpen,
   classroom: BookOpenCheck,
@@ -76,6 +79,7 @@ export const icons = {
   moreHorizontal: MoreHorizontal,
   moon: Moon,
   paperclip: Paperclip,
+  pictureInPicture: PictureInPicture2,
   plus: Plus,
   refresh: RefreshCw,
   search: Search,
