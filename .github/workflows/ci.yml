@@ -46,3 +46,9 @@ jobs:
 
       - name: Type-check and build
         run: pnpm build
+
+      - name: Test
+        run: pnpm test:run
+
+      - name: Lint (non-blocking until baseline is clean)
+        run: pnpm lint || true
