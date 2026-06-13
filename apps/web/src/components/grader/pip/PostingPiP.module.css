@@ -72,11 +72,11 @@
 
 /* ── student section ──────────────────────────────────────────────────────── */
 
-.student-section {
+.pip-student-section {
   padding: 13px 14px 9px;
 }
 
-.student-label {
+.pip-student-label {
   font-size: 9.5px;
   text-transform: uppercase;
   letter-spacing: 0.09em;
@@ -85,14 +85,14 @@
   margin-bottom: 8px;
 }
 
-.student-row {
+.pip-student-row {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 8px;
 }
 
-.student-name {
+.pip-student-name {
   margin: 0;
   font-size: 30px;
   font-weight: 750;
@@ -312,7 +312,7 @@
 
 /* ── Done screen ──────────────────────────────────────────────────────────── */
 
-.done {
+.pip-done {
   padding: 28px 20px 24px;
   display: flex;
   flex-direction: column;

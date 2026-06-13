@@ -2262,6 +2262,7 @@
   font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
+  max-width: 8.75rem;
 }
 
 .student-meta {

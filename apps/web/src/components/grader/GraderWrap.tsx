@@ -244,9 +244,8 @@ export function GraderWrap({
                 <AppIcon name={preparingLinks ? "loader" : "refresh"} className={preparingLinks ? "ico spin" : "ico"} />
                 Preparar postagem
               </button>
-              <Button
-                variant="default"
-                size="default"
+              <button
+                className="btn btn-primary"
                 onClick={() => void handleOpenPiP()}
                 disabled={!pipSupported || pipQueue.length === 0}
                 title={
@@ -259,7 +258,7 @@ export function GraderWrap({
               >
                 <AppIcon name="pictureInPicture" />
                 Postagem guiada
-              </Button>
+              </button>
             </div>
             {gradedSubmissions.length ? (
               <div className="classroom-post-list">
