@@ -4,29 +4,11 @@ import { createPortal } from "react-dom";
 import type { GradingJob, GradingSubmission } from "../../../types";
 import { AppIcon } from "../../icons";
 import { Button } from "../../ui/button";
+import { classroomActivityUrl, scoreColor, scoreOf, studentLabel } from "../domain";
 import styles from "./PostingPiP.module.css";
-
-// ── helpers (mirrors GraderWrap helpers — duplicated to avoid circular deps) ──
-
-function scoreOf(submission: GradingSubmission): number | null {
-  return submission.final_score ?? submission.ai_score ?? null;
-}
-
-function studentLabel(submission: GradingSubmission): string {
-  return submission.student_name ?? submission.student_email ?? "Aluno desconhecido";
-}
-
-function scoreColor(g: number | null): string {
-  if (g == null) return "var(--muted-2)";
-  return g >= 85 ? "var(--ink)" : g >= 65 ? "var(--warning)" : "var(--danger)";
-}
 
 function postingFeedbackText(submission: GradingSubmission): string {
   return submission.feedback ?? "";
-}
-
-function classroomActivityUrl(job: GradingJob): string {
-  return `https://classroom.google.com/c/${job.course_id}/a/${job.activity_id}/details`;
 }
 
 // ── component props ───────────────────────────────────────────────────────────

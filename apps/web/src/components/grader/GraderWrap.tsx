@@ -3,25 +3,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../lib/api";
 import type { GradingJob, GradingSubmission } from "../../types";
 import { AppIcon } from "../icons";
-import { Button } from "../ui/button";
 import { GraderTopbar } from "./GraderTopbar";
+import { classroomActivityUrl, scoreOf, studentLabel } from "./domain";
 import { safeStatusLabel } from "./graderStatus";
 import graderStyles from "./Grader.module.css";
 import { PostingPiP } from "./pip/PostingPiP";
 import { useDocumentPiP } from "./pip/useDocumentPiP";
 void graderStyles;
-
-function scoreOf(submission: GradingSubmission): number | null {
-  return submission.final_score ?? submission.ai_score ?? null;
-}
-
-function studentLabel(submission: GradingSubmission): string {
-  return submission.student_name ?? submission.student_email ?? "Aluno desconhecido";
-}
-
-function classroomActivityUrl(job: GradingJob): string {
-  return `https://classroom.google.com/c/${job.course_id}/a/${job.activity_id}/details`;
-}
 
 function postingClipboardText(submission: GradingSubmission): string {
   return `Nota: ${scoreOf(submission)}/100\n\n${submission.feedback ?? ""}`;

@@ -3,6 +3,7 @@ import { api } from "../../lib/api";
 import type { GradingJob, GradingSubmission, GradingSubmissionFile, PrivacyAudit } from "../../types";
 import { AppIcon } from "../icons";
 import { GraderTopbar } from "./GraderTopbar";
+import { studentLabel } from "./domain";
 import {
   privacyLabel,
   privacyTone,
@@ -31,10 +32,6 @@ function isBlocked(submission: GradingSubmission | undefined): boolean {
 function isVisualSubmission(submission: GradingSubmission): boolean {
   const files = submission.files?.length ? submission.files : [{ mime_type: submission.mime_type }];
   return files.some((file) => file.mime_type?.startsWith("image/"));
-}
-
-function studentLabel(submission: GradingSubmission): string {
-  return submission.student_name ?? submission.student_email ?? "Aluno desconhecido";
 }
 
 function hasDefaultCriteria(job: GradingJob): boolean {
