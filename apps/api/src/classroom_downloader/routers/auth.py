@@ -14,7 +14,12 @@ from ..api.deps import get_current_session, is_admin_email
 from ..api.errors import api_error
 from ..api.session_cleanup import purge_cached_classroom_state_for_user, purge_google_session_if_needed
 from ..database import get_session
-from ..google_provider import DbTokenStore, build_oauth_authorization_url, make_google_provider
+from ..google_provider import (
+    DbTokenStore,
+    build_oauth_authorization_url,
+    encrypt_credentials_json,
+    make_google_provider,
+)
 from ..models import OAuthState, UserSession
 from ..observability import get_logger, log_error, log_event, log_warning
 from ..schemas import AuthStart, AuthState
@@ -205,6 +210,12 @@ def auth_callback(
             "oauth_not_configured",
             "Google OAuth is not configured.",
         )
+    if not settings.session_secret_key:
+        raise api_error(
+            503,
+            "encryption_not_configured",
+            "Credential encryption key is not configured. Set CD_SESSION_SECRET_KEY.",
+        )
 
     oauth_state = db.get(OAuthState, state)
     if oauth_state is None or _as_utc(oauth_state.expires_at) < datetime.now(UTC):
@@ -241,7 +252,7 @@ def auth_callback(
     db.add(UserSession(
         id=session_id,
         user_email=user_email,
-        google_credentials_json=creds.to_json(),
+        google_credentials_json=encrypt_credentials_json(creds.to_json()),
         created_at=now,
         expires_at=now + max_age,
     ))

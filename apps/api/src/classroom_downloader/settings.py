@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     google_redirect_uri: str = "http://localhost:8000/api/auth/google/callback"
     google_token_path: str = ".tokens/google-user.json"  # deprecated, ignored
     google_oauth_state_path: str = ".tokens/google-oauth-state.txt"  # deprecated, ignored
+    # Keys Fernet encryption for stored Google OAuth credentials.
     session_secret_key: str | None = None
     session_max_age_hours: int = 24
     session_cookie_name: str = "cd_session"

@@ -13,7 +13,7 @@ advisory session. The advisor does not modify source code.
 |------|-------|----------|--------|------------|--------|
 | 001 | Frontend test runner + linter + CI wiring | P1 | M | — | DONE |
 | 002 | Characterization tests for api cache + folder export | P1 | M | 001 | DONE |
-| 003 | Encrypt Google OAuth credentials at rest | P2 | M | — | TODO |
+| 003 | Encrypt Google OAuth credentials at rest | P2 | M | — | DONE |
 | 004 | Shared grader/domain.ts; resolve dead session_secret_key | P3 | S | — (Part B interacts with 003) | TODO |
 | 006 | Playwright E2E for core flows, mock mode, in CI (boot, logout, nav, queue) | P1 | M | — (recommended before 005) | TODO |
 | 007 | Local real-session smoke — real OAuth, prod-like, true logout/reload | P2 | M | 006 (reuses Playwright tooling) | TODO |

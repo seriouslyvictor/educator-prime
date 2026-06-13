@@ -19,6 +19,7 @@ from classroom_downloader.models import OAuthState
 def test_callback_relaxes_scope_mismatch_before_fetch_token(monkeypatch) -> None:
     monkeypatch.setattr(settings, "google_client_id", "client-id")
     monkeypatch.setattr(settings, "google_client_secret", "client-secret")
+    monkeypatch.setattr(settings, "session_secret_key", "test-session-secret")
 
     scopes = [
         "https://www.googleapis.com/auth/classroom.coursework.students.readonly",

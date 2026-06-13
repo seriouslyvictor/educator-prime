@@ -55,6 +55,36 @@ def clear_google_provider_caches() -> None:
     log_event(logger, "google.cache.clear")
 
 
+def _credential_fernet():
+    import base64
+    import hashlib
+
+    from cryptography.fernet import Fernet
+
+    secret = get_settings().session_secret_key
+    if not secret:
+        return None
+    key = base64.urlsafe_b64encode(hashlib.sha256(secret.encode("utf-8")).digest())
+    return Fernet(key)
+
+
+def encrypt_credentials_json(plaintext: str) -> str:
+    fernet = _credential_fernet()
+    if fernet is None:
+        return plaintext
+    return fernet.encrypt(plaintext.encode("utf-8")).decode("ascii")
+
+
+def decrypt_credentials_json(stored: str) -> str:
+    # Legacy plaintext rows can be removed after all deployments run the migration.
+    if stored.startswith("{"):
+        return stored
+    fernet = _credential_fernet()
+    if fernet is None:
+        return stored
+    return fernet.decrypt(stored.encode("ascii")).decode("utf-8")
+
+
 def _ttl(minutes: int) -> datetime:
     return datetime.now(UTC) + timedelta(minutes=minutes)
 
@@ -965,7 +995,8 @@ class DbTokenStore:
 
         import json as _json
         log_event(logger, "google.token.load", session_id=self._session_id)
-        return Credentials.from_authorized_user_info(_json.loads(row.google_credentials_json))
+        raw = decrypt_credentials_json(row.google_credentials_json)
+        return Credentials.from_authorized_user_info(_json.loads(raw))
 
     def load_valid_credentials(self):
         from .models import UserSession
@@ -980,7 +1011,7 @@ class DbTokenStore:
             credentials.refresh(Request())
             row = self._db.get(UserSession, self._session_id)
             if row is not None:
-                row.google_credentials_json = credentials.to_json()
+                row.google_credentials_json = encrypt_credentials_json(credentials.to_json())
                 row.last_seen_at = datetime.now(UTC)
                 self._db.add(row)
                 self._db.commit()
