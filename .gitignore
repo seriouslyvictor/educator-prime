@@ -17,7 +17,7 @@ dist/
 .cache/
 .claude
 docs
-graphify-out/cost.json       
-graphify-out/cache/       
+graphify-out/*
 study-roadmap.md
 archive
+plans
