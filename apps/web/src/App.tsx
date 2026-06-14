@@ -10,7 +10,7 @@ import {
   GraderWrap,
 } from "./components/grader";
 import { HistoryView } from "./components/HistoryView";
-import { ProgressView, type ProgressLogItem } from "./components/ProgressView";
+import { ProgressView } from "./components/ProgressView";
 import { Rail } from "./components/Rail";
 import { TurmasView } from "./components/workspace";
 import {
@@ -21,29 +21,22 @@ import {
 import { resolveError } from "./lib/errorCatalog";
 import appStyles from "./components/App.module.css";
 void appStyles;
-import {
-  exportJobToFolder,
-  isFolderExportSupported,
-  pickExportFolder,
-} from "./lib/folder-export";
 import { useLocalExportHistory } from "./lib/local-history";
-import { buildPreviewTree } from "./lib/preview-tree";
 import { useThemePreference } from "./lib/theme";
 import { useConnection } from "./hooks/useConnection";
+import { useExportWorkspace } from "./hooks/useExportWorkspace";
+import { useGradingQueue } from "./hooks/useGradingQueue";
 import { AppIcon } from "./components/icons";
 import { InlineError } from "./components/ui";
 import { Gate, OfflinePill } from "./components/errors";
 import type {
   Activity,
   AppView,
-  Course,
-  ExportJob,
   GradingHealth,
   GradingCriterionInput,
   GradingJob,
   GradingQueueItem,
   GradingSubmission,
-  LocalExportHistoryItem,
   PrivacyAudit,
   QueueAction,
   RubricMode,
@@ -125,37 +118,74 @@ function gradingItemFromJob(job: GradingJob): GradingQueueItem {
 export function App() {
   const { mode: themeMode, setMode: setThemeMode } = useThemePreference();
   const { history, addHistoryItem } = useLocalExportHistory();
-  const folderSupported = isFolderExportSupported();
-  const deliveryMode: "folder" | "zip" = folderSupported ? "folder" : "zip";
 
   const [view, setView] = useState<AppView>("connect");
-  const [courses, setCourses] = useState<Course[]>([]);
-  const [activities, setActivities] = useState<Activity[]>([]);
-  const [selectedCourseId, setSelectedCourseId] = useState("");
-  const [selectedActivityIds, setSelectedActivityIds] = useState<string[]>([]);
-  const [classQuery, setClassQuery] = useState("");
-  const [activityQuery, setActivityQuery] = useState("");
-  const [dryRunOpen, setDryRunOpen] = useState(false);
-  const [job, setJob] = useState<ExportJob | null>(null);
-  const [lastResult, setLastResult] = useState<LocalExportHistoryItem | null>(null);
-  const [activitiesLoading, setActivitiesLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<ApiError | string | null>(null);
-  const [progress, setProgress] = useState({ completed: 0, total: 0, currentPath: "" });
-  const [progressLog, setProgressLog] = useState<ProgressLogItem[]>([]);
-  const [selectedGradingItem, setSelectedGradingItem] = useState<GradingQueueItem | null>(null);
-  const [gradingQueue, setGradingQueue] = useState<GradingQueueItem[]>([]);
-  const [archivedQueue, setArchivedQueue] = useState<GradingQueueItem[]>([]);
-  // Activities the teacher sent from Turmas that don't have a server-side job yet.
-  // They surface in the grader queue as "ready" until opened (which creates the job).
-  const [pendingQueue, setPendingQueue] = useState<GradingQueueItem[]>([]);
-  const [gradingQueueLoading, setGradingQueueLoading] = useState(false);
   const [gradingJob, setGradingJob] = useState<GradingJob | null>(null);
   const [privacyAudit, setPrivacyAudit] = useState<PrivacyAudit | null>(null);
   const [activeGradingSubmissionId, setActiveGradingSubmissionId] = useState<string | null>(null);
   const [draftingSubmissionId, setDraftingSubmissionId] = useState<string | null>(null);
   const [graderBusy, setGraderBusy] = useState(false);
   const [gradingProgress, setGradingProgress] = useState<GradingInlineProgress | null>(null);
+
+  const {
+    folderSupported,
+    deliveryMode,
+    courses,
+    activities,
+    selectedCourseId,
+    classQuery,
+    activityQuery,
+    dryRunOpen,
+    job,
+    lastResult,
+    activitiesLoading,
+    progress,
+    progressLog,
+    selectedCourse,
+    previewTree,
+    setClassQuery,
+    setActivityQuery,
+    setDryRunOpen,
+    loadCourses,
+    loadActivities,
+    startExport,
+    pickCourse,
+    previewActivity,
+    resetExportWorkspace,
+  } = useExportWorkspace({
+    view,
+    busy,
+    setBusy,
+    setError,
+    setView,
+    loadGradingQueue: () => loadGradingQueue(),
+    addHistoryItem,
+  });
+
+  const {
+    selectedGradingItem,
+    setSelectedGradingItem,
+    gradingQueue,
+    archivedQueue,
+    setPendingQueue,
+    gradingQueueLoading,
+    gradingByActivity,
+    queueItems,
+    resetGradingQueue,
+    sendActivitiesToQueue,
+    findExistingJob,
+    loadGradingQueue,
+    runQueueAction,
+  } = useGradingQueue({
+    selectedCourse,
+    getActiveJobId: () => gradingJob?.id ?? null,
+    setView,
+    setError,
+    setGraderBusy,
+    clearActiveJob,
+  });
 
   const {
     auth,
@@ -178,35 +208,6 @@ export function App() {
     readStoredJobId,
     resetWorkspace,
   });
-
-  const selectedCourse = useMemo(
-    () => courses.find((course) => course.id === selectedCourseId),
-    [courses, selectedCourseId],
-  );
-  const selectedActivities = useMemo(
-    () => activities.filter((activity) => selectedActivityIds.includes(activity.id)),
-    [activities, selectedActivityIds],
-  );
-  const previewTree = selectedCourse
-    ? buildPreviewTree(selectedCourse, selectedActivities, job)
-    : null;
-  const gradingByActivity = useMemo(() => {
-    const rows = new Map<string, GradingQueueItem>();
-    for (const item of gradingQueue) {
-      if (!selectedCourse || item.course_id === selectedCourse.id) {
-        rows.set(item.activity_id, item);
-      }
-    }
-    return rows;
-  }, [gradingQueue, selectedCourse]);
-
-  // The queue the grader screen renders: server jobs plus any pending activities the
-  // teacher just sent from Turmas (deduped — a real job for the same activity wins).
-  const queueItems = useMemo(() => {
-    const serverActivityIds = new Set(gradingQueue.map((item) => item.activity_id));
-    const pending = pendingQueue.filter((item) => !serverActivityIds.has(item.activity_id));
-    return [...pending, ...gradingQueue];
-  }, [gradingQueue, pendingQueue]);
 
   useEffect(() => {
     if (connected && view === "connect") {
@@ -265,128 +266,26 @@ export function App() {
     void bootstrap();
   };
 
-  function resetWorkspace() {
-    setCourses([]);
-    setActivities([]);
-    setSelectedCourseId("");
-    setSelectedActivityIds([]);
-    setSelectedGradingItem(null);
+  function clearActiveJob() {
     setGradingJob(null);
-    setGradingQueue([]);
+    setPrivacyAudit(null);
+    setActiveGradingSubmissionId(null);
+    setSelectedGradingItem(null);
+    writeStoredJobId(null);
+  }
+
+  function resetWorkspace() {
+    resetExportWorkspace();
+    resetGradingQueue();
+    setGradingJob(null);
     writeStoredJobId(null);
     setPrivacyAudit(null);
-    setJob(null);
-  }
-
-  async function loadCourses() {
-    const courseList = await api.courses();
-    setCourses(courseList);
-    if (courseList[0]) {
-      setSelectedCourseId(courseList[0].id);
-      await loadActivities(courseList[0].id);
-    }
-  }
-
-  async function loadActivities(courseId: string) {
-    setActivitiesLoading(true);
-    setError(null);
-    setSelectedActivityIds([]);
-    setJob(null);
-    try {
-      const activityList = await api.activities(courseId);
-      setActivities(activityList);
-      setSelectedActivityIds([]);
-      await loadGradingQueue();
-    } catch (caught) {
-      setActivities([]);
-      setError(appError(caught, "Falha ao carregar atividades."));
-    } finally {
-      setActivitiesLoading(false);
-    }
-  }
-
-
-  async function startExport(activityIds = selectedActivityIds) {
-    if (!selectedCourse || activityIds.length === 0 || busy) return;
-    if (deliveryMode === "zip") {
-      setError(
-        new ApiError(
-          0,
-          "unsupported_browser",
-          "Folder export is not available in this browser.",
-        ),
-      );
-      return;
-    }
-
-    setBusy(true);
-    setError(null);
-    setDryRunOpen(false);
-    setProgress({ completed: 0, total: 0, currentPath: "" });
-    setProgressLog([]);
-
-    try {
-      const root = await pickExportFolder();
-      const exportJob = await api.createExport(selectedCourse.id, activityIds);
-      setJob(exportJob);
-      setProgress({ completed: 0, total: exportJob.files.length, currentPath: "Preparando arquivos..." });
-      setView("progress");
-
-      const exportSummary = await exportJobToFolder(exportJob, root, (completed, total, currentPath) => {
-        setProgress({ completed, total, currentPath });
-        setProgressLog((current) => [
-          ...current.slice(-80),
-          {
-            id: `${completed}-${currentPath}`,
-            kind: currentPath.startsWith("Falhou:") ? "err" : "ok",
-            text: currentPath,
-          },
-        ]);
-      });
-
-      const historyItem = {
-        courseName: selectedCourse.name,
-        activityCount: activityIds.length,
-        fileCount: exportSummary.completed,
-        failedFiles: exportSummary.failed,
-        outputLabel: `${root.name}/${selectedCourse.name}`,
-      };
-      addHistoryItem(historyItem);
-      setLastResult({
-        ...historyItem,
-        id: crypto.randomUUID(),
-        completedAt: new Date().toISOString(),
-      });
-      setView("done");
-    } catch (caught) {
-      const exportError = appError(caught, "Falha na exportação.");
-      const message = appErrorSummary(exportError);
-      setError(exportError);
-      setProgressLog((current) => [
-        ...current,
-        { id: `error-${Date.now()}`, kind: "err", text: message },
-      ]);
-      if (view !== "progress") setView("workspace");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  function pickCourse(courseId: string) {
-    setSelectedCourseId(courseId);
-    void loadActivities(courseId);
   }
 
   function navigate(nextView: AppView) {
     if (!connected && nextView !== "connect") return;
     if (nextView === "graderQueue") void loadGradingQueue();
     setView(nextView);
-  }
-
-  function previewActivity(activity: Activity) {
-    setSelectedActivityIds([activity.id]);
-    setJob(null);
-    setDryRunOpen(true);
   }
 
   async function gradeActivity(activity: Activity) {
@@ -433,32 +332,6 @@ export function App() {
     }
   }
 
-  // "Enviar N para a fila" from Turmas: stage the selected activities as pending queue
-  // items and jump to the grader queue so they're visible immediately.
-  function sendActivitiesToQueue(activitiesToSend: Activity[]) {
-    if (!selectedCourse || activitiesToSend.length === 0) return;
-    setPendingQueue((current) => {
-      const seen = new Set(current.map((row) => row.activity_id));
-      const additions = activitiesToSend
-        .filter((activity) => !seen.has(activity.id))
-        .map<GradingQueueItem>((activity) => ({
-          course_id: selectedCourse.id,
-          course_name: selectedCourse.name,
-          activity_id: activity.id,
-          activity_title: activity.title,
-          due_label: activity.due_label,
-          submission_count: 0,
-          status: "ready",
-          latest_job_id: null,
-          queue_state: "active",
-          reviewed_submissions: 0,
-          total_submissions: 0,
-        }));
-      return [...additions, ...current];
-    });
-    navigate("graderQueue");
-  }
-
   async function regradeActivity(activity: Activity) {
     if (!selectedCourse) return;
     const known = gradingQueue.find(
@@ -481,114 +354,6 @@ export function App() {
       total_submissions: existing?.total_submissions ?? 0,
     });
     setView("graderSetup");
-  }
-
-  async function findExistingJob(
-    courseId: string,
-    activityId: string,
-  ): Promise<GradingQueueItem | null> {
-    try {
-      const items = await api.gradingQueue(courseId, activityId);
-      return items.find((item) => item.latest_job_id) ?? null;
-    } catch {
-      return null;
-    }
-  }
-
-  async function loadGradingQueue() {
-    setGradingQueueLoading(true);
-    try {
-      const [activeItems, archivedItems, hiddenItems] = await Promise.all([
-        api.gradingJobs("active"),
-        api.gradingJobs("archived"),
-        api.gradingJobs("hidden"),
-      ]);
-      setGradingQueue(activeItems);
-      setArchivedQueue([...archivedItems, ...hiddenItems]);
-    } catch {
-      setGradingQueue([]);
-      setArchivedQueue([]);
-    } finally {
-      setGradingQueueLoading(false);
-    }
-  }
-
-  async function runQueueAction(action: QueueAction, items: GradingQueueItem[]) {
-    if (items.length === 0) return;
-    setGraderBusy(true);
-    setError(null);
-    const shouldIgnoreMissing = (caught: unknown) =>
-      caught instanceof Error && /not found|404/i.test(caught.message);
-    const freshPending: GradingQueueItem[] = [];
-    try {
-      if (action === "remove") {
-        const pendingActivityIds = new Set(
-          items.filter((item) => !item.latest_job_id).map((item) => item.activity_id),
-        );
-        if (pendingActivityIds.size > 0) {
-          setPendingQueue((current) =>
-            current.filter((item) => !pendingActivityIds.has(item.activity_id)),
-          );
-        }
-      }
-
-      for (const item of items) {
-        if (!item.latest_job_id) continue;
-        try {
-          if (action === "remove" || action === "restart") {
-            await api.deleteGradingJob(item.latest_job_id);
-            if (action === "restart") {
-              freshPending.push({
-                course_id: item.course_id,
-                course_name: item.course_name,
-                activity_id: item.activity_id,
-                activity_title: item.activity_title,
-                due_label: item.due_label,
-                submission_count: item.submission_count,
-                status: "ready",
-                latest_job_id: null,
-                queue_state: "active",
-                reviewed_submissions: 0,
-                total_submissions: 0,
-              });
-            }
-          } else if (action === "archive") {
-            await api.archiveGradingJob(item.latest_job_id);
-          } else if (action === "hide") {
-            await api.hideGradingJob(item.latest_job_id);
-          } else if (action === "restore") {
-            await api.restoreGradingJob(item.latest_job_id);
-          }
-        } catch (caught) {
-          if (!shouldIgnoreMissing(caught)) throw caught;
-        }
-      }
-
-      if (freshPending.length > 0) {
-        setPendingQueue((current) => {
-          const activityIds = new Set(freshPending.map((item) => item.activity_id));
-          return [...freshPending, ...current.filter((item) => !activityIds.has(item.activity_id))];
-        });
-      }
-
-      if (
-        gradingJob?.id &&
-        items.some((item) => item.latest_job_id === gradingJob.id) &&
-        action !== "restore"
-      ) {
-        setGradingJob(null);
-        setPrivacyAudit(null);
-        setActiveGradingSubmissionId(null);
-        setSelectedGradingItem(null);
-        writeStoredJobId(null);
-      }
-
-      await loadGradingQueue();
-    } catch (caught) {
-      setError(appError(caught, "Falha ao gerenciar a fila de correção."));
-    } finally {
-      setGraderBusy(false);
-    }
   }
 
   // Quietly restore a job on reload. Unlike openGradingJob this never re-runs a

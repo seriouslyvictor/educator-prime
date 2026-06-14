@@ -297,11 +297,19 @@ Stop and report back (do not improvise) if:
 
 - Clean intermediate completed: extracted `apps/web/src/hooks/useConnection.ts`
   from `App.tsx` and kept the existing auth/bootstrap/connect/logout behavior.
-- Verification completed after the extraction: `pnpm build` passed and
-  `pnpm test:run` passed (21 tests). `App.tsx` line count is now 1308.
-- Not marked DONE: `useExportWorkspace`, `useGradingQueue`, and
-  `useGradingJob` remain in `App.tsx`, and the full manual smoke checklist has
-  not been run.
+- Follow-up progress in the resumed run: extracted
+  `apps/web/src/hooks/useExportWorkspace.ts` and
+  `apps/web/src/hooks/useGradingQueue.ts`. `App.tsx` line count is now 1073.
+- Verification completed after the first extraction: `pnpm build` passed and
+  `pnpm test:run` passed (21 tests). Verification completed after the export and
+  queue extractions: `pnpm exec tsc -b` passed.
+- Not marked DONE: `useGradingJob` remains in `App.tsx`, the full Vite
+  build/Vitest/manual smoke checklist has not been run after the latest
+  extractions, and the latest extraction is not committed yet.
+- Current blocker: unsandboxed build/test/commit approvals are unavailable until
+  the account usage limit clears (reported by the app as available again on
+  2026-06-14 01:19). Continue with full `pnpm build`, `pnpm test:run`, then
+  `useGradingJob` extraction and manual smoke when approvals are available.
 - Lint status: `pnpm lint` still exits 1 because of the pre-existing
   `GraderSetup.tsx` `selectedRubric` unused-variable error; no new `App.tsx`
   lint errors were introduced.

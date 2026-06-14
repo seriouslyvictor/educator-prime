@@ -17,7 +17,7 @@ advisory session. The advisor does not modify source code.
 | 004 | Shared grader/domain.ts; resolve dead session_secret_key | P3 | S | — (Part B interacts with 003) | DONE |
 | 006 | Playwright E2E for core flows, mock mode, in CI (boot, logout, nav, queue) | P1 | M | — (recommended before 005) | TODO |
 | 007 | Local real-session smoke — real OAuth, prod-like, true logout/reload | P2 | M | 006 (reuses Playwright tooling) | TODO |
-| 005 | Decompose the 1380-line App.tsx into hooks | P2 | L | 001, 002 (use 006 as smoke net) | IN PROGRESS — useConnection extracted; remaining hooks/manual smoke pending |
+| 005 | Decompose the 1380-line App.tsx into hooks | P2 | L | 001, 002 (use 006 as smoke net) | IN PROGRESS — connection/export/queue hooks extracted; job hook/full smoke pending |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED
 (one-line rationale).
