@@ -299,17 +299,20 @@ Stop and report back (do not improvise) if:
   from `App.tsx` and kept the existing auth/bootstrap/connect/logout behavior.
 - Follow-up progress in the resumed run: extracted
   `apps/web/src/hooks/useExportWorkspace.ts` and
-  `apps/web/src/hooks/useGradingQueue.ts`. `App.tsx` line count is now 1073.
-- Verification completed after the first extraction: `pnpm build` passed and
-  `pnpm test:run` passed (21 tests). Verification completed after the export and
-  queue extractions: `pnpm exec tsc -b` passed.
-- Not marked DONE: `useGradingJob` remains in `App.tsx`, the full Vite
-  build/Vitest/manual smoke checklist has not been run after the latest
-  extractions, and the latest extraction is not committed yet.
-- Current blocker: unsandboxed build/test/commit approvals are unavailable until
-  the account usage limit clears (reported by the app as available again on
-  2026-06-14 01:19). Continue with full `pnpm build`, `pnpm test:run`, then
-  `useGradingJob` extraction and manual smoke when approvals are available.
-- Lint status: `pnpm lint` still exits 1 because of the pre-existing
-  `GraderSetup.tsx` `selectedRubric` unused-variable error; no new `App.tsx`
-  lint errors were introduced.
+  `apps/web/src/hooks/useGradingQueue.ts`. Committed in commit 945c3c3
+  (`refactor(web): extract export and grading-queue hooks from app`).
+- Final extraction completed: `apps/web/src/hooks/useGradingJob.ts` extracted.
+  `graderBusy`/`setGraderBusy` kept in App to break the circular dependency
+  between `useGradingQueue` (needs the setter) and `useGradingJob` (would own it).
+  The circular `clearActiveJob`/`getActiveJobId` refs (queue needs job's functions)
+  are resolved with two stable `useRef`s updated every render.
+  `streamGradingProgress` SSE machine moved verbatim — no STOP condition triggered.
+  No child-component prop signatures changed.
+- Final `App.tsx` line count: 442 (target was ~400; JSX return accounts for most).
+- All done criteria met (machine-checkable): `pnpm build` exit 0,
+  `pnpm test:run` 21 passed, all four hooks exist, no child props changed.
+- Lint status: `pnpm lint` exits 1 only because of the pre-existing
+  `GraderSetup.tsx` `selectedRubric` error; no new errors introduced in
+  `App.tsx` or any hook file.
+- Manual smoke checklist NOT run (needs live browser + mock backend). Must be
+  completed by a human before demo/deploy.
