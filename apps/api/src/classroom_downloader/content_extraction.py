@@ -8,6 +8,10 @@ from .zip_extraction import (
     extract_zip_submission,
     render_zip_submission_text,
 )
+from .office_extraction import (
+    OFFICE_MIME_TYPES,
+    extract_office_text,
+)
 
 
 logger = get_logger(__name__)
@@ -22,10 +26,7 @@ TEXT_MIME_TYPES = {
     "application/yaml",
     "application/x-yaml",
 }
-DEGRADED_MIME_TYPES = {
-    "application/pdf",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-}
+DEGRADED_MIME_TYPES: set[str] = set()
 SAFE_SOURCE_EXTENSIONS = {
     ".csv",
     ".docx",
@@ -39,6 +40,8 @@ SAFE_SOURCE_EXTENSIONS = {
     ".py",
     ".txt",
     ".webp",
+    ".xlsx",
+    ".pptx",
     ".zip",
 }
 
@@ -52,6 +55,12 @@ class ExtractedSubmissionContent:
     retryable: bool = False
     pii_observed: list[str] | None = None
     content_kind: str | None = None
+
+
+def _is_multimodal_mime(mime: str) -> bool:
+    """Retorna True para mimes que seguem o caminho multimodal (imagens e PDF)."""
+    m = mime.lower()
+    return m.startswith("image/") or m == "application/pdf"
 
 
 def extract_submission_content(
@@ -73,7 +82,9 @@ def extract_submission_content(
         byte_size=cache_file.byte_size,
         safe_source_label=safe_source_label,
     )
-    if mime_type.startswith("image/"):
+
+    # Imagens e PDFs seguem o caminho multimodal (visão).
+    if _is_multimodal_mime(mime_type):
         if allow_visual_pending:
             log_event(
                 logger,
@@ -116,6 +127,10 @@ def extract_submission_content(
 
     if _is_zip_submission(cache_file, mime_type):
         return _extract_zip_content(cache_file, path, safe_source_label)
+
+    # Arquivos Office OOXML — extração de texto server-side.
+    if _is_office_submission(cache_file, mime_type):
+        return _extract_office_content(cache_file, path, mime_type, safe_source_label)
 
     content = path.read_bytes()
     text = _decode_text(content)
@@ -182,6 +197,13 @@ def _is_zip_submission(cache_file: GradingFileCache, mime_type: str) -> bool:
     return Path(cache_file.source_name).suffix.lower() == ".zip"
 
 
+def _is_office_submission(cache_file: GradingFileCache, mime_type: str) -> bool:
+    if mime_type in OFFICE_MIME_TYPES:
+        return True
+    from .office_extraction import OFFICE_EXTENSIONS
+    return Path(cache_file.source_name).suffix.lower() in OFFICE_EXTENSIONS
+
+
 def _extract_zip_content(
     cache_file: GradingFileCache,
     path: Path,
@@ -232,6 +254,45 @@ def _extract_zip_content(
     return ExtractedSubmissionContent(
         status=status,
         text=text,
+        safe_source_label=safe_source_label,
+    )
+
+
+def _extract_office_content(
+    cache_file: GradingFileCache,
+    path: Path,
+    mime_type: str,
+    safe_source_label: str,
+) -> ExtractedSubmissionContent:
+    result = extract_office_text(path, mime_type)
+    if result.error:
+        log_event(
+            logger,
+            "content.extract.office_failed",
+            cache_file_id=cache_file.id,
+            mime_type=mime_type,
+            error=result.error,
+        )
+        return ExtractedSubmissionContent(
+            status="unsupported",
+            text="",
+            safe_source_label=safe_source_label,
+            error=result.error,
+        )
+    status = "degraded" if result.truncated else "supported"
+    log_event(
+        logger,
+        "content.extract.office",
+        cache_file_id=cache_file.id,
+        mime_type=mime_type,
+        status=status,
+        char_count=len(result.text),
+        truncated=result.truncated,
+        text_preview=text_preview(result.text),
+    )
+    return ExtractedSubmissionContent(
+        status=status,
+        text=result.text,
         safe_source_label=safe_source_label,
     )
 

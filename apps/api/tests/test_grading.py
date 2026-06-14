@@ -1584,6 +1584,9 @@ def test_litellm_engine_attempt_metadata_is_persisted(monkeypatch, tmp_path) -> 
         for key, value in original_settings.items():
             setattr(settings, key, value)
 
+    # activity-3 (course-2) now has 3 submissions: docx, xlsx, pptx.
+    n = body["submissions_graded"]
+    assert n >= 1
     submission = body["submissions"][0]
     assert submission["ai_engine"] == "litellm"
     assert submission["ai_model"] == "openai/gpt-5"
@@ -1593,11 +1596,10 @@ def test_litellm_engine_attempt_metadata_is_persisted(monkeypatch, tmp_path) -> 
     assert submission["ai_cached_prompt_tokens"] == 25
     assert submission["ai_cache_write_tokens"] == 10
     assert submission["ai_cost_cents"] == 12.34
-    assert body["total_prompt_tokens"] == 100
-    assert body["total_completion_tokens"] == 50
-    assert body["total_cached_tokens"] == 25
-    assert body["total_cost_cents"] == 12.34
-    assert body["submissions_graded"] == 1
+    assert body["total_prompt_tokens"] == 100 * n
+    assert body["total_completion_tokens"] == 50 * n
+    assert body["total_cached_tokens"] == 25 * n
+    assert round(body["total_cost_cents"], 2) == round(12.34 * n, 2)
     assert body["ai_engine"] == "litellm"
     assert body["ai_model"] == "openai/gpt-5"
     assert body["ai_mode"] == settings.grading_batch_mode
@@ -2299,3 +2301,260 @@ def test_regrade_creates_new_latest_job() -> None:
     with Session(engine) as session:
         assert session.get(GradingJob, first["id"]) is not None
         assert session.get(GradingJob, second["id"]) is not None
+
+
+# ---------------------------------------------------------------------------
+# Lane A — content_extraction: Office OOXML → supported / degraded
+# ---------------------------------------------------------------------------
+
+
+def _make_cache_file(
+    tmp_path: Path,
+    content: bytes,
+    mime_type: str,
+    source_name: str = "arquivo",
+) -> GradingFileCache:
+    """Helper: grava bytes no disco e retorna um GradingFileCache apontando para o arquivo."""
+    from io import BytesIO
+    path = tmp_path / source_name
+    path.write_bytes(content)
+    return GradingFileCache(
+        id=str(uuid4()),
+        job_id="job-test",
+        submission_id="sub-test",
+        source_file_id="drive-test",
+        source_name=source_name,
+        mime_type=mime_type,
+        cached_path=str(path),
+        content_hash="testhash",
+        byte_size=len(content),
+        expires_at=datetime.now(UTC),
+    )
+
+
+def _make_real_docx() -> bytes:
+    import docx
+    from io import BytesIO
+    buf = BytesIO()
+    doc = docx.Document()
+    doc.add_paragraph("Trabalho de biologia do aluno.")
+    doc.save(buf)
+    return buf.getvalue()
+
+
+def _make_real_xlsx() -> bytes:
+    import openpyxl
+    from io import BytesIO
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Dados"
+    ws.append(["Col", "Valor"])
+    ws.append(["A", 1])
+    buf = BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def _make_real_pptx() -> bytes:
+    from pptx import Presentation
+    from pptx.util import Inches
+    from io import BytesIO
+    prs = Presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[5])
+    txBox = slide.shapes.add_textbox(Inches(1), Inches(1), Inches(8), Inches(4))
+    txBox.text_frame.text = "Slide do projeto."
+    buf = BytesIO()
+    prs.save(buf)
+    return buf.getvalue()
+
+
+DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+PPTX_MIME = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+
+
+def test_content_extraction_docx_returns_supported(tmp_path: Path) -> None:
+    cache = _make_cache_file(tmp_path, _make_real_docx(), DOCX_MIME, "trabalho.docx")
+    result = extract_submission_content(cache)
+    assert result.status == "supported"
+    assert result.error is None
+    assert len(result.text) > 0
+
+
+def test_content_extraction_xlsx_returns_supported(tmp_path: Path) -> None:
+    cache = _make_cache_file(tmp_path, _make_real_xlsx(), XLSX_MIME, "planilha.xlsx")
+    result = extract_submission_content(cache)
+    assert result.status == "supported"
+    assert result.error is None
+    assert len(result.text) > 0
+
+
+def test_content_extraction_pptx_returns_supported(tmp_path: Path) -> None:
+    cache = _make_cache_file(tmp_path, _make_real_pptx(), PPTX_MIME, "apresentacao.pptx")
+    result = extract_submission_content(cache)
+    assert result.status == "supported"
+    assert result.error is None
+    assert len(result.text) > 0
+
+
+def test_content_extraction_corrupt_docx_returns_unsupported(tmp_path: Path) -> None:
+    cache = _make_cache_file(tmp_path, b"nao e um docx valido", DOCX_MIME, "corrupt.docx")
+    result = extract_submission_content(cache)
+    assert result.status == "unsupported"
+    assert result.error == "office_parse_failed"
+
+
+# ---------------------------------------------------------------------------
+# Lane B — content_extraction: PDF → pending_vision / unsupported
+# ---------------------------------------------------------------------------
+
+MINIMAL_PDF = (
+    b"%PDF-1.4\n"
+    b"1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n"
+    b"2 0 obj<</Type/Pages/Count 1/Kids[3 0 R]>>endobj\n"
+    b"3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]>>endobj\n"
+    b"xref\n0 4\n"
+    b"0000000000 65535 f \n"
+    b"0000000009 00000 n \n"
+    b"0000000058 00000 n \n"
+    b"0000000115 00000 n \n"
+    b"trailer<</Size 4/Root 1 0 R>>\n"
+    b"startxref\n207\n%%EOF\n"
+)
+
+
+def test_content_extraction_pdf_with_visual_flag_returns_pending_vision(tmp_path: Path) -> None:
+    cache = _make_cache_file(tmp_path, MINIMAL_PDF, "application/pdf", "relatorio.pdf")
+    result = extract_submission_content(cache, allow_visual_pending=True)
+    assert result.status == "pending_vision"
+    assert result.error is None
+
+
+def test_content_extraction_pdf_without_visual_flag_returns_unsupported(tmp_path: Path) -> None:
+    cache = _make_cache_file(tmp_path, MINIMAL_PDF, "application/pdf", "relatorio.pdf")
+    result = extract_submission_content(cache, allow_visual_pending=False)
+    assert result.status == "unsupported"
+    assert result.error == "unsupported_visual_submission"
+
+
+def test_content_extraction_image_with_visual_flag_returns_pending_vision(tmp_path: Path) -> None:
+    from classroom_downloader.google_provider import MOCK_PNG_BYTES
+    cache = _make_cache_file(tmp_path, MOCK_PNG_BYTES, "image/png", "foto.png")
+    result = extract_submission_content(cache, allow_visual_pending=True)
+    assert result.status == "pending_vision"
+
+
+# ---------------------------------------------------------------------------
+# Lane B — litellm_engine: _build_vision_messages emite parte correta
+# ---------------------------------------------------------------------------
+
+
+def test_build_vision_messages_emits_image_url_for_image() -> None:
+    from classroom_downloader.grading_engine import VisionExtractionRequest
+    from classroom_downloader.litellm_engine import _build_vision_messages
+
+    req = VisionExtractionRequest(
+        job_id="job-1",
+        submission_id="sub-1",
+        activity_title="Teste",
+        source_label="submission.png",
+        image_data=b"\x89PNG fake",
+        image_mime_type="image/png",
+    )
+    messages = _build_vision_messages(req)
+    user_content = messages[1]["content"]
+    types = [part.get("type") for part in user_content]
+    assert "image_url" in types
+    assert "file" not in types
+    image_part = next(p for p in user_content if p.get("type") == "image_url")
+    assert "data:image/png;base64," in image_part["image_url"]["url"]
+
+
+def test_build_vision_messages_emits_file_part_for_pdf() -> None:
+    from classroom_downloader.grading_engine import VisionExtractionRequest
+    from classroom_downloader.litellm_engine import _build_vision_messages
+
+    req = VisionExtractionRequest(
+        job_id="job-1",
+        submission_id="sub-1",
+        activity_title="Teste",
+        source_label="submission.pdf",
+        image_data=MINIMAL_PDF,
+        image_mime_type="application/pdf",
+    )
+    messages = _build_vision_messages(req)
+    user_content = messages[1]["content"]
+    types = [part.get("type") for part in user_content]
+    assert "file" in types
+    assert "image_url" not in types
+    file_part = next(p for p in user_content if p.get("type") == "file")
+    assert "data:application/pdf;base64," in file_part["file"]["file_data"]
+
+
+def test_parse_vision_extraction_result_accepts_pdf_document() -> None:
+    from classroom_downloader.litellm_engine import parse_vision_extraction_result
+
+    payload = json.dumps(
+        {
+            "transcription": "Texto extraido do PDF do aluno.",
+            "visual_description": "Documento PDF com tabela de dados.",
+            "content_kind": "pdf_document",
+            "legibility": "full",
+            "pii_observed": [],
+        }
+    )
+    result = parse_vision_extraction_result(payload)
+    assert result.content_kind == "pdf_document"
+    assert result.transcription == "Texto extraido do PDF do aluno."
+
+
+# ---------------------------------------------------------------------------
+# End-to-end: docx submission grades and filename stays redacted
+# ---------------------------------------------------------------------------
+
+
+def test_docx_submission_grades_and_filename_redacted(tmp_path: Path) -> None:
+    """Docx vai para extração de texto; filename não aparece no payload ao engine."""
+    get_settings().grading_cache_path = str(tmp_path / "grading")
+    captured: list[GradingEngineRequest] = []
+
+    class CapturingEngine(GradingEngine):
+        name = "capture"
+        model = None
+
+        def grade(self, request: GradingEngineRequest) -> GradingEngineResult:
+            captured.append(request)
+            return GradingEngineResult(
+                score=88,
+                confidence=0.85,
+                feedback="Bom trabalho.",
+                flags=[],
+            )
+
+    with TestClient(app) as client:
+        job = client.post(
+            "/api/grading/jobs",
+            json={
+                "course_id": "course-2",
+                "activity_id": "activity-3",
+                "rubric_mode": "brief",
+                "teacher_loop": "approve",
+            },
+        ).json()
+        from classroom_downloader import grading as _grading_module
+        import unittest.mock as _mock
+        with _mock.patch.object(_grading_module, "get_grading_engine", return_value=CapturingEngine()):
+            body = client.post(f"/api/grading/jobs/{job['id']}/draft").json()
+
+    assert captured, "Nenhuma requisição ao engine — a extração falhou para todos os arquivos"
+    # Verifica que filenames e dados pessoais não vazam no payload
+    payload_text = "\n".join(
+        f"{r.student_label}\n{r.source_label}\n{r.content}" for r in captured
+    )
+    assert "essay draft.docx" not in payload_text
+    assert "notas.xlsx" not in payload_text
+    assert "apresentacao.pptx" not in payload_text
+    assert "diego.lima@example.edu" not in payload_text
+    assert "Diego Lima" not in payload_text
+    # Todos os student_labels devem ser pseudônimos
+    assert all(r.student_label.startswith("student_") for r in captured)

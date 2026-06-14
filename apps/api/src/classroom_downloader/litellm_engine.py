@@ -23,7 +23,14 @@ from .settings import get_settings
 
 
 logger = get_logger(__name__)
-DEFAULT_MAX_OUTPUT_TOKENS = 1200
+# Output budgets. Generous on purpose: the grading models in use are cheap and
+# support ~64k output, so the real ceiling is model.max_output_tokens (applied
+# via min() below). PDFs get the largest budget so multi-page transcriptions are
+# not clipped — note the model still chooses how much to emit, so the vision
+# prompt also forbids summarizing.
+DEFAULT_MAX_OUTPUT_TOKENS = 4096
+MAX_VISION_OUTPUT_TOKENS = 8192
+MAX_PDF_OUTPUT_TOKENS = 32768
 
 
 class LiteLlmGradingEngine:
@@ -43,7 +50,12 @@ class LiteLlmGradingEngine:
             model.max_output_tokens or DEFAULT_MAX_OUTPUT_TOKENS,
             DEFAULT_MAX_OUTPUT_TOKENS,
         )
-        self.max_vision_output_tokens = min(model.max_output_tokens or 2000, 2000)
+        self.max_vision_output_tokens = min(
+            model.max_output_tokens or MAX_VISION_OUTPUT_TOKENS, MAX_VISION_OUTPUT_TOKENS
+        )
+        self.max_pdf_output_tokens = min(
+            model.max_output_tokens or MAX_PDF_OUTPUT_TOKENS, MAX_PDF_OUTPUT_TOKENS
+        )
         self.last_usage: dict[str, int] = {}
         self.last_latency_ms: int | None = None
         self.last_response: Any | None = None
@@ -174,6 +186,8 @@ class LiteLlmGradingEngine:
             image_mime_type=request.image_mime_type,
             byte_size=len(request.image_data),
         )
+        is_pdf = request.image_mime_type.lower() == "application/pdf"
+        vision_max_tokens = self.max_pdf_output_tokens if is_pdf else self.max_vision_output_tokens
         started = time.monotonic()
         try:
             response = litellm.completion(
@@ -181,7 +195,7 @@ class LiteLlmGradingEngine:
                 messages=messages,
                 timeout=self.timeout_seconds,
                 num_retries=self.max_retries,
-                max_tokens=self.max_vision_output_tokens,
+                max_tokens=vision_max_tokens,
                 response_format=_vision_response_format(self.catalog_model),
             )
             self.last_response = response
@@ -263,16 +277,27 @@ def _build_vision_messages(request: VisionExtractionRequest) -> list[dict[str, A
         "activity_title": request.activity_title,
         "source_label": request.source_label,
     }
-    image_url = "data:image/jpeg;base64," + b64encode(request.image_data).decode("ascii")
+    mime = request.image_mime_type.lower()
+    if mime == "application/pdf":
+        file_data = "data:application/pdf;base64," + b64encode(request.image_data).decode("ascii")
+        media_part: dict[str, Any] = {"type": "file", "file": {"file_data": file_data}}
+    else:
+        image_url = f"data:{mime};base64," + b64encode(request.image_data).decode("ascii")
+        media_part = {"type": "image_url", "image_url": {"url": image_url}}
     return [
         {
             "role": "system",
             "content": (
-                "You transcribe student work from images for a Brazilian teacher. "
+                "You transcribe student work from images or PDF documents for a Brazilian teacher. "
                 "Images may be photographed computer screens, handwritten assignments, "
                 "code or terminal screenshots, frontend/UI screenshots, documents, "
-                "spreadsheets, IDEs, or other computer work. Identify content_kind. "
-                "Transcribe the student's work faithfully and completely in PT-BR. "
+                "spreadsheets, IDEs, or other computer work. PDF documents may be "
+                "typed or scanned documents, exported Google Docs, spreadsheets, or "
+                "presentations. Identify content_kind. "
+                "Transcribe the student's work faithfully and in full: reproduce every "
+                "page and section verbatim, in reading order, preserving the original "
+                "wording. Do not summarize, abbreviate, paraphrase, or skip any part — "
+                "even for long multi-page documents, transcribe the whole thing. "
                 "For visual work, describe layout, structure, colors, and visible output "
                 "succinctly in PT-BR because the grader will only see this text. "
                 "Replace any visible personal name, ID number, email, phone, or handle at "
@@ -288,7 +313,7 @@ def _build_vision_messages(request: VisionExtractionRequest) -> list[dict[str, A
             "role": "user",
             "content": [
                 {"type": "text", "text": json.dumps(context, ensure_ascii=True)},
-                {"type": "image_url", "image_url": {"url": image_url}},
+                media_part,
             ],
         },
     ]
@@ -357,6 +382,7 @@ def _vision_response_format(model: LlmModelEntry) -> dict[str, Any]:
                                 "code_screenshot",
                                 "app_screenshot",
                                 "document_photo",
+                                "pdf_document",
                                 "other",
                             ],
                         },
@@ -505,6 +531,7 @@ def parse_vision_extraction_result(content: str) -> VisionExtractionResult:
         "code_screenshot",
         "app_screenshot",
         "document_photo",
+        "pdf_document",
         "other",
     }:
         raise LlmCallError("vision_malformed_response", True, "invalid_content_kind")
@@ -591,6 +618,11 @@ def _safe_messages_text(messages: list[dict[str, Any]]) -> str:
                         "image_url": "<image bytes>" if url else "<image>",
                     }
                 return {"type": value.get("type", "image_url"), "image_url": "<image>"}
+            if value.get("type") == "file" and "file" in value:
+                file_obj = value.get("file")
+                if isinstance(file_obj, dict) and file_obj.get("file_data"):
+                    return {"type": "file", "file": "<pdf bytes>"}
+                return {"type": "file", "file": "<pdf>"}
             return {key: scrub(item) for key, item in value.items()}
         if isinstance(value, list):
             return [scrub(item) for item in value]

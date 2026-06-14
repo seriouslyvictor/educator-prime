@@ -9,6 +9,8 @@ import pytest
 from classroom_downloader.grading_engine import GradingEngineRequest, VisionExtractionRequest
 from classroom_downloader.litellm_engine import (
     DEFAULT_MAX_OUTPUT_TOKENS,
+    MAX_PDF_OUTPUT_TOKENS,
+    MAX_VISION_OUTPUT_TOKENS,
     LiteLlmGradingEngine,
     _build_messages,
     parse_vision_extraction_result,
@@ -21,6 +23,7 @@ from classroom_downloader.llm_catalog import LlmModelEntry
 def model_entry(
     supports_response_schema: bool = True,
     supports_vision: bool = False,
+    max_output_tokens: int = 8192,
 ) -> LlmModelEntry:
     return LlmModelEntry(
         id="openai/gpt-5",
@@ -32,7 +35,7 @@ def model_entry(
         input_cost_per_token=0.000001,
         output_cost_per_token=0.000004,
         max_input_tokens=128000,
-        max_output_tokens=8192,
+        max_output_tokens=max_output_tokens,
         supports_response_schema=supports_response_schema,
         supports_vision=supports_vision,
         rpm_limit=None,
@@ -446,10 +449,64 @@ def test_extract_image_calls_litellm_with_multimodal_payload(monkeypatch) -> Non
     assert result.content_kind == "code_screenshot"
     assert result.pii_observed == ["name_visible"]
     assert captured["model"] == "openai/gpt-5"
-    assert captured["max_tokens"] == 2000
+    assert captured["max_tokens"] == MAX_VISION_OUTPUT_TOKENS
     assert captured["response_format"]["type"] == "json_schema"
     user_content = captured["messages"][1]["content"]
     assert user_content[0]["type"] == "text"
     assert "Projeto" in user_content[0]["text"]
     assert user_content[1]["type"] == "image_url"
     assert user_content[1]["image_url"]["url"].startswith("data:image/jpeg;base64,")
+
+
+def test_extract_image_pdf_uses_file_part_and_larger_budget(monkeypatch) -> None:
+    captured = {}
+
+    def fake_completion(**kwargs):
+        captured.update(kwargs)
+
+        class Choice:
+            message = {
+                "content": json.dumps(
+                    {
+                        "transcription": "Relatório completo do aluno.",
+                        "visual_description": "Documento PDF de várias páginas.",
+                        "content_kind": "pdf_document",
+                        "legibility": "full",
+                        "pii_observed": [],
+                    }
+                )
+            }
+
+        class Response:
+            choices = [Choice()]
+            usage = {"prompt_tokens": 500, "completion_tokens": 200, "total_tokens": 700}
+
+        return Response()
+
+    monkeypatch.setattr("classroom_downloader.litellm_engine.litellm.completion", fake_completion)
+    # A model whose own ceiling (65536) exceeds both budgets, so the PDF budget
+    # is set by MAX_PDF_OUTPUT_TOKENS and is visibly larger than the image one.
+    engine = LiteLlmGradingEngine(
+        model=model_entry(supports_vision=True, max_output_tokens=65536),
+        timeout_seconds=30,
+        max_retries=1,
+    )
+
+    result = engine.extract_image(
+        VisionExtractionRequest(
+            job_id="job-1",
+            submission_id="submission-1",
+            activity_title="Projeto",
+            source_label="submission.pdf",
+            image_data=b"%PDF-1.4 fake",
+            image_mime_type="application/pdf",
+        )
+    )
+
+    assert result.content_kind == "pdf_document"
+    # PDFs get the generous transcription budget, larger than images.
+    assert captured["max_tokens"] == MAX_PDF_OUTPUT_TOKENS
+    assert MAX_PDF_OUTPUT_TOKENS > MAX_VISION_OUTPUT_TOKENS
+    user_content = captured["messages"][1]["content"]
+    assert user_content[1]["type"] == "file"
+    assert user_content[1]["file"]["file_data"].startswith("data:application/pdf;base64,")

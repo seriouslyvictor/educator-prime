@@ -29,6 +29,68 @@ MOCK_PNG_BYTES = (
     b"IEND\xaeB`\x82"
 )
 
+# Minimal valid PDF (1 página, sem conteúdo visível) para uso como fixture mock.
+MOCK_PDF_BYTES = (
+    b"%PDF-1.4\n"
+    b"1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n"
+    b"2 0 obj<</Type/Pages/Count 1/Kids[3 0 R]>>endobj\n"
+    b"3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]>>endobj\n"
+    b"xref\n0 4\n"
+    b"0000000000 65535 f \n"
+    b"0000000009 00000 n \n"
+    b"0000000058 00000 n \n"
+    b"0000000115 00000 n \n"
+    b"trailer<</Size 4/Root 1 0 R>>\n"
+    b"startxref\n207\n%%EOF\n"
+)
+
+
+def _make_mock_docx() -> bytes:
+    """Gera um .docx mínimo real (OOXML) para uso em fixtures mock."""
+    import docx as _docx
+
+    buf = BytesIO()
+    doc = _docx.Document()
+    doc.add_paragraph("Trabalho de dissertacao enviado pelo aluno.")
+    doc.add_paragraph("O aluno apresenta argumentos convincentes sobre o tema proposto.")
+    doc.save(buf)
+    return buf.getvalue()
+
+
+def _make_mock_xlsx() -> bytes:
+    """Gera um .xlsx mínimo real (OOXML) para uso em fixtures mock."""
+    import openpyxl as _openpyxl
+
+    wb = _openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Dados"
+    ws.append(["Nome", "Nota", "Comentario"])
+    ws.append(["Aluno Exemplo", 85, "Bom desempenho"])
+    buf = BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def _make_mock_pptx() -> bytes:
+    """Gera um .pptx mínimo real (OOXML) para uso em fixtures mock."""
+    from pptx import Presentation as _Presentation
+    from pptx.util import Inches as _Inches
+
+    prs = _Presentation()
+    slide_layout = prs.slide_layouts[5]
+    slide = prs.slides.add_slide(slide_layout)
+    txBox = slide.shapes.add_textbox(_Inches(1), _Inches(1), _Inches(8), _Inches(4))
+    txBox.text_frame.text = "Apresentacao do projeto final do aluno."
+    buf = BytesIO()
+    prs.save(buf)
+    return buf.getvalue()
+
+
+# Gerados uma vez no import; ficam em memória para o ciclo de vida do processo.
+MOCK_DOCX_BYTES: bytes = _make_mock_docx()
+MOCK_XLSX_BYTES: bytes = _make_mock_xlsx()
+MOCK_PPTX_BYTES: bytes = _make_mock_pptx()
+
 
 GOOGLE_NATIVE_EXPORTS = {
     "application/vnd.google-apps.document": ("application/pdf", ".pdf"),
@@ -817,7 +879,7 @@ class MockGoogleProvider(GoogleProvider):
             "drive-file-2",
             "cell-diagram.gdoc",
             "application/vnd.google-apps.document",
-            b"Mock exported PDF bytes for Bruno Costa\n",
+            MOCK_PDF_BYTES,
         ),
         SubmissionFile(
             "export-file-3",
@@ -828,7 +890,7 @@ class MockGoogleProvider(GoogleProvider):
             "drive-file-3",
             "osmosis notes.pdf",
             "application/pdf",
-            b"Mock PDF bytes for Carla Mendes\n",
+            MOCK_PDF_BYTES,
         ),
         SubmissionFile(
             "export-file-4",
@@ -839,7 +901,29 @@ class MockGoogleProvider(GoogleProvider):
             "drive-file-4",
             "essay draft.docx",
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            b"Mock DOCX bytes for Diego Lima\n",
+            MOCK_DOCX_BYTES,
+        ),
+        SubmissionFile(
+            "export-file-xlsx",
+            "course-2",
+            "activity-3",
+            "elena.souza@example.edu",
+            "Elena Souza",
+            "drive-file-xlsx",
+            "notas.xlsx",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            MOCK_XLSX_BYTES,
+        ),
+        SubmissionFile(
+            "export-file-pptx",
+            "course-2",
+            "activity-3",
+            "fabio.melo@example.edu",
+            "Fabio Melo",
+            "drive-file-pptx",
+            "apresentacao.pptx",
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            MOCK_PPTX_BYTES,
         ),
         # One student (Júlia) submits two attachments under a single Classroom
         # submission — they must collapse into one card graded as a set.

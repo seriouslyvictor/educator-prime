@@ -7,7 +7,7 @@ from uuid import uuid4
 
 from sqlmodel import Session, select
 
-from ..content_extraction import extract_submission_content, ExtractedSubmissionContent
+from ..content_extraction import extract_submission_content, ExtractedSubmissionContent, _is_multimodal_mime
 from ..grading_engine import GradingEngine, VisionExtractionRequest, VisionExtractionResult
 from ..google_provider import GoogleProvider, SubmissionFile
 from ..image_preprocessing import prepare_image_for_llm
@@ -210,7 +210,7 @@ def scrub_submission_cached(
     if (
         extracted.error
         and extracted.retryable
-        and cache_file.mime_type.lower().startswith("image/")
+        and _is_multimodal_mime(cache_file.mime_type)
     ):
         return CachedScrubbedSubmission(extracted, scrubbed, cache_hit=False)
     row = GradingScrubCache(
@@ -250,6 +250,38 @@ def scrub_submission_cached(
     return CachedScrubbedSubmission(extracted, scrubbed, cache_hit=False)
 
 
+_PDF_MAX_BYTES = 15 * 1024 * 1024  # 15 MB — seguro para payload inline base64
+
+
+def _prepare_pdf_for_vision(
+    path: Path,
+    pending: ExtractedSubmissionContent,
+) -> tuple[bytes | None, str | None, ExtractedSubmissionContent | None]:
+    """Lê o PDF do cache e aplica guarda de tamanho.
+
+    Retorna (data, mime, None) em caso de sucesso, ou (None, None, resultado_de_erro).
+    """
+    try:
+        data = path.read_bytes()
+    except OSError as exc:
+        return None, None, ExtractedSubmissionContent(
+            status="failed",
+            text="",
+            safe_source_label=pending.safe_source_label,
+            error="pdf_read_failed",
+            retryable=False,
+        )
+    if len(data) > _PDF_MAX_BYTES:
+        return None, None, ExtractedSubmissionContent(
+            status="unsupported",
+            text="",
+            safe_source_label=pending.safe_source_label,
+            error="pdf_too_large",
+            retryable=False,
+        )
+    return data, "application/pdf", None
+
+
 def _extract_visual_submission(
     session: Session,
     job: GradingJob,
@@ -263,17 +295,30 @@ def _extract_visual_submission(
             select(GradingAiAttempt).where(GradingAiAttempt.submission_id == submission.id)
         ).all()
     )
-    try:
-        prepared = prepare_image_for_llm(Path(cache_file.cached_path))
-    except LlmCallError as exc:
-        status = "unsupported" if exc.code == "local_unsupported_image_format" else "failed"
-        return ExtractedSubmissionContent(
-            status=status,
-            text="",
-            safe_source_label=pending.safe_source_label,
-            error=exc.code,
-            retryable=exc.retryable,
+
+    mime = cache_file.mime_type.lower()
+    if mime == "application/pdf":
+        pdf_data, pdf_mime, pdf_error = _prepare_pdf_for_vision(
+            Path(cache_file.cached_path), pending
         )
+        if pdf_error is not None:
+            return pdf_error
+        image_data = pdf_data
+        image_mime = pdf_mime
+    else:
+        try:
+            prepared = prepare_image_for_llm(Path(cache_file.cached_path))
+        except LlmCallError as exc:
+            status = "unsupported" if exc.code == "local_unsupported_image_format" else "failed"
+            return ExtractedSubmissionContent(
+                status=status,
+                text="",
+                safe_source_label=pending.safe_source_label,
+                error=exc.code,
+                retryable=exc.retryable,
+            )
+        image_data = prepared.data
+        image_mime = prepared.mime_type
 
     try:
         result = vision_extractor.extract_image(
@@ -282,8 +327,8 @@ def _extract_visual_submission(
                 submission_id=submission.id,
                 activity_title=job.activity_title,
                 source_label=pending.safe_source_label,
-                image_data=prepared.data,
-                image_mime_type=prepared.mime_type,
+                image_data=image_data,
+                image_mime_type=image_mime,
             )
         )
     except LlmCallError as exc:
@@ -388,7 +433,7 @@ def _bypass_visual_scrub_cache(
     cache_file: GradingFileCache,
     existing: GradingScrubCache,
 ) -> bool:
-    if not job.include_visual_submissions or not cache_file.mime_type.lower().startswith("image/"):
+    if not job.include_visual_submissions or not _is_multimodal_mime(cache_file.mime_type):
         return False
     return existing.extraction_status == "pending_vision" or (
         existing.extraction_status == "unsupported"
