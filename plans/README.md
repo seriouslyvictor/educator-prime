@@ -18,9 +18,36 @@ advisory session. The advisor does not modify source code.
 | 006 | Playwright E2E for core flows, mock mode, in CI (boot, logout, nav, queue) | P1 | M | — (recommended before 005) | DONE |
 | 007 | Local real-session smoke — real OAuth, prod-like, true logout/reload | P2 | M | 006 (reuses Playwright tooling) | TODO |
 | 005 | Decompose the 1380-line App.tsx into hooks | P2 | L | 001, 002 (use 006 as smoke net) | DONE — all 4 hooks extracted; App.tsx 442 lines; manual smoke checklist pending human pass |
+| 008 | Decompose GraderReview.tsx into a co-located `review/` component folder | P1 | M | — (001/002/006 nets already landed) | DONE — commit 6d34c12; 831→388 lines; 5 files in review/; build/test/lint green = baseline |
+| 009 | Decompose GraderSetup.tsx + GraderQueue.tsx into co-located folders | P2 | M | 008 (same recipe; sequencing only) | DONE — commit 86350b1; Setup 608→356, Queue 564→213; build/test/lint green = baseline; e2e deferred to human (no backend/browser in agent) |
+| 010 | Frontend UI conventions guardrail (FRONTEND.md + safe `cn` consolidation) | P2 | S | — | DONE — commit 7cc05de; apps/web/FRONTEND.md added; cn consolidated onto lib/utils; utils.test.ts pins it; build/test/lint green = baseline |
+| 011 | Spike — bridge the home-brewed and shadcn token systems | P3 | M | 010 | TODO |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED
 (one-line rationale).
+
+## Frontend modularity track (plans 008–011, added 2026-06-16, commit `a9713b0`)
+
+Goal set by the maintainer: break the front-end monoliths into reusable
+components and document the home-brewed-vs-shadcn coexistence — **without
+rewriting anything that already works**, just more modularity.
+
+Recommended order: **008 → 009** (the component decompositions; 008 is the
+detailed exemplar, 009 applies the same recipe), with **010** runnable any time
+in parallel (disjoint files), and **011** after 010 (it builds on the FRONTEND.md
+the doc plan produces). The whole track is independent of the original 001–007
+frontend/backend tracks above.
+
+The load-bearing fact behind 008/009's LOW risk: `apps/web/vite.config.ts:16-20`
+sets `css.modules.generateScopedName: "[local]"`, so every `*.module.css` is
+effectively a **global** stylesheet (class names unhashed). Moving a
+sub-component's JSX to a new file therefore needs **zero CSS changes** and carries
+no visual risk — the global classes follow the markup. This is why the
+decompositions are mechanical moves, not rewrites.
+
+AdminView.tsx (571 lines, already shadcn) was offered as a fourth decomposition
+and **declined** by the maintainer — it's lower priority since it's already on the
+newer system. Not planned.
 
 ## Recommended sequence
 
@@ -62,6 +89,17 @@ demo-style breakage (logout failing) is **006**.
 - **004 Part B interacts with 003**: 003 gives `session_secret_key` a purpose
   (credential encryption). 004 Part B removes it *only if* 003 has not landed —
   the plan greps to decide. Do 003 first if both are planned.
+- **009 follows 008 by convention, not by code**: they touch disjoint files
+  (008 = `GraderReview.tsx` + `review/`; 009 = `GraderSetup/Queue.tsx` +
+  `setup/`/`queue/`), so they cannot conflict. 008 is sequenced first only so its
+  `grader/<screen>/` folder pattern is established and reviewed before 009 repeats
+  it three more times.
+- **010 is independent of 008/009**: it touches `FRONTEND.md`, `ui.tsx`, and
+  `lib/utils.ts` — explicitly *not* the grader files (the plan lists them
+  out-of-scope) — so it can land in parallel with the decompositions.
+- **011 depends on 010**: the spike records its conclusions in the `FRONTEND.md`
+  that 010 creates, and the token-bridge it investigates is the future work 010's
+  doc points at.
 
 ## Findings considered and rejected
 
@@ -83,6 +121,22 @@ demo-style breakage (logout failing) is **006**.
 - **Backend authorization (IDOR)**: every grading endpoint scopes by
   `user_email` via `_get_owned_job`, including inside the SSE worker threads
   (`routers/grading.py`). No action.
+
+## Findings considered and rejected (frontend modularity run, 2026-06-16)
+
+- **Decompose `AdminView.tsx` (571 lines)**: offered as a fourth component split;
+  declined by the maintainer. It's already on the newer shadcn system, so the
+  consistency payoff is lower than the grader-screen splits. Revisit only if it
+  keeps growing.
+- **Split the 3415-line `Grader.module.css`** alongside the component folders:
+  deferred, not planned. With `generateScopedName: "[local]"` the classes are
+  global, so order/cascade risk makes a CSS split materially riskier than the
+  JSX moves — and it isn't needed to achieve the modularity goal. Reconsider after
+  008/009 land if the single stylesheet becomes the bottleneck.
+- **Deduplicate the two `Card` components** (`../ui` vs `@/components/ui/card`)
+  and migrate home-brewed screens to shadcn: out of scope by the maintainer's
+  "don't rewrite what works" constraint. The boundary is documented instead
+  (Plan 010); migration happens per-screen only when a screen is reworked anyway.
 
 ## Areas not audited (this run, `standard` effort)
 
