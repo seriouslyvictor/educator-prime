@@ -2,11 +2,10 @@ import type { ButtonHTMLAttributes, HTMLAttributes } from "react";
 import { resolveError } from "../lib/errorCatalog";
 import { AppIcon } from "./icons";
 import uiStyles from "./ui.module.css";
+import { cn } from "../lib/utils";
 void uiStyles;
 
-export function cn(...classes: Array<string | false | null | undefined>): string {
-  return classes.filter(Boolean).join(" ");
-}
+export { cn };
 
 export function Card({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   return <section className={cn(uiStyles.card, className)} {...props} />;
