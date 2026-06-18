@@ -7,77 +7,81 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* Shared variable names that also exist in tokens.css (--primary, --muted,
+/* TOKEN BRIDGE (spike/011-token-bridge) ─────────────────────────────────────
+   Shared variable names that also exist in tokens.css (--primary, --muted,
    --border, --radius) are prefixed with --ui- here: this file loads after
    tokens.css, so unprefixed duplicates would override the app palette
-   (e.g. light-theme muted text turning near-white). */
+   (e.g. light-theme muted text turning near-white).
+
+   BRIDGE APPROACH: shadcn semantic tokens now point at the home-brewed
+   tokens.css palette via var() references. The home-brewed values are the
+   source of truth (hex). CSS doesn't care about hex vs oklch — a color value
+   is a color value. Since tokens.css already has [data-theme="dark"] overrides,
+   the shadcn surface automatically inherits both light and dark brand values.
+
+   The .dark block below only needs to override tokens that do NOT correspond
+   to any home-brewed variable (e.g. secondary/accent which have no direct
+   brand equivalent, ring/input which use context-aware values in dark). */
 :root {
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.145 0.008 326);
-    --card: oklch(1 0 0);
-    --card-foreground: oklch(0.145 0.008 326);
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.145 0.008 326);
-    --ui-primary: oklch(0.496 0.265 301.924);
-    --primary-foreground: oklch(0.977 0.014 308.299);
+    /* Surface + text — bridged to brand palette */
+    --background: var(--bg);
+    --foreground: var(--ink);
+    --card: var(--surface);
+    --card-foreground: var(--ink);
+    --popover: var(--paper);
+    --popover-foreground: var(--ink);
+    /* Primary — bridged to brand #6b3fe0 */
+    --ui-primary: var(--primary);
+    --primary-foreground: var(--primary-ink);
+    /* Secondary — no direct brand token; keep oklch neutral */
     --secondary: oklch(0.967 0.001 286.375);
     --secondary-foreground: oklch(0.21 0.006 285.885);
-    --ui-muted: oklch(0.96 0.003 325.6);
-    --muted-foreground: oklch(0.542 0.034 322.5);
-    --accent: oklch(0.96 0.003 325.6);
-    --accent-foreground: oklch(0.212 0.019 322.12);
-    --destructive: oklch(0.577 0.245 27.325);
-    --ui-border: oklch(0.922 0.005 325.62);
-    --input: oklch(0.922 0.005 325.62);
-    --ring: oklch(0.711 0.019 323.02);
+    /* Muted — bridged */
+    --ui-muted: var(--surface-2);
+    --muted-foreground: var(--muted);
+    /* Accent — same as muted (shadcn convention) */
+    --accent: var(--surface-2);
+    --accent-foreground: var(--ink);
+    /* Destructive — bridged to brand danger */
+    --destructive: var(--danger);
+    /* Border + input — bridged */
+    --ui-border: var(--border);
+    --input: var(--border-strong);
+    /* Ring — use primary for focus rings */
+    --ring: var(--primary);
+    /* Charts — keep oklch (no brand equivalent) */
     --chart-1: oklch(0.879 0.169 91.605);
     --chart-2: oklch(0.769 0.188 70.08);
     --chart-3: oklch(0.666 0.179 58.318);
     --chart-4: oklch(0.555 0.163 48.998);
     --chart-5: oklch(0.473 0.137 46.201);
     --ui-radius: 0.45rem;
-    --sidebar: oklch(0.985 0 0);
-    --sidebar-foreground: oklch(0.145 0.008 326);
-    --sidebar-primary: oklch(0.558 0.288 302.321);
-    --sidebar-primary-foreground: oklch(0.977 0.014 308.299);
-    --sidebar-accent: oklch(0.96 0.003 325.6);
-    --sidebar-accent-foreground: oklch(0.212 0.019 322.12);
-    --sidebar-border: oklch(0.922 0.005 325.62);
-    --sidebar-ring: oklch(0.711 0.019 323.02);
+    /* Sidebar — bridged */
+    --sidebar: var(--surface);
+    --sidebar-foreground: var(--ink);
+    --sidebar-primary: var(--primary);
+    --sidebar-primary-foreground: var(--primary-ink);
+    --sidebar-accent: var(--surface-2);
+    --sidebar-accent-foreground: var(--ink);
+    --sidebar-border: var(--border);
+    --sidebar-ring: var(--primary);
 }
 
+/* .dark — only overrides for values without a direct home-brewed token,
+   or where the home-brewed var() reference itself resolves differently under
+   [data-theme="dark"] (which it already does — tokens.css handles the dark
+   values). This block mainly handles secondary/accent/ring contrast in dark. */
 .dark {
-    --background: oklch(0.145 0.008 326);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.212 0.019 322.12);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.212 0.019 322.12);
-    --popover-foreground: oklch(0.985 0 0);
-    --ui-primary: oklch(0.438 0.218 303.724);
-    --primary-foreground: oklch(0.977 0.014 308.299);
+    /* secondary has no brand token; dark neutral override */
     --secondary: oklch(0.274 0.006 286.033);
     --secondary-foreground: oklch(0.985 0 0);
-    --ui-muted: oklch(0.263 0.024 320.12);
-    --muted-foreground: oklch(0.711 0.019 323.02);
-    --accent: oklch(0.263 0.024 320.12);
-    --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.704 0.191 22.216);
-    --ui-border: oklch(1 0 0 / 10%);
+    /* input needs higher contrast in dark */
     --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.542 0.034 322.5);
-    --chart-1: oklch(0.879 0.169 91.605);
-    --chart-2: oklch(0.769 0.188 70.08);
-    --chart-3: oklch(0.666 0.179 58.318);
-    --chart-4: oklch(0.555 0.163 48.998);
-    --chart-5: oklch(0.473 0.137 46.201);
-    --sidebar: oklch(0.212 0.019 322.12);
-    --sidebar-foreground: oklch(0.985 0 0);
-    --sidebar-primary: oklch(0.627 0.265 303.9);
-    --sidebar-primary-foreground: oklch(0.977 0.014 308.299);
-    --sidebar-accent: oklch(0.263 0.024 320.12);
-    --sidebar-accent-foreground: oklch(0.985 0 0);
-    --sidebar-border: oklch(1 0 0 / 10%);
-    --sidebar-ring: oklch(0.542 0.034 322.5);
+    /* ring in dark uses muted to avoid harsh purple glow */
+    --ring: var(--muted);
+    /* Sidebar overrides to match dark surface */
+    --sidebar-accent: var(--surface-2);
+    --sidebar-accent-foreground: var(--ink);
 }
 
 @theme inline {

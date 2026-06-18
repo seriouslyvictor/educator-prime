@@ -76,13 +76,17 @@ classes that happen to share a name.
   ```
 
 - The two palettes (`tokens.css` hex vs. `tailwind.css` oklch) are currently
-  **independent and will drift** as each is edited in isolation. Reconciling them is
-  tracked in `plans/011-token-bridge-spike.md`.
+  **independent and will drift** as each is edited in isolation. A spike
+  (`plans/011-token-bridge-spike.md`) investigated bridging them; findings are in
+  `docs/token-bridge-findings.md`. The implementation plan is
+  `plans/012-implement-token-bridge.md` (TODO — awaiting human screenshot review).
 - **Known dark-mode gap**: theme switching sets `[data-theme="dark"]` on the root (see
   `lib/theme.ts`), which the home-brewed system's CSS responds to. shadcn's dark-mode
   variant, however, keys off a `.dark` class (`@custom-variant dark (&:is(.dark *));`
   in `tailwind.css:8`) that is never applied anywhere in this app. As a result, shadcn
-  screens do not currently honor dark mode. Also tracked in plan 011.
+  screens do not currently honor dark mode. The spike confirmed the fix: add
+  `document.documentElement.classList.toggle("dark", resolvedTheme === "dark")` in
+  `lib/theme.ts`. No `*.module.css` uses `.dark`, so home-brewed screens are unaffected.
 
 ## Adding a shadcn component
 
