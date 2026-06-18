@@ -23,7 +23,7 @@ from ..google_provider import (
 )
 from ..models import OAuthState, UserSession
 from ..observability import get_logger, log_error, log_event, log_warning
-from ..schemas import AuthStart, AuthState
+from ..schemas import AuthStart, AuthStartRequest, AuthState
 from ..settings import get_settings
 
 settings = get_settings()
@@ -166,16 +166,17 @@ def auth_logout(
 
 
 @router.post("/api/auth/google/start", response_model=AuthStart)
-def auth_start(scopes: list[str], db: Session = Depends(get_session)) -> AuthStart:
+def auth_start(payload: AuthStartRequest, db: Session = Depends(get_session)) -> AuthStart:
+    requested = sorted(CAPABILITY_SCOPES[payload.capability])
     log_event(
         logger,
         "auth.google.start",
         provider=settings.google_provider,
-        scope_count=len(scopes),
-        scopes=scopes,
+        capability=payload.capability,
+        scope_count=len(requested),
     )
     if settings.google_provider == "mock":
-        return AuthStart(mock_connected=True, scopes=scopes)
+        return AuthStart(mock_connected=True, scopes=requested)
     if not settings.google_client_id or not settings.google_client_secret:
         log_warning(logger, "auth.google.not_configured")
         raise api_error(
@@ -187,7 +188,9 @@ def auth_start(scopes: list[str], db: Session = Depends(get_session)) -> AuthSta
     now = datetime.now(UTC)
     db.add(OAuthState(
         id=state,
-        scopes_json=json.dumps(scopes),
+        scopes_json=json.dumps(requested),
+        capability=payload.capability,
+        reason=payload.reason[:500],
         expires_at=now + timedelta(minutes=10),
     ))
     db.exec(delete(OAuthState).where(OAuthState.expires_at < now))
@@ -197,10 +200,10 @@ def auth_start(scopes: list[str], db: Session = Depends(get_session)) -> AuthSta
             client_id=settings.google_client_id,
             client_secret=settings.google_client_secret,
             redirect_uri=settings.google_redirect_uri,
-            scopes=scopes,
+            scopes=requested,
             state=state,
         ),
-        scopes=scopes,
+        scopes=requested,
     )
 
 

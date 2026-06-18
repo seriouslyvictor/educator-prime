@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session
 
 from classroom_downloader.database import engine, init_db
+from classroom_downloader.google_scopes import CAPABILITY_SCOPES
 from classroom_downloader.main import app, settings
 from classroom_downloader.models import OAuthState, UserSession
 
@@ -72,3 +73,32 @@ def test_callback_relaxes_scope_mismatch_before_fetch_token(monkeypatch) -> None
         assert session is not None
         assert json.loads(session.google_granted_scopes_json) == ["email", "openid"]
         assert session.google_last_scope_update_at is not None
+
+
+def test_auth_start_resolves_capability_to_scopes_and_stores_context(monkeypatch) -> None:
+    monkeypatch.setattr(settings, "google_provider", "google")
+    monkeypatch.setattr(settings, "google_client_id", "client-id")
+    monkeypatch.setattr(settings, "google_client_secret", "client-secret")
+    init_db()
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/auth/google/start",
+            json={
+                "capability": "classroom_read",
+                "reason": "Listar turmas",
+                "scopes": ["https://www.googleapis.com/auth/drive.readonly"],
+            },
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["scopes"] == sorted(CAPABILITY_SCOPES["classroom_read"])
+    assert "drive.readonly" not in body["authorization_url"]
+    state = body["authorization_url"].split("state=")[1].split("&")[0]
+    with Session(engine) as db:
+        oauth_state = db.get(OAuthState, state)
+        assert oauth_state is not None
+        assert json.loads(oauth_state.scopes_json) == sorted(CAPABILITY_SCOPES["classroom_read"])
+        assert oauth_state.capability == "classroom_read"
+        assert oauth_state.reason == "Listar turmas"

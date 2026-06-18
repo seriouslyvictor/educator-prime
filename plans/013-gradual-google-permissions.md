@@ -401,6 +401,10 @@ Verify:
 uv run --extra dev pytest tests/test_oauth_callback.py tests/test_google_real_provider.py -q
 ```
 
+**Result 2026-06-18**:
+- `uv run --extra dev pytest tests/test_oauth_callback.py tests/test_google_real_provider.py -q` passed, 6 tests.
+- `uv run --extra dev pytest tests/test_database.py -q` passed, 1 test for OAuthState migration coverage.
+
 ### Step 5: Add backend capability gates before Google API calls
 
 Create `apps/api/src/classroom_downloader/api/permissions.py` with:
@@ -449,6 +453,8 @@ Verify:
 ```powershell
 uv run --extra dev pytest tests/test_api.py tests/test_error_contract.py tests/test_grading.py -q
 ```
+
+**Result 2026-06-18**: passed, 106 tests.
 
 ### Step 6: Frontend API and hook split
 

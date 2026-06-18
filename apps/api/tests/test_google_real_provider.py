@@ -21,6 +21,21 @@ def test_build_oauth_authorization_url_uses_configured_web_client() -> None:
     assert "redirect_uri=http%3A%2F%2Flocalhost%3A8000%2Fapi%2Fauth%2Fgoogle%2Fcallback" in url
     assert "scope=openid+email" in url
     assert "state=state-123" in url
+    assert "include_granted_scopes=true" in url
+    assert "prompt=consent" not in url
+
+
+def test_build_oauth_authorization_url_accepts_optional_prompt() -> None:
+    url = build_oauth_authorization_url(
+        client_id="client-id.apps.googleusercontent.com",
+        client_secret="client-secret",
+        redirect_uri="http://localhost:8000/api/auth/google/callback",
+        scopes=["openid", "email"],
+        state="state-123",
+        prompt="consent",
+    )
+
+    assert "prompt=consent" in url
 
 
 def test_drive_files_from_submission_extracts_drive_attachments_only() -> None:

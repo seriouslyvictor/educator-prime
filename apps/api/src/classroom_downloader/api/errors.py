@@ -8,6 +8,7 @@ ERROR_CODES = (
     "google_session_missing",
     "google_session_expired",
     "google_auth_denied",
+    "google_permission_required",
     "oauth_not_configured",
     "google_rate_limited",
     "google_unavailable",
@@ -16,8 +17,8 @@ ERROR_CODES = (
 )
 
 
-def api_error(status_code: int, code: str, message: str) -> HTTPException:
+def api_error(status_code: int, code: str, message: str, **metadata) -> HTTPException:
     return HTTPException(
         status_code=status_code,
-        detail={"code": code, "message": message},
+        detail={"code": code, "message": message, **metadata},
     )

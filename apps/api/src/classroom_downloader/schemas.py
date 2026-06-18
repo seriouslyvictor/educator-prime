@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel
 
@@ -76,6 +77,17 @@ class AuthStart(BaseModel):
     authorization_url: str | None = None
     mock_connected: bool = False
     scopes: list[str]
+
+
+class AuthStartRequest(BaseModel):
+    capability: Literal[
+        "identity",
+        "classroom_read",
+        "submissions_read",
+        "student_profile_read",
+        "drive_read",
+    ]
+    reason: str
 
 
 class GradingHealthRead(BaseModel):

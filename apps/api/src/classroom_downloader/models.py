@@ -300,5 +300,7 @@ class UserSession(SQLModel, table=True):
 class OAuthState(SQLModel, table=True):
     id: str = Field(primary_key=True)
     scopes_json: str
+    capability: str | None = None
+    reason: str | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     expires_at: datetime

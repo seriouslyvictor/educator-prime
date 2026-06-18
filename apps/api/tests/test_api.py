@@ -10,7 +10,11 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
 from classroom_downloader.database import engine, init_db
-from classroom_downloader.google_scopes import CAPABILITY_SCOPES, IDENTITY_SCOPES
+from classroom_downloader.google_scopes import (
+    CAPABILITY_SCOPES,
+    CLASSROOM_READ_SCOPES,
+    IDENTITY_SCOPES,
+)
 from classroom_downloader.main import app, provider_dependency, settings
 from classroom_downloader.models import Activity, Course, UserSession
 
@@ -20,10 +24,11 @@ _FAKE_CREDS_JSON = json.dumps({
     "token_uri": "https://oauth2.googleapis.com/token",
     "client_id": "client-id",
     "client_secret": "client-secret",
-    "scopes": [
-        "https://www.googleapis.com/auth/classroom.courses.readonly",
-        "https://www.googleapis.com/auth/drive.readonly",
-    ],
+        "scopes": [
+            "https://www.googleapis.com/auth/classroom.courses.readonly",
+            "https://www.googleapis.com/auth/classroom.coursework.students.readonly",
+            "https://www.googleapis.com/auth/drive.readonly",
+        ],
 })
 
 
@@ -192,6 +197,84 @@ def test_auth_me_google_reports_missing_capabilities_from_stored_scopes(monkeypa
         "student_profile_read",
         "drive_read",
     }
+
+
+def test_courses_require_classroom_read_capability(monkeypatch) -> None:
+    session_id = "test-session-identity-only-courses"
+    monkeypatch.setattr(settings, "google_provider", "google")
+    init_db()
+    with Session(engine) as db:
+        db.merge(UserSession(
+            id=session_id,
+            user_email="teacher@example.edu",
+            google_credentials_json=_FAKE_CREDS_JSON,
+            google_granted_scopes_json=json.dumps(sorted(IDENTITY_SCOPES)),
+            expires_at=datetime.now(UTC) + timedelta(hours=1),
+        ))
+        db.commit()
+
+    class UnexpectedProvider:
+        def list_courses(self):
+            raise AssertionError("provider should not be called without classroom_read")
+
+    app.dependency_overrides[provider_dependency] = lambda: UnexpectedProvider()
+    try:
+        with TestClient(app) as client:
+            client.cookies.set(settings.session_cookie_name, session_id)
+            response = client.get("/api/courses?refresh=true")
+    finally:
+        app.dependency_overrides.pop(provider_dependency, None)
+
+    assert response.status_code == 403
+    assert response.json()["detail"]["code"] == "google_permission_required"
+    assert response.json()["detail"]["capability"] == "classroom_read"
+
+
+def test_export_requires_drive_capability_before_google_calls(monkeypatch) -> None:
+    session_id = "test-session-classroom-only-export"
+    monkeypatch.setattr(settings, "google_provider", "google")
+    init_db()
+    granted = sorted(IDENTITY_SCOPES | CLASSROOM_READ_SCOPES)
+    with Session(engine) as db:
+        db.merge(UserSession(
+            id=session_id,
+            user_email="teacher@example.edu",
+            google_credentials_json=_FAKE_CREDS_JSON,
+            google_granted_scopes_json=json.dumps(granted),
+            expires_at=datetime.now(UTC) + timedelta(hours=1),
+        ))
+        db.commit()
+
+    class UnexpectedProvider:
+        def list_courses(self):
+            raise AssertionError("provider should not be called without drive_read")
+
+    app.dependency_overrides[provider_dependency] = lambda: UnexpectedProvider()
+    try:
+        with TestClient(app) as client:
+            client.cookies.set(settings.session_cookie_name, session_id)
+            response = client.post(
+                "/api/exports",
+                json={"course_id": "course-1", "activity_ids": ["activity-1"]},
+            )
+    finally:
+        app.dependency_overrides.pop(provider_dependency, None)
+
+    assert response.status_code == 403
+    assert response.json()["detail"]["code"] == "google_permission_required"
+    assert response.json()["detail"]["capability"] == "drive_read"
+
+
+def test_mock_provider_remains_fully_connected_after_permission_gates() -> None:
+    with TestClient(app) as client:
+        courses = client.get("/api/courses")
+        export = client.post(
+            "/api/exports",
+            json={"course_id": "course-1", "activity_ids": ["activity-1"]},
+        )
+
+    assert courses.status_code == 200
+    assert export.status_code == 200
 
 
 def test_logout_deletes_google_token(monkeypatch) -> None:

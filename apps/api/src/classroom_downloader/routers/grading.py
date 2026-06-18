@@ -12,6 +12,7 @@ from sqlmodel import Session, select
 from ..api.auth_errors import google_auth_http_exception
 from ..api.common import _conditional_response, _sse_event
 from ..api.google_errors import google_api_http_exception
+from ..api.permissions import require_google_capability
 from ..api.deps import (
     get_current_session,
     get_current_user_email,
@@ -256,8 +257,11 @@ def grading_queue(
     activity_id: str | None = None,
     session: Session = Depends(get_session),
     provider: GoogleProvider = Depends(provider_dependency),
-    user_email: str = Depends(get_current_user_email),
+    current_session=Depends(get_current_session),
 ) -> list[GradingQueueItem]:
+    require_google_capability(current_session, "submissions_read")
+    require_google_capability(current_session, "drive_read")
+    user_email = current_session.user_email
     log_event(logger, "grading.queue.start", course_id=course_id, activity_id=activity_id)
     if not course_id or not activity_id:
         raise HTTPException(
@@ -357,8 +361,10 @@ def create_grading_job(
     payload: GradingJobCreate,
     session: Session = Depends(get_session),
     provider: GoogleProvider = Depends(provider_dependency),
-    user_email: str = Depends(get_current_user_email),
+    current_session=Depends(get_current_session),
 ) -> GradingJobRead:
+    require_google_capability(current_session, "classroom_read")
+    user_email = current_session.user_email
     rubric_mode = (payload.rubric_mode or "").strip().lower()
     log_event(
         logger,
@@ -554,6 +560,7 @@ def prepare_classroom_links(
     provider: GoogleProvider = Depends(provider_dependency),
     current_session=Depends(get_current_session),
 ) -> GradingJobRead:
+    require_google_capability(current_session, "submissions_read")
     log_event(logger, "grading.classroom_links.start", job_id=job_id)
     job = _get_owned_job(job_id, current_session.user_email, session)
     try:
@@ -608,8 +615,11 @@ def run_grading_privacy_audit(
     job_id: str,
     session: Session = Depends(get_session),
     provider: GoogleProvider = Depends(provider_dependency),
-    user_email: str = Depends(get_current_user_email),
+    current_session=Depends(get_current_session),
 ) -> PrivacyAuditRead:
+    require_google_capability(current_session, "submissions_read")
+    require_google_capability(current_session, "drive_read")
+    user_email = current_session.user_email
     log_event(logger, "grading.privacy_audit.endpoint.start", job_id=job_id)
     job = _get_owned_job(job_id, user_email, session)
     audit = run_privacy_audit(session, job, provider)
@@ -645,8 +655,11 @@ def read_grading_privacy_audit(
 def stream_grading_privacy_audit(
     job_id: str,
     provider: GoogleProvider = Depends(provider_dependency),
-    user_email: str = Depends(get_current_user_email),
+    current_session=Depends(get_current_session),
 ) -> StreamingResponse:
+    require_google_capability(current_session, "submissions_read")
+    require_google_capability(current_session, "drive_read")
+    user_email = current_session.user_email
     events: Queue[dict] = Queue()
 
     def worker() -> None:
@@ -696,8 +709,11 @@ def stream_grading_privacy_audit(
 def stream_grading_criteria(
     job_id: str,
     provider: GoogleProvider = Depends(provider_dependency),
-    user_email: str = Depends(get_current_user_email),
+    current_session=Depends(get_current_session),
 ) -> StreamingResponse:
+    require_google_capability(current_session, "submissions_read")
+    require_google_capability(current_session, "drive_read")
+    user_email = current_session.user_email
     events: Queue[dict] = Queue()
 
     def worker() -> None:
@@ -796,8 +812,11 @@ def draft_job(
     job_id: str,
     session: Session = Depends(get_session),
     provider: GoogleProvider = Depends(provider_dependency),
-    user_email: str = Depends(get_current_user_email),
+    current_session=Depends(get_current_session),
 ) -> GradingJobRead:
+    require_google_capability(current_session, "submissions_read")
+    require_google_capability(current_session, "drive_read")
+    user_email = current_session.user_email
     log_event(logger, "grading.draft.endpoint.start", job_id=job_id)
     job = _get_owned_job(job_id, user_email, session)
     grading_engine = resolve_grading_engine()
@@ -819,8 +838,11 @@ def draft_job(
 def stream_draft_job(
     job_id: str,
     provider: GoogleProvider = Depends(provider_dependency),
-    user_email: str = Depends(get_current_user_email),
+    current_session=Depends(get_current_session),
 ) -> StreamingResponse:
+    require_google_capability(current_session, "submissions_read")
+    require_google_capability(current_session, "drive_read")
+    user_email = current_session.user_email
     events: Queue[dict] = Queue()
 
     def worker() -> None:
@@ -1047,8 +1069,11 @@ def retry_grading_submission(
     submission_id: str,
     session: Session = Depends(get_session),
     provider: GoogleProvider = Depends(provider_dependency),
-    user_email: str = Depends(get_current_user_email),
+    current_session=Depends(get_current_session),
 ) -> GradingJobRead:
+    require_google_capability(current_session, "submissions_read")
+    require_google_capability(current_session, "drive_read")
+    user_email = current_session.user_email
     log_event(logger, "grading.retry.endpoint.start", job_id=job_id, submission_id=submission_id)
     job = _get_owned_job(job_id, user_email, session)
     submission = session.get(GradingSubmission, submission_id)

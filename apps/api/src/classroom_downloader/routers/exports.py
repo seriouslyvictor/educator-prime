@@ -14,10 +14,11 @@ from ..api.common import (
     _if_none_match,
     _is_future,
 )
-from ..api.deps import get_current_user_email, provider_dependency
+from ..api.deps import get_current_session, get_current_user_email, provider_dependency
+from ..api.permissions import require_google_capability
 from ..database import get_session
 from ..google_provider import GOOGLE_NATIVE_EXPORTS, GoogleProvider
-from ..models import ExportError, ExportFile, ExportJob, ExportStatus
+from ..models import ExportError, ExportFile, ExportJob, ExportStatus, UserSession
 from ..naming import build_output_path
 from ..observability import get_logger, log_cache_hit, log_cache_miss, log_debug, log_event, log_warning, safe_fields
 from ..schemas import ExportCreate, ExportErrorRead, ExportFileRead, ExportJobRead
@@ -108,8 +109,11 @@ def create_export(
     payload: ExportCreate,
     session: Session = Depends(get_session),
     provider: GoogleProvider = Depends(provider_dependency),
-    user_email: str = Depends(get_current_user_email),
+    current_session: UserSession = Depends(get_current_session),
 ) -> ExportJobRead:
+    require_google_capability(current_session, "drive_read")
+    require_google_capability(current_session, "submissions_read")
+    user_email = current_session.user_email
     log_event(
         logger,
         "export.create.start",
@@ -245,8 +249,10 @@ def stream_export_file(
     request: Request,
     session: Session = Depends(get_session),
     provider: GoogleProvider = Depends(provider_dependency),
-    user_email: str = Depends(get_current_user_email),
+    current_session: UserSession = Depends(get_current_session),
 ) -> Response:
+    require_google_capability(current_session, "drive_read")
+    user_email = current_session.user_email
     log_event(logger, "export.file.stream.start", job_id=job_id, file_id=file_id)
     job = session.get(ExportJob, job_id)
     if job is None or job.user_email != user_email:

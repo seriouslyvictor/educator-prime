@@ -241,6 +241,7 @@ def build_oauth_authorization_url(
     redirect_uri: str,
     scopes: list[str],
     state: str,
+    prompt: str | None = None,
 ) -> str:
     del client_secret
     log_event(
@@ -252,18 +253,18 @@ def build_oauth_authorization_url(
         scopes=scopes,
         state=state,
     )
-    query = urlencode(
-        {
-            "response_type": "code",
-            "client_id": client_id,
-            "redirect_uri": redirect_uri,
-            "scope": " ".join(scopes),
-            "state": state,
-            "access_type": "offline",
-            "include_granted_scopes": "true",
-            "prompt": "consent",
-        }
-    )
+    params = {
+        "response_type": "code",
+        "client_id": client_id,
+        "redirect_uri": redirect_uri,
+        "scope": " ".join(scopes),
+        "state": state,
+        "access_type": "offline",
+        "include_granted_scopes": "true",
+    }
+    if prompt:
+        params["prompt"] = prompt
+    query = urlencode(params)
     return f"https://accounts.google.com/o/oauth2/auth?{query}"
 
 

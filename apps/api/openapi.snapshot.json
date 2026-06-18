@@ -388,6 +388,31 @@
         "title": "AuthStart",
         "type": "object"
       },
+      "AuthStartRequest": {
+        "properties": {
+          "capability": {
+            "enum": [
+              "identity",
+              "classroom_read",
+              "submissions_read",
+              "student_profile_read",
+              "drive_read"
+            ],
+            "title": "Capability",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "capability",
+          "reason"
+        ],
+        "title": "AuthStartRequest",
+        "type": "object"
+      },
       "AuthState": {
         "properties": {
           "classroom_scopes": {
@@ -409,6 +434,14 @@
             ],
             "title": "Email"
           },
+          "granted_scopes": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Granted Scopes",
+            "type": "array"
+          },
           "identity_scopes": {
             "title": "Identity Scopes",
             "type": "boolean"
@@ -417,6 +450,14 @@
             "default": false,
             "title": "Is Admin",
             "type": "boolean"
+          },
+          "missing_capabilities": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Missing Capabilities",
+            "type": "array"
           },
           "name": {
             "anyOf": [
@@ -2302,11 +2343,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "items": {
-                  "type": "string"
-                },
-                "title": "Scopes",
-                "type": "array"
+                "$ref": "#/components/schemas/AuthStartRequest"
               }
             }
           },

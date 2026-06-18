@@ -8,6 +8,7 @@ from ..api.auth_errors import google_auth_http_exception
 from ..api.common import _is_fresh
 from ..api.deps import get_current_session, provider_dependency
 from ..api.google_errors import google_api_http_exception
+from ..api.permissions import require_google_capability
 from ..api.session_cleanup import purge_google_session_if_needed
 from ..database import get_session
 from ..google_provider import GoogleProvider
@@ -29,6 +30,7 @@ def list_courses(
     provider: GoogleProvider = Depends(provider_dependency),
     current_session: UserSession = Depends(get_current_session),
 ) -> list[Course]:
+    require_google_capability(current_session, "classroom_read")
     user_email = current_session.user_email
     log_event(logger, "classroom.courses.start")
     cached_rows = session.exec(
@@ -92,6 +94,7 @@ def list_activities(
     provider: GoogleProvider = Depends(provider_dependency),
     current_session: UserSession = Depends(get_current_session),
 ) -> list[Activity]:
+    require_google_capability(current_session, "classroom_read")
     user_email = current_session.user_email
     log_event(logger, "classroom.activities.start", course_id=course_id)
     cached_rows = session.exec(

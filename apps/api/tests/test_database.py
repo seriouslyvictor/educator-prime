@@ -130,6 +130,18 @@ def test_sqlite_dev_migration_adds_cache_and_grading_metadata_columns(tmp_path) 
         connection.execute(
             text(
                 """
+                CREATE TABLE oauthstate (
+                    id VARCHAR PRIMARY KEY,
+                    scopes_json VARCHAR NOT NULL,
+                    created_at DATETIME NOT NULL,
+                    expires_at DATETIME NOT NULL
+                )
+                """
+            )
+        )
+        connection.execute(
+            text(
+                """
                 CREATE TABLE usersession (
                     id VARCHAR PRIMARY KEY,
                     user_email VARCHAR NOT NULL,
@@ -223,6 +235,10 @@ def test_sqlite_dev_migration_adds_cache_and_grading_metadata_columns(tmp_path) 
         "google_granted_scopes_json",
         "google_last_scope_update_at",
     }.issubset(session_columns)
+    oauth_state_columns = {
+        column["name"] for column in inspect(engine).get_columns("oauthstate")
+    }
+    assert {"capability", "reason"}.issubset(oauth_state_columns)
     scrub_columns = {
         column["name"] for column in inspect(engine).get_columns("gradingscrubcache")
     }

@@ -22,6 +22,7 @@ def test_error_registry_has_unique_codes() -> None:
         "google_session_missing",
         "google_session_expired",
         "google_auth_denied",
+        "google_permission_required",
         "oauth_not_configured",
         "google_rate_limited",
         "google_unavailable",
@@ -35,6 +36,23 @@ def test_api_error_uses_structured_detail() -> None:
 
     assert error.status_code == 503
     assert error.detail == {"code": "busy_retry", "message": "Database is locked."}
+
+
+def test_api_error_accepts_metadata_fields() -> None:
+    error = api_error(
+        403,
+        "google_permission_required",
+        "Google permission is required for this action.",
+        capability="drive_read",
+        missing_scopes=["scope-a"],
+    )
+
+    assert error.detail == {
+        "code": "google_permission_required",
+        "message": "Google permission is required for this action.",
+        "capability": "drive_read",
+        "missing_scopes": ["scope-a"],
+    }
 
 
 def test_missing_session_returns_not_signed_in_code(monkeypatch) -> None:
@@ -76,7 +94,10 @@ def test_oauth_not_configured_returns_code(monkeypatch) -> None:
     monkeypatch.setattr(settings, "google_client_secret", "")
 
     with TestClient(app) as client:
-        response = client.post("/api/auth/google/start", json=[])
+        response = client.post(
+            "/api/auth/google/start",
+            json={"capability": "identity", "reason": "Sign in"},
+        )
 
     assert response.status_code == 503
     assert response.json()["detail"]["code"] == "oauth_not_configured"
