@@ -24,6 +24,10 @@ export function useThemePreference() {
   useEffect(() => {
     localStorage.setItem(themeKey, mode);
     document.documentElement.dataset.theme = resolvedTheme;
+    // Activate shadcn's @custom-variant dark (&:is(.dark *)) so shadcn screens
+    // honour dark mode. The home-brewed system keys on [data-theme] only; no
+    // *.module.css uses a .dark selector, so this toggle has no side-effect there.
+    document.documentElement.classList.toggle("dark", resolvedTheme === "dark");
   }, [mode, resolvedTheme]);
 
   useEffect(() => {
