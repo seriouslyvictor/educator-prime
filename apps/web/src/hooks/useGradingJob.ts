@@ -58,6 +58,10 @@ function appError(caught: unknown, fallback: string): ApiError {
   return apiErrorFromUnknown(caught, fallback);
 }
 
+function isGooglePermissionRequired(caught: unknown): caught is ApiError {
+  return caught instanceof ApiError && caught.code === "google_permission_required";
+}
+
 export type GradingStreamPayload = {
   phase?: "audit" | "criteria" | "draft";
   processed?: number;
@@ -92,6 +96,7 @@ type UseGradingJobOptions = {
   findExistingJob: (courseId: string, activityId: string) => Promise<GradingQueueItem | null>;
   gradingQueue: GradingQueueItem[];
   selectedCourse: Course | undefined;
+  requestDrivePermission: () => boolean;
 };
 
 export function useGradingJob({
@@ -105,6 +110,7 @@ export function useGradingJob({
   findExistingJob,
   gradingQueue,
   selectedCourse,
+  requestDrivePermission,
 }: UseGradingJobOptions) {
   const [gradingJob, setGradingJob] = useState<GradingJob | null>(null);
   const [privacyAudit, setPrivacyAudit] = useState<PrivacyAudit | null>(null);
@@ -414,6 +420,7 @@ export function useGradingJob({
     item: GradingQueueItem,
     payload: { rubricMode: RubricMode; teacherLoop: TeacherLoopMode; rubricText: string; includeVisualSubmissions: boolean },
   ) {
+    if (!requestDrivePermission()) return;
     setGraderBusy(true);
     setError(null);
     setPrivacyAudit(null);
@@ -445,6 +452,10 @@ export function useGradingJob({
       await runCriteriaStream(target);
       setGradingProgress(null);
     } catch (caught) {
+      if (isGooglePermissionRequired(caught)) {
+        requestDrivePermission();
+        return;
+      }
       const message = caught instanceof Error ? caught.message : "Falha ao inferir critérios da rubrica.";
       setError(message);
       setGradingProgress((current) => ({
@@ -470,6 +481,7 @@ export function useGradingJob({
       criteria?: GradingCriterionInput[];
     },
   ) {
+    if (!requestDrivePermission()) return;
     setGraderBusy(true);
     setError(null);
     setPrivacyAudit(null);
@@ -521,6 +533,10 @@ export function useGradingJob({
       void loadGradingQueue();
       setGradingProgress(null);
     } catch (caught) {
+      if (isGooglePermissionRequired(caught)) {
+        requestDrivePermission();
+        return;
+      }
       const message = caught instanceof Error ? caught.message : "Falha ao executar a auditoria de privacidade.";
       setError(message);
       setGradingProgress((current) => ({
@@ -559,6 +575,7 @@ export function useGradingJob({
 
   async function rerunGradingPrivacyAudit() {
     if (!gradingJob) return;
+    if (!requestDrivePermission()) return;
     setGraderBusy(true);
     setError(null);
     try {
@@ -572,6 +589,10 @@ export function useGradingJob({
       api.clearGradingCache(gradingJob.id);
       setGradingProgress(null);
     } catch (caught) {
+      if (isGooglePermissionRequired(caught)) {
+        requestDrivePermission();
+        return;
+      }
       const message = caught instanceof Error ? caught.message : "Falha ao executar a auditoria de privacidade.";
       setError(message);
     } finally {
@@ -581,6 +602,7 @@ export function useGradingJob({
 
   async function continueToGradingDraft() {
     if (!gradingJob) return;
+    if (!requestDrivePermission()) return;
     setGraderBusy(true);
     setError(null);
     setDraftingSubmissionId(null);
@@ -615,6 +637,10 @@ export function useGradingJob({
       setDraftingSubmissionId(null);
       void loadGradingQueue();
     } catch (caught) {
+      if (isGooglePermissionRequired(caught)) {
+        requestDrivePermission();
+        return;
+      }
       setError(appError(caught, "Falha ao gerar rascunhos de notas."));
     } finally {
       setDraftingSubmissionId(null);
@@ -653,6 +679,7 @@ export function useGradingJob({
 
   async function retryGradingDraft(submission: GradingSubmission) {
     if (!gradingJob) return;
+    if (!requestDrivePermission()) return;
     setGraderBusy(true);
     setError(null);
     try {
@@ -660,6 +687,10 @@ export function useGradingJob({
       setGradingJob(updated);
       setActiveGradingSubmissionId(submission.id);
     } catch (caught) {
+      if (isGooglePermissionRequired(caught)) {
+        requestDrivePermission();
+        return;
+      }
       setError(appError(caught, "Falha ao corrigir a entrega novamente."));
     } finally {
       setGraderBusy(false);

@@ -7,6 +7,7 @@ import type {
   AuthState,
   Course,
   ExportJob,
+  GoogleCapability,
   GradingHealth,
   GradingJob,
   GradingCriterionInput,
@@ -244,14 +245,14 @@ export const api = {
     clearApiCache();
     return response;
   },
-  connectGoogle: (scopes: string[]) =>
+  connectGoogle: (capability: GoogleCapability, reason: string) =>
     request<{
       authorization_url: string | null;
       mock_connected: boolean;
       scopes: string[];
     }>("/api/auth/google/start", {
       method: "POST",
-      body: JSON.stringify(scopes),
+      body: JSON.stringify({ capability, reason }),
     }),
   gradingHealth: (probe = false) =>
     request<GradingHealth>(

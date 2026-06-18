@@ -9,19 +9,6 @@ import {
 } from "../lib/api";
 import type { AppView, AuthState, GradingHealth } from "../types";
 
-const classroomScopes = [
-  "openid",
-  "email",
-  "profile",
-  "https://www.googleapis.com/auth/classroom.courses.readonly",
-  "https://www.googleapis.com/auth/classroom.coursework.students.readonly",
-  "https://www.googleapis.com/auth/classroom.rosters.readonly",
-  "https://www.googleapis.com/auth/classroom.student-submissions.students.readonly",
-  "https://www.googleapis.com/auth/classroom.profile.emails",
-  "https://www.googleapis.com/auth/classroom.profile.photos",
-  "https://www.googleapis.com/auth/drive.readonly",
-];
-
 type UseConnectionOptions = {
   setView: (view: AppView) => void;
   setBusy: (busy: boolean) => void;
@@ -53,9 +40,12 @@ export function useConnection({
   const [versionSkew, setVersionSkew] = useState(false);
   const [gradingHealth, setGradingHealth] = useState<GradingHealth | null>(null);
 
-  const connected = Boolean(auth?.signed_in && auth.classroom_scopes && auth.drive_scopes);
+  const signedIn = Boolean(auth?.signed_in && auth.identity_scopes);
+  const classroomReady = Boolean(auth?.classroom_scopes);
+  const driveReady = Boolean(auth?.drive_scopes);
+  const connected = Boolean(signedIn && classroomReady);
   const partialConsent = Boolean(
-    auth?.signed_in && (!auth.classroom_scopes || !auth.drive_scopes),
+    signedIn && !classroomReady,
   );
 
   async function bootstrap() {
@@ -64,8 +54,12 @@ export function useConnection({
     try {
       const authState = await api.authMe();
       setAuth(authState);
-      const hasConnection = authState.signed_in && authState.classroom_scopes && authState.drive_scopes;
-      if (!hasConnection) {
+      const hasIdentity = authState.signed_in && authState.identity_scopes;
+      if (!hasIdentity) {
+        setView("connect");
+        return;
+      }
+      if (!authState.classroom_scopes) {
         setView("connect");
         return;
       }
@@ -91,11 +85,14 @@ export function useConnection({
     }
   }
 
-  async function connectClassroom() {
+  async function requestGoogleCapability(
+    capability: "identity" | "classroom_read" | "drive_read",
+    reason: string,
+  ) {
     setBusy(true);
     setError(null);
     try {
-      const authStart = await api.connectGoogle(classroomScopes);
+      const authStart = await api.connectGoogle(capability, reason);
       if (authStart.authorization_url) {
         window.location.href = authStart.authorization_url;
         return;
@@ -106,6 +103,27 @@ export function useConnection({
     } finally {
       setBusy(false);
     }
+  }
+
+  async function connectIdentity() {
+    await requestGoogleCapability(
+      "identity",
+      "Entrar no Classroom Downloader com sua conta Google escolar.",
+    );
+  }
+
+  async function connectClassroomRead() {
+    await requestGoogleCapability(
+      "classroom_read",
+      "Listar suas turmas e atividades do Google Classroom.",
+    );
+  }
+
+  async function connectDriveRead() {
+    await requestGoogleCapability(
+      "drive_read",
+      "Baixar os arquivos anexados nas entregas escolhidas.",
+    );
   }
 
   async function logoutClassroom() {
@@ -138,9 +156,15 @@ export function useConnection({
     versionSkew,
     gradingHealth,
     connected,
+    signedIn,
+    classroomReady,
+    driveReady,
     partialConsent,
     bootstrap,
-    connectClassroom,
+    connectIdentity,
+    connectClassroomRead,
+    connectDriveRead,
+    connectClassroom: connectIdentity,
     logoutClassroom,
   };
 }

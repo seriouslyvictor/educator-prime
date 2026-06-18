@@ -496,6 +496,10 @@ pnpm test:run
 pnpm build
 ```
 
+**Result 2026-06-18**:
+- `pnpm test:run` passed, 23 tests.
+- `pnpm build` passed.
+
 ### Step 7: Redesign ConnectView into permission stages
 
 Modify `apps/web/src/components/ConnectView.tsx` so it receives `auth` and three
@@ -532,6 +536,10 @@ pnpm build
 pnpm e2e
 ```
 
+**Result 2026-06-18**:
+- `pnpm build` passed.
+- `pnpm e2e` passed, 4 tests.
+
 ### Step 8: Add just-in-time Drive prompts at export/grading boundaries
 
 Find frontend actions that create exports or load/grading submission content:
@@ -560,6 +568,11 @@ Verify with Playwright:
 - A synthetic auth state with Classroom but no Drive can view courses but shows
   Drive prompt on export/grader file-content action.
 
+**Result 2026-06-18**:
+- Mock-mode Playwright boot reached the workspace.
+- Frontend unit coverage verifies capability/reason auth-start payloads.
+- Export and grading file-content actions now preflight missing Drive permission and map backend `google_permission_required` responses to the same Drive prompt.
+
 ### Step 9: Document the Drive restricted-scope decision
 
 Create `docs/google-permissions.md` or `apps/api/docs/google-permissions.md`
@@ -579,6 +592,8 @@ Create `docs/google-permissions.md` or `apps/api/docs/google-permissions.md`
 
 Update README or deployment docs only if they already mention Google OAuth
 scope setup.
+
+**Result 2026-06-18**: `docs/google-permissions.md` created with the capability table, source links, `drive.readonly` rationale, `drive.file` deferral, and production checklist.
 
 ### Step 10: Full verification and visible smoke
 
@@ -610,6 +625,14 @@ For real Google smoke, run only locally with a test Google account:
    moment.
 5. Confirm decline keeps Classroom browsing usable.
 
+**Result 2026-06-18**:
+- Backend full suite: `uv run --extra dev pytest -q` passed, 231 tests and 4 skipped, after regenerating the intentional OpenAPI snapshot change.
+- Frontend build: `pnpm build` passed.
+- Frontend unit tests: `pnpm test:run` passed, 23 tests.
+- Frontend E2E: `pnpm e2e` passed, 4 tests in mock mode.
+- Frontend lint: `pnpm lint` has one pre-existing error in unchanged `apps/web/src/components/grader/GraderSetup.tsx` (`selectedRubric` unused) plus existing warnings; this branch did not modify that file.
+- Browser smoke: covered by the Playwright mock-mode boot/navigation/logout/queue suite; manual real-Google smoke was not run because it requires an external test Google account.
+
 ## Test plan
 
 Backend:
@@ -634,21 +657,21 @@ Frontend:
 
 ## Done criteria
 
-- [ ] Initial connect requests only identity scopes.
-- [ ] Classroom scopes are requested only after user intent to browse/use
+- [x] Initial connect requests only identity scopes.
+- [x] Classroom scopes are requested only after user intent to browse/use
       Classroom.
-- [ ] Drive scope is requested only at export/download/grading file-content
+- [x] Drive scope is requested only at export/download/grading file-content
       boundaries.
-- [ ] Backend persists and reports actual granted scopes.
-- [ ] Backend rejects scope-backed API calls with `google_permission_required`
+- [x] Backend persists and reports actual granted scopes.
+- [x] Backend rejects scope-backed API calls with `google_permission_required`
       instead of making doomed Google calls.
-- [ ] Partial consent keeps unrelated features usable.
-- [ ] `drive.readonly` restricted-scope decision is documented with alternatives.
-- [ ] Backend full test suite passes.
-- [ ] Frontend build, unit tests, lint, and E2E pass, or any known lint
+- [x] Partial consent keeps unrelated features usable.
+- [x] `drive.readonly` restricted-scope decision is documented with alternatives.
+- [x] Backend full test suite passes.
+- [x] Frontend build, unit tests, lint, and E2E pass, or any known lint
       non-blocker matches CI policy and is documented.
-- [ ] Browser smoke validates mock mode after the UI change.
-- [ ] `plans/README.md` status row for 013 is updated.
+- [x] Browser smoke validates mock mode after the UI change.
+- [x] `plans/README.md` status row for 013 is updated.
 
 ## STOP conditions
 

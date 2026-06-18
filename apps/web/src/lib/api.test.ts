@@ -136,6 +136,24 @@ describe("cache behavior", () => {
   });
 });
 
+describe("Google auth start", () => {
+  it("posts capability and reason instead of raw scopes", async () => {
+    const fetch = vi.fn().mockResolvedValue(jsonResponse({
+      authorization_url: "https://accounts.google.com",
+      mock_connected: false,
+      scopes: ["openid"],
+    }));
+    vi.stubGlobal("fetch", fetch);
+
+    await mod.api.connectGoogle("identity", "Entrar no app.");
+
+    expect(fetch).toHaveBeenCalledWith("/api/auth/google/start", expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({ capability: "identity", reason: "Entrar no app." }),
+    }));
+  });
+});
+
 describe("fetchJson error mapping", () => {
   it("maps thrown fetch errors to unreachable ApiError", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network failed")));

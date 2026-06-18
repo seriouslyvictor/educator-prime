@@ -30,6 +30,7 @@ import { InlineError } from "./components/ui";
 import { Gate, OfflinePill } from "./components/errors";
 import type {
   AppView,
+  AuthState,
   GradingHealth,
 } from "./types";
 
@@ -41,10 +42,12 @@ function appErrorSummary(error: unknown): string {
 export function App() {
   const { mode: themeMode, setMode: setThemeMode } = useThemePreference();
   const { history, addHistoryItem } = useLocalExportHistory();
+  const authRef = useRef<AuthState | null>(null);
 
   const [view, setView] = useState<AppView>("connect");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<ApiError | string | null>(null);
+  const [drivePermissionOpen, setDrivePermissionOpen] = useState(false);
   // graderBusy is shared between useGradingJob and useGradingQueue; keeping it
   // in App avoids a circular dependency (queue needs it as a setter, job owns it).
   const [graderBusy, setGraderBusy] = useState(false);
@@ -88,6 +91,7 @@ export function App() {
     setView,
     loadGradingQueue: () => loadGradingQueue(),
     addHistoryItem,
+    requestDrivePermission,
   });
 
   const {
@@ -146,12 +150,19 @@ export function App() {
     findExistingJob,
     gradingQueue,
     selectedCourse,
+    requestDrivePermission,
   });
 
   // Keep the refs current every render so queue callbacks always get the latest
   // functions from the job hook.
   clearActiveJobRef.current = clearActiveJob;
   getActiveJobIdRef.current = getActiveJobId;
+
+  function requestDrivePermission() {
+    if (authRef.current?.drive_scopes) return true;
+    setDrivePermissionOpen(true);
+    return false;
+  }
 
   const {
     auth,
@@ -162,7 +173,9 @@ export function App() {
     connected,
     partialConsent,
     bootstrap,
-    connectClassroom,
+    connectIdentity,
+    connectClassroomRead,
+    connectDriveRead,
     logoutClassroom,
   } = useConnection({
     setView,
@@ -174,6 +187,7 @@ export function App() {
     readStoredJobId,
     resetWorkspace,
   });
+  authRef.current = auth;
 
   useEffect(() => {
     if (connected && view === "connect") {
@@ -221,7 +235,7 @@ export function App() {
   const handleGateAction = () => {
     const action = resolveError(gateError).action?.kind;
     if (action === "reconnect-google") {
-      void connectClassroom();
+      void connectClassroomRead();
       return;
     }
     void bootstrap();
@@ -262,12 +276,24 @@ export function App() {
                 onAction={() => window.location.reload()}
               />
             ) : null}
+            {drivePermissionOpen && !auth?.drive_scopes ? (
+              <DrivePermissionPanel
+                onGrant={() => {
+                  setDrivePermissionOpen(false);
+                  void connectDriveRead();
+                }}
+                onDismiss={() => setDrivePermissionOpen(false)}
+              />
+            ) : null}
         {view === "connect" ? (
           <ConnectView
+            auth={auth}
             connecting={busy}
             deliveryMode={deliveryMode}
             error={error}
-            onConnect={connectClassroom}
+            onConnectIdentity={connectIdentity}
+            onConnectClassroom={connectClassroomRead}
+            onConnectDrive={connectDriveRead}
           />
         ) : null}
 
@@ -467,6 +493,38 @@ function GradingHealthBanner({ health }: { health: GradingHealth }) {
       <div className="notice-copy">
         <div className="notice-title">Correção por IA indisponível</div>
         <div className="notice-desc">{message}</div>
+      </div>
+    </div>
+  );
+}
+
+function DrivePermissionPanel({
+  onGrant,
+  onDismiss,
+}: {
+  onGrant: () => void;
+  onDismiss: () => void;
+}) {
+  return (
+    <div className="notice notice-warning" role="alert">
+      <div className="notice-icon">
+        <AppIcon name="folderOpen" />
+      </div>
+      <div className="notice-copy">
+        <div className="notice-title">Permitir download de arquivos do Drive</div>
+        <div className="notice-desc">
+          Esta acao precisa ler ou baixar arquivos anexados nas entregas selecionadas. Se voce
+          recusar, as turmas e atividades continuam disponiveis.
+        </div>
+        <div className="connect-actions">
+          <button className="btn btn-primary" type="button" onClick={onGrant}>
+            <AppIcon name="shield" className="ico" />
+            Permitir Drive
+          </button>
+          <button className="btn" type="button" onClick={onDismiss}>
+            Agora nao
+          </button>
+        </div>
       </div>
     </div>
   );

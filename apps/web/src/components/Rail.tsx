@@ -22,7 +22,7 @@ export function Rail({
   themeMode: ThemeMode;
   onThemeChange: (mode: ThemeMode) => void;
 }) {
-  const connected = Boolean(auth?.signed_in && auth.classroom_scopes && auth.drive_scopes);
+  const connected = Boolean(auth?.signed_in && auth.identity_scopes && auth.classroom_scopes);
   const accountName = auth?.name ?? auth?.email ?? (connected ? "Conta Google conectada" : "Não conectado");
   const fallbackInitials = getInitials(auth?.name, auth?.email);
   return (
@@ -74,8 +74,9 @@ export function Rail({
 
       <div className="rail-nav-label">Conectado</div>
       <nav className="rail-nav">
-        <ConnectionItem label="Google Classroom" ready={Boolean(auth?.classroom_scopes)} />
-        <ConnectionItem label="Google Drive" ready={Boolean(auth?.drive_scopes)} />
+        <ConnectionItem label="Google account" ready={Boolean(auth?.identity_scopes)} />
+        <ConnectionItem label="Classroom read" ready={Boolean(auth?.classroom_scopes)} />
+        <ConnectionItem label="Drive file download" ready={Boolean(auth?.drive_scopes)} />
       </nav>
 
       <div className="rail-tools">
@@ -112,7 +113,7 @@ function getInitials(name?: string | null, email?: string | null) {
 function ConnectionItem({ label, ready }: { label: string; ready: boolean }) {
   return (
     <button className="nav-item passive" tabIndex={-1}>
-      <AppIcon name={label.includes("Drive") ? "folderOpen" : "classroom"} />
+      <AppIcon name={label.includes("Drive") ? "folderOpen" : label.includes("account") ? "shield" : "classroom"} />
       {label}
       <span className={`nav-count ${ready ? "ok" : "needed"}`}>{ready ? "ok" : "necessário"}</span>
     </button>

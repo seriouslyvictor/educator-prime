@@ -25,6 +25,7 @@ type UseExportWorkspaceOptions = {
   setView: (view: AppView) => void;
   loadGradingQueue: () => Promise<void>;
   addHistoryItem: (item: Omit<LocalExportHistoryItem, "id" | "completedAt">) => void;
+  requestDrivePermission: () => boolean;
 };
 
 function appError(caught: unknown, fallback: string): ApiError {
@@ -44,6 +45,7 @@ export function useExportWorkspace({
   setView,
   loadGradingQueue,
   addHistoryItem,
+  requestDrivePermission,
 }: UseExportWorkspaceOptions) {
   const folderSupported = isFolderExportSupported();
   const deliveryMode: "folder" | "zip" = folderSupported ? "folder" : "zip";
@@ -110,6 +112,7 @@ export function useExportWorkspace({
 
   async function startExport(activityIds = selectedActivityIds) {
     if (!selectedCourse || activityIds.length === 0 || busy) return;
+    if (!requestDrivePermission()) return;
     if (deliveryMode === "zip") {
       setError(
         new ApiError(
@@ -161,6 +164,10 @@ export function useExportWorkspace({
       });
       setView("done");
     } catch (caught) {
+      if (caught instanceof ApiError && caught.code === "google_permission_required") {
+        requestDrivePermission();
+        return;
+      }
       const exportError = appError(caught, "Falha na exportaÃ§Ã£o.");
       setError(exportError);
       setProgressLog((current) => [
