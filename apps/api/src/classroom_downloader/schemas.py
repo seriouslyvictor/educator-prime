@@ -63,6 +63,8 @@ class AuthState(BaseModel):
     identity_scopes: bool
     classroom_scopes: bool
     drive_scopes: bool
+    granted_scopes: list[str] = []
+    missing_capabilities: list[str] = []
     email: str | None = None
     name: str | None = None
     picture: str | None = None

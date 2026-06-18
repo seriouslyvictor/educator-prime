@@ -1097,6 +1097,15 @@ class DbTokenStore:
             if row is not None:
                 row.google_credentials_json = encrypt_credentials_json(credentials.to_json())
                 row.last_seen_at = datetime.now(UTC)
+                refreshed_scopes = sorted(
+                    set(getattr(credentials, "granted_scopes", None) or [])
+                    or set(getattr(credentials, "scopes", None) or [])
+                )
+                if refreshed_scopes:
+                    import json as _json
+
+                    row.google_granted_scopes_json = _json.dumps(refreshed_scopes)
+                    row.google_last_scope_update_at = datetime.now(UTC)
                 self._db.add(row)
                 self._db.commit()
             return credentials

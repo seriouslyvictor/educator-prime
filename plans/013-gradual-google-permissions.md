@@ -1,4 +1,4 @@
-# Plan 012: Gradual Google permissions
+# Plan 013: Gradual Google permissions
 
 > **Executor instructions**: Follow this plan step by step. Run every
 > verification command and confirm the expected result before moving to the next
@@ -244,6 +244,8 @@ Verify:
 uv run --extra dev pytest tests/test_google_scopes.py -q
 ```
 
+**Result 2026-06-18**: passed, 3 tests.
+
 ### Step 2: Persist and report actual granted scopes
 
 Add fields to `UserSession` in `apps/api/src/classroom_downloader/models.py`:
@@ -281,6 +283,8 @@ Verify:
 ```powershell
 uv run --extra dev pytest tests/test_oauth_callback.py tests/test_database.py tests/test_credentials_crypto.py -q
 ```
+
+**Result 2026-06-18**: passed, 6 tests.
 
 ### Step 3: Upgrade AuthState from booleans-only to capability-aware
 
@@ -330,6 +334,10 @@ Verify:
 uv run --extra dev pytest tests/test_api.py tests/test_oauth_callback.py -q
 pnpm test:run
 ```
+
+**Result 2026-06-18**:
+- `uv run --extra dev pytest tests/test_api.py tests/test_oauth_callback.py -q` passed, 15 tests.
+- `pnpm test:run` passed, 22 tests.
 
 ### Step 4: Restrict auth_start input to capabilities
 
@@ -634,7 +642,7 @@ Frontend:
 - [ ] Frontend build, unit tests, lint, and E2E pass, or any known lint
       non-blocker matches CI policy and is documented.
 - [ ] Browser smoke validates mock mode after the UI change.
-- [ ] `plans/README.md` status row for 012 is updated.
+- [ ] `plans/README.md` status row for 013 is updated.
 
 ## STOP conditions
 

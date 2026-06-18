@@ -3,12 +3,21 @@ export interface AuthState {
   identity_scopes: boolean;
   classroom_scopes: boolean;
   drive_scopes: boolean;
+  granted_scopes: string[];
+  missing_capabilities: GoogleCapability[];
   email: string | null;
   name: string | null;
   picture: string | null;
   provider: string;
   is_admin?: boolean;
 }
+
+export type GoogleCapability =
+  | "identity"
+  | "classroom_read"
+  | "submissions_read"
+  | "student_profile_read"
+  | "drive_read";
 
 export interface GradingHealth {
   engine: string;

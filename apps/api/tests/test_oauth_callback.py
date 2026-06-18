@@ -13,7 +13,7 @@ from sqlmodel import Session
 
 from classroom_downloader.database import engine, init_db
 from classroom_downloader.main import app, settings
-from classroom_downloader.models import OAuthState
+from classroom_downloader.models import OAuthState, UserSession
 
 
 def test_callback_relaxes_scope_mismatch_before_fetch_token(monkeypatch) -> None:
@@ -25,6 +25,7 @@ def test_callback_relaxes_scope_mismatch_before_fetch_token(monkeypatch) -> None
         "https://www.googleapis.com/auth/classroom.coursework.students.readonly",
         "https://www.googleapis.com/auth/classroom.courses.readonly",
     ]
+    requested_scopes = scopes
     init_db()
     with Session(engine) as db:
         db.merge(OAuthState(
@@ -36,9 +37,11 @@ def test_callback_relaxes_scope_mismatch_before_fetch_token(monkeypatch) -> None
 
     class FakeCredentials:
         id_token = None
+        granted_scopes = ["openid", "email"]
+        scopes = requested_scopes
 
         def to_json(self) -> str:
-            return "{}"
+            return json.dumps({"scopes": scopes})
 
     class FakeFlow:
         credentials = FakeCredentials()
@@ -65,3 +68,7 @@ def test_callback_relaxes_scope_mismatch_before_fetch_token(monkeypatch) -> None
     assert response.headers["location"] == f"{settings.frontend_origin}/?google=connected"
     with Session(engine) as db:
         assert db.get(OAuthState, "state-123") is None
+        session = db.get(UserSession, response.cookies[settings.session_cookie_name])
+        assert session is not None
+        assert json.loads(session.google_granted_scopes_json) == ["email", "openid"]
+        assert session.google_last_scope_update_at is not None

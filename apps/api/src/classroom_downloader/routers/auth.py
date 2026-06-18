@@ -14,6 +14,7 @@ from ..api.deps import get_current_session, is_admin_email
 from ..api.errors import api_error
 from ..api.session_cleanup import purge_cached_classroom_state_for_user, purge_google_session_if_needed
 from ..database import get_session
+from ..google_scopes import CAPABILITY_SCOPES, has_capability
 from ..google_provider import (
     DbTokenStore,
     build_oauth_authorization_url,
@@ -41,6 +42,26 @@ def disconnected_auth_state() -> AuthState:
     )
 
 
+def _all_google_scopes() -> list[str]:
+    return sorted({scope for scopes in CAPABILITY_SCOPES.values() for scope in scopes})
+
+
+def _missing_capabilities(granted_scopes: set[str]) -> list[str]:
+    return [
+        capability
+        for capability in CAPABILITY_SCOPES
+        if not has_capability(granted_scopes, capability)
+    ]
+
+
+def _stored_granted_scopes(row: UserSession) -> set[str]:
+    try:
+        scopes = json.loads(row.google_granted_scopes_json or "[]")
+    except json.JSONDecodeError:
+        scopes = []
+    return {scope for scope in scopes if isinstance(scope, str) and scope}
+
+
 @router.get("/api/auth/me", response_model=AuthState)
 def auth_me(
     request: Request,
@@ -50,12 +71,15 @@ def auth_me(
     if settings.google_provider == "mock":
         from ..google_provider import MockGoogleProvider
         profile = MockGoogleProvider().account_profile()
+        granted_scopes = _all_google_scopes()
         log_event(logger, "auth.me.mock", name=profile.name, email=profile.email)
         return AuthState(
             signed_in=True,
             identity_scopes=True,
             classroom_scopes=True,
             drive_scopes=True,
+            granted_scopes=granted_scopes,
+            missing_capabilities=[],
             email=profile.email,
             name=profile.name,
             picture=profile.picture,
@@ -68,14 +92,17 @@ def auth_me(
     row = db.get(UserSession, session_id)
     if row is None or _as_utc(row.expires_at) < datetime.now(UTC):
         return disconnected_auth_state()
-    scopes: set[str] = set()
+    scopes: set[str] = _stored_granted_scopes(row)
     name = None
     email = None
     picture = None
     try:
         store = DbTokenStore(session_id, db)
         credentials = store.load_credentials()
-        scopes = set(credentials.scopes or [])
+        if not scopes:
+            scopes = set(getattr(credentials, "granted_scopes", None) or [])
+            if not scopes:
+                scopes = set(credentials.scopes or [])
         provider = make_google_provider(session_id, db)
         profile = provider.account_profile()
         name = profile.name
@@ -104,14 +131,13 @@ def auth_me(
         name=name,
         email=email,
     )
-    has_google_identity = {"openid", "email", "profile"}.issubset(scopes)
-    has_classroom_identity = any("classroom.profile.emails" in scope for scope in scopes)
     return AuthState(
         signed_in=bool(scopes),
-        identity_scopes=has_google_identity or has_classroom_identity,
-        classroom_scopes=any(scope.startswith("classroom.") for scope in scopes)
-        or any("classroom" in scope for scope in scopes),
-        drive_scopes=any("drive.readonly" in scope for scope in scopes),
+        identity_scopes=has_capability(scopes, "identity"),
+        classroom_scopes=has_capability(scopes, "classroom_read"),
+        drive_scopes=has_capability(scopes, "drive_read"),
+        granted_scopes=sorted(scopes),
+        missing_capabilities=_missing_capabilities(scopes),
         email=email,
         name=name,
         picture=picture,
@@ -245,6 +271,11 @@ def auth_callback(
     flow.fetch_token(authorization_response=str(request.url), code=code)
     creds = flow.credentials
     user_email = _email_from_credentials(creds) or ""
+    granted_scopes = sorted(
+        set(getattr(creds, "granted_scopes", None) or [])
+        or set(getattr(creds, "scopes", None) or [])
+        or set(scopes)
+    )
 
     session_id = token_urlsafe(32)
     now = datetime.now(UTC)
@@ -253,6 +284,8 @@ def auth_callback(
         id=session_id,
         user_email=user_email,
         google_credentials_json=encrypt_credentials_json(creds.to_json()),
+        google_granted_scopes_json=json.dumps(granted_scopes),
+        google_last_scope_update_at=now,
         created_at=now,
         expires_at=now + max_age,
     ))
@@ -262,7 +295,7 @@ def auth_callback(
         logger,
         "auth.google.callback.complete",
         user_email=user_email,
-        scopes=scopes,
+        scope_count=len(granted_scopes),
     )
     is_prod = settings.frontend_origin.startswith("https://")
     redirect = RedirectResponse(f"{settings.frontend_origin}/?google=connected")

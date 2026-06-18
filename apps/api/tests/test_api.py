@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
 from classroom_downloader.database import engine, init_db
+from classroom_downloader.google_scopes import CAPABILITY_SCOPES, IDENTITY_SCOPES
 from classroom_downloader.main import app, provider_dependency, settings
 from classroom_downloader.models import Activity, Course, UserSession
 
@@ -128,6 +129,69 @@ def test_auth_me_profile_failure_keeps_loadable_google_token_signed_in(
     assert response.json()["signed_in"] is True
     with Session(engine) as db:
         assert db.get(UserSession, session_id) is not None
+
+
+def test_auth_me_mock_reports_all_capabilities() -> None:
+    with TestClient(app) as client:
+        response = client.get("/api/auth/me")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["provider"] == "mock"
+    assert body["granted_scopes"] == sorted(
+        {scope for scopes in CAPABILITY_SCOPES.values() for scope in scopes}
+    )
+    assert body["missing_capabilities"] == []
+
+
+def test_auth_me_google_reports_missing_capabilities_from_stored_scopes(monkeypatch) -> None:
+    session_id = "test-session-identity-only"
+    monkeypatch.setattr(settings, "google_provider", "google")
+    init_db()
+    with Session(engine) as db:
+        db.merge(UserSession(
+            id=session_id,
+            user_email="teacher@example.edu",
+            google_credentials_json=_FAKE_CREDS_JSON,
+            google_granted_scopes_json=json.dumps(sorted(IDENTITY_SCOPES)),
+            expires_at=datetime.now(UTC) + timedelta(hours=1),
+        ))
+        db.commit()
+
+    class ProfileProvider:
+        def account_profile(self):
+            return type(
+                "Profile",
+                (),
+                {
+                    "name": "Teacher Example",
+                    "email": "teacher@example.edu",
+                    "picture": None,
+                },
+            )()
+
+    monkeypatch.setattr(
+        "classroom_downloader.routers.auth.make_google_provider",
+        lambda *_, **__: ProfileProvider(),
+    )
+
+    with TestClient(app) as client:
+        client.cookies.set(settings.session_cookie_name, session_id)
+        response = client.get("/api/auth/me")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["signed_in"] is True
+    assert body["identity_scopes"] is True
+    assert body["classroom_scopes"] is False
+    assert body["drive_scopes"] is False
+    assert body["granted_scopes"] == sorted(IDENTITY_SCOPES)
+    assert set(body["missing_capabilities"]) == {
+        "classroom_read",
+        "submissions_read",
+        "student_profile_read",
+        "drive_read",
+    }
 
 
 def test_logout_deletes_google_token(monkeypatch) -> None:

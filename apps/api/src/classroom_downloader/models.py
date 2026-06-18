@@ -290,6 +290,8 @@ class UserSession(SQLModel, table=True):
     id: str = Field(primary_key=True)
     user_email: str = Field(index=True)
     google_credentials_json: str
+    google_granted_scopes_json: str = "[]"
+    google_last_scope_update_at: datetime | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     expires_at: datetime
     last_seen_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

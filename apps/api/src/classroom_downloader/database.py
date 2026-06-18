@@ -33,6 +33,7 @@ def ensure_sqlite_dev_migrations(target_engine: Engine) -> None:
     _ensure_privacy_columns(target_engine)
     _ensure_cache_columns(target_engine)
     _ensure_user_email_columns(target_engine)
+    _ensure_user_session_columns(target_engine)
 
 
 def _ensure_activity_columns(target_engine: Engine) -> None:
@@ -187,6 +188,17 @@ def _ensure_cache_columns(target_engine: Engine) -> None:
 def _ensure_user_email_columns(target_engine: Engine) -> None:
     for table_name in ("course", "activity", "gradingjob", "exportjob"):
         _ensure_columns(target_engine, table_name, {"user_email": "VARCHAR DEFAULT ''"})
+
+
+def _ensure_user_session_columns(target_engine: Engine) -> None:
+    _ensure_columns(
+        target_engine,
+        "usersession",
+        {
+            "google_granted_scopes_json": "VARCHAR DEFAULT '[]'",
+            "google_last_scope_update_at": "DATETIME",
+        },
+    )
 
 
 def get_session() -> Generator[Session, None, None]:

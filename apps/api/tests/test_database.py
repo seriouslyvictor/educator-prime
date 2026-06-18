@@ -130,6 +130,20 @@ def test_sqlite_dev_migration_adds_cache_and_grading_metadata_columns(tmp_path) 
         connection.execute(
             text(
                 """
+                CREATE TABLE usersession (
+                    id VARCHAR PRIMARY KEY,
+                    user_email VARCHAR NOT NULL,
+                    google_credentials_json VARCHAR NOT NULL,
+                    created_at DATETIME NOT NULL,
+                    expires_at DATETIME NOT NULL,
+                    last_seen_at DATETIME NOT NULL
+                )
+                """
+            )
+        )
+        connection.execute(
+            text(
+                """
                 CREATE TABLE gradingscrubcache (
                     id VARCHAR PRIMARY KEY,
                     job_id VARCHAR NOT NULL,
@@ -202,6 +216,13 @@ def test_sqlite_dev_migration_adds_cache_and_grading_metadata_columns(tmp_path) 
         column["name"] for column in inspect(engine).get_columns("gradingjob")
     }
     assert "queue_state" in job_columns
+    session_columns = {
+        column["name"] for column in inspect(engine).get_columns("usersession")
+    }
+    assert {
+        "google_granted_scopes_json",
+        "google_last_scope_update_at",
+    }.issubset(session_columns)
     scrub_columns = {
         column["name"] for column in inspect(engine).get_columns("gradingscrubcache")
     }
