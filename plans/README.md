@@ -22,7 +22,8 @@ advisory session. The advisor does not modify source code.
 | 009 | Decompose GraderSetup.tsx + GraderQueue.tsx into co-located folders | P2 | M | 008 (same recipe; sequencing only) | DONE — commit 86350b1; Setup 608→356, Queue 564→213; build/test/lint green = baseline; e2e deferred to human (no backend/browser in agent) |
 | 010 | Frontend UI conventions guardrail (FRONTEND.md + safe `cn` consolidation) | P2 | S | — | DONE — commit 7cc05de; apps/web/FRONTEND.md added; cn consolidated onto lib/utils; utils.test.ts pins it; build/test/lint green = baseline |
 | 011 | Spike — bridge the home-brewed and shadcn token systems | P3 | M | 010 | DONE — spike/011-token-bridge branch; findings in apps/web/docs/token-bridge-findings.md; recommendation: bridge as prototyped; build green; screenshots deferred to human (no browser in agent); plan 012 written |
-| 012 | Implement the token bridge (fix dark mode + bridge shadcn palette to brand) | P3 | S | 011 | TODO |
+| 012 | Implement the token bridge (fix dark mode + bridge shadcn palette to brand) | P3 | S | 011 | DONE — token bridge already matched spike diff; FRONTEND.md updated; pnpm build and pnpm e2e green; screenshot evidence saved in apps/web/docs/screenshots/after |
+| 013 | Gradual Google permissions — incremental OAuth, capability gates, just-in-time Drive consent | P1 | L | 003 | TODO — first agent attempt discarded (built on a stale base 17 commits behind main); restart fresh from main HEAD |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED
 (one-line rationale).
