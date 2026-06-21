@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { ConnectView } from "./components/ConnectView";
 import { AdminView } from "./components/admin/AdminView";
+import { AuthGate } from "./components/auth/AuthGate";
+import { resolveAuthStage } from "./components/auth/authState";
 import { DoneView } from "./components/DoneView";
 import { DryRunDrawer } from "./components/DryRunDrawer";
 import {
@@ -27,7 +28,7 @@ import { useGradingQueue } from "./hooks/useGradingQueue";
 import { useGradingJob, readStoredJobId } from "./hooks/useGradingJob";
 import { AppIcon } from "./components/icons";
 import { InlineError } from "./components/ui";
-import { Gate, OfflinePill } from "./components/errors";
+import { OfflinePill } from "./components/errors";
 import type {
   AppView,
   GradingHealth,
@@ -213,13 +214,16 @@ export function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, [dryRunOpen, view]);
 
-  const partialConsentError = partialConsent
-    ? new ApiError(401, "google_auth_denied", "Missing required Google scopes.")
-    : null;
-  const gateError =
-    partialConsentError ?? (error && resolveError(error).tier === "gate" ? error : null);
+  const authStage = resolveAuthStage({
+    auth,
+    loading,
+    courses,
+    error,
+    partialConsent,
+  });
+  const authGateActive = authStage.kind !== "ready";
   const handleGateAction = () => {
-    const action = resolveError(gateError).action?.kind;
+    const action = resolveError(error).action?.kind;
     if (action === "reconnect-google") {
       void connectClassroom();
       return;
@@ -241,19 +245,33 @@ export function App() {
 
   return (
     <div className={appStyles.shell} data-screen-label={view}>
-      <Rail
-        view={view}
-        auth={auth}
-        history={history}
-        onNavigate={navigate}
-        onLogout={() => void logoutClassroom()}
-        themeMode={themeMode}
-        onThemeChange={setThemeMode}
-      />
+      {!authGateActive ? (
+        <Rail
+          view={view}
+          auth={auth}
+          history={history}
+          onNavigate={navigate}
+          onLogout={() => void logoutClassroom()}
+          themeMode={themeMode}
+          onThemeChange={setThemeMode}
+        />
+      ) : null}
 
       <main className="main">
-        {gateError ? (
-          <Gate error={gateError} onAction={handleGateAction} />
+        {authGateActive ? (
+          <AuthGate
+            auth={auth}
+            loading={loading}
+            busy={busy}
+            courses={courses}
+            error={error}
+            partialConsent={partialConsent}
+            apiOffline={apiOffline}
+            versionSkew={versionSkew}
+            onConnect={connectClassroom}
+            onLogout={() => void logoutClassroom()}
+            onRetry={handleGateAction}
+          />
         ) : (
           <>
             {versionSkew ? (
@@ -262,15 +280,6 @@ export function App() {
                 onAction={() => window.location.reload()}
               />
             ) : null}
-        {view === "connect" ? (
-          <ConnectView
-            connecting={busy}
-            deliveryMode={deliveryMode}
-            error={error}
-            onConnect={connectClassroom}
-          />
-        ) : null}
-
         {view === "admin" ? <AdminView /> : null}
 
         {view === "workspace" ? (
@@ -444,7 +453,7 @@ export function App() {
         ) : null}
           </>
         )}
-        {apiOffline && !gateError ? <OfflinePill /> : null}
+        {apiOffline && !authGateActive ? <OfflinePill /> : null}
       </main>
     </div>
   );

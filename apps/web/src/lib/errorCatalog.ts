@@ -53,6 +53,22 @@ const entries: Record<string, Omit<ErrorEntry, "technicalDetail">> = {
     body: "Reconecte a conta e marque todas as permissões solicitadas na tela do Google.",
     action: { label: "Reconectar Google", kind: "reconnect-google" },
   },
+  classroom_not_available: {
+    tier: "gate",
+    tone: "info",
+    icon: "shield",
+    title: "Esta conta n?o tem acesso ao Classroom",
+    body: "Troque para uma conta Google escolar com Classroom habilitado para continuar.",
+    action: { label: "Trocar de conta", kind: "reconnect-google" },
+  },
+  google_policy_blocked: {
+    tier: "gate",
+    tone: "warning",
+    icon: "triangleAlert",
+    title: "A organiza??o bloqueou este app",
+    body: "O administrador Google Workspace precisa liberar o acesso ao Classroom Downloader.",
+    action: { label: "Trocar de conta", kind: "reconnect-google" },
+  },
   oauth_not_configured: {
     tier: "gate",
     tone: "danger",

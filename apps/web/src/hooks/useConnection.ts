@@ -33,6 +33,16 @@ type UseConnectionOptions = {
   resetWorkspace: () => void;
 };
 
+
+function readGoogleCallbackError(): ApiError | null {
+  const params = new URLSearchParams(window.location.search);
+  const googleStatus = params.get("google");
+  const googleReason = params.get("reason");
+  if (googleStatus !== "error" || !googleReason) return null;
+  window.history.replaceState({}, "", window.location.pathname);
+  return new ApiError(401, googleReason, "Google sign-in did not complete.");
+}
+
 function appError(caught: unknown, fallback: string): ApiError {
   return apiErrorFromUnknown(caught, fallback);
 }
@@ -48,6 +58,7 @@ export function useConnection({
   resetWorkspace,
 }: UseConnectionOptions) {
   const [auth, setAuth] = useState<AuthState | null>(null);
+  const [googleCallbackError] = useState<ApiError | null>(() => readGoogleCallbackError());
   const [loading, setLoading] = useState(true);
   const [apiOffline, setApiOffline] = useState(false);
   const [versionSkew, setVersionSkew] = useState(false);
@@ -61,6 +72,13 @@ export function useConnection({
   async function bootstrap() {
     setLoading(true);
     setError(null);
+    if (googleCallbackError) {
+      setAuth(null);
+      setError(googleCallbackError);
+      setView("connect");
+      setLoading(false);
+      return;
+    }
     try {
       const authState = await api.authMe();
       setAuth(authState);
@@ -83,8 +101,9 @@ export function useConnection({
         return;
       }
       setView("workspace");
-    } catch {
+    } catch (caught) {
       setAuth(null);
+      setError(appError(caught, "Falha ao carregar o estado da conexao."));
       setView("connect");
     } finally {
       setLoading(false);

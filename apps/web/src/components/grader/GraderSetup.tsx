@@ -82,7 +82,6 @@ export function GraderSetup({
     { name: "Funcionalidade", weight: 60, description: "Resolve o que foi pedido." },
     { name: "Clareza", weight: 40, description: "Organização, leitura e justificativa." },
   ]);
-  const selectedRubric = rubricModes.find((mode) => mode.id === rubricMode) ?? rubricModes[0];
   // Infer mode runs in two steps: first produce the rubric, then let the teacher
   // edit it. Inference has happened once the job carries non-placeholder criteria.
   const criteriaInferred = rubricMode === "infer" && !!job && job.criteria.length > 0 && !hasDefaultCriteria(job);

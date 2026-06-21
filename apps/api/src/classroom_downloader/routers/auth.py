@@ -178,6 +178,16 @@ def auth_start(scopes: list[str], db: Session = Depends(get_session)) -> AuthSta
     )
 
 
+def _google_callback_reason(error: str | None) -> str:
+    if error in {"admin_policy_enforced", "org_internal", "disallowed_useragent"}:
+        return "google_policy_blocked"
+    return "google_auth_denied"
+
+
+def _frontend_google_error_redirect(reason: str) -> RedirectResponse:
+    return RedirectResponse(f"{settings.frontend_origin}/?google=error&reason={reason}")
+
+
 def _email_from_credentials(creds) -> str | None:
     import base64 as _base64
     import json as _json
@@ -198,11 +208,30 @@ def _email_from_credentials(creds) -> str | None:
 @router.get("/api/auth/google/callback")
 def auth_callback(
     request: Request,
-    code: str,
-    state: str,
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
+    error_description: str | None = None,
     db: Session = Depends(get_session),
 ) -> RedirectResponse:
-    log_event(logger, "auth.google.callback.start", state=state, has_code=bool(code))
+    log_event(
+        logger,
+        "auth.google.callback.start",
+        state=state,
+        has_code=bool(code),
+        google_error=error,
+    )
+    if error:
+        log_warning(
+            logger,
+            "auth.google.callback.provider_error",
+            google_error=error,
+            error_description=error_description,
+        )
+        return _frontend_google_error_redirect(_google_callback_reason(error))
+    if not code or not state:
+        log_warning(logger, "auth.google.callback.missing_code_or_state")
+        return _frontend_google_error_redirect("google_auth_denied")
     if not settings.google_client_id or not settings.google_client_secret:
         log_warning(logger, "auth.google.callback.not_configured")
         raise api_error(
@@ -242,7 +271,15 @@ def auth_callback(
     )
     flow.redirect_uri = settings.google_redirect_uri
     os.environ["OAUTHLIB_RELAX_TOKEN_SCOPE"] = "1"
-    flow.fetch_token(authorization_response=str(request.url), code=code)
+    try:
+        flow.fetch_token(authorization_response=str(request.url), code=code)
+    except Exception as token_error:
+        log_warning(
+            logger,
+            "auth.google.callback.fetch_token_failed",
+            error=str(token_error),
+        )
+        return _frontend_google_error_redirect("google_auth_denied")
     creds = flow.credentials
     user_email = _email_from_credentials(creds) or ""
 

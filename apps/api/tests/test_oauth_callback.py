@@ -65,3 +65,58 @@ def test_callback_relaxes_scope_mismatch_before_fetch_token(monkeypatch) -> None
     assert response.headers["location"] == f"{settings.frontend_origin}/?google=connected"
     with Session(engine) as db:
         assert db.get(OAuthState, "state-123") is None
+
+
+def test_callback_redirects_access_denied_to_google_auth_denied(monkeypatch) -> None:
+    monkeypatch.setattr(settings, "google_client_id", "client-id")
+    monkeypatch.setattr(settings, "google_client_secret", "client-secret")
+
+    with TestClient(app) as client:
+        response = client.get(
+            "/api/auth/google/callback?error=access_denied&state=state-123",
+            follow_redirects=False,
+        )
+
+    assert response.status_code == 307
+    assert response.headers["location"] == (
+        f"{settings.frontend_origin}/?google=error&reason=google_auth_denied"
+    )
+
+
+def test_callback_redirects_admin_policy_to_policy_blocked(monkeypatch) -> None:
+    monkeypatch.setattr(settings, "google_client_id", "client-id")
+    monkeypatch.setattr(settings, "google_client_secret", "client-secret")
+
+    with TestClient(app) as client:
+        response = client.get(
+            "/api/auth/google/callback?error=admin_policy_enforced&state=state-123",
+            follow_redirects=False,
+        )
+
+    assert response.status_code == 307
+    assert response.headers["location"] == (
+        f"{settings.frontend_origin}/?google=error&reason=google_policy_blocked"
+    )
+
+
+def test_callback_expired_state_still_returns_400(monkeypatch) -> None:
+    monkeypatch.setattr(settings, "google_client_id", "client-id")
+    monkeypatch.setattr(settings, "google_client_secret", "client-secret")
+    monkeypatch.setattr(settings, "session_secret_key", "test-session-secret")
+
+    init_db()
+    with Session(engine) as db:
+        db.merge(OAuthState(
+            id="expired-state",
+            scopes_json=json.dumps(["openid"]),
+            expires_at=datetime.now(UTC) - timedelta(minutes=1),
+        ))
+        db.commit()
+
+    with TestClient(app) as client:
+        response = client.get(
+            "/api/auth/google/callback?state=expired-state&code=code-123",
+            follow_redirects=False,
+        )
+
+    assert response.status_code == 400
