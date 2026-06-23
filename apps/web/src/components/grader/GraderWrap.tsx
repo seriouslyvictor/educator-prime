@@ -125,6 +125,9 @@ export function GraderWrap({
   async function handleOpenPiP() {
     // Snapshot queue at open time so auto-marking doesn't reshuffle mid-session
     pipQueueRef.current = pipQueue;
+    // Deep-link straight to the Classroom assignment screen so the teacher lands
+    // where they'll paste feedback; the grid companion handles copy-only.
+    window.open(classroomActivityUrl(job), "classroom-posting");
     await openPiP();
   }
 

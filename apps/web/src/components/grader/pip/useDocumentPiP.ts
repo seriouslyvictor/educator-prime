@@ -50,8 +50,8 @@ export function useDocumentPiP(): UseDocumentPiPResult {
 
     // requestWindow must be called from a user gesture (click handler)
     const win = await window.documentPictureInPicture.requestWindow({
-      width: 360,
-      height: 480,
+      width: 600,
+      height: 680,
     });
 
     // Copy all stylesheets from the opener document
