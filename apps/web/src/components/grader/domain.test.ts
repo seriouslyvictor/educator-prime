@@ -52,14 +52,16 @@ describe("grader domain helpers", () => {
     expect(scoreColor(50)).toBe("var(--danger)");
   });
 
-  it("builds the Classroom activity URL", () => {
+  it("builds the Classroom grading URL with base64-encoded IDs", () => {
     const job = {
-      course_id: "course-1",
-      activity_id: "activity-1",
+      course_id: "794020742771",
+      activity_id: "796411880885",
     } as GradingJob;
 
+    // Classroom web routes need base64-encoded IDs; raw numeric IDs hang on an
+    // endless loading screen. Lands on the teacher submissions grading view.
     expect(classroomActivityUrl(job)).toBe(
-      "https://classroom.google.com/c/course-1/a/activity-1/details",
+      "https://classroom.google.com/u/0/c/Nzk0MDIwNzQyNzcx/a/Nzk2NDExODgwODg1/submissions/by-status/and-sort-first-name/all/all",
     );
   });
 });
