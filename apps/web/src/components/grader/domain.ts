@@ -20,10 +20,22 @@ function encodeClassroomId(id: string): string {
   return btoa(id).replace(/=+$/, "");
 }
 
-export function classroomActivityUrl(job: GradingJob): string {
+// Pin the link to the account signed into the tool. `authuser` accepts the
+// account email and selects that exact account regardless of its /u/N/ index,
+// so we never land on the wrong (or a signed-out) Google account.
+export function withAuthUser(url: string, accountEmail?: string | null): string {
+  if (!accountEmail) return url;
+  const separator = url.includes("?") ? "&" : "?";
+  return `${url}${separator}authuser=${encodeURIComponent(accountEmail)}`;
+}
+
+export function classroomActivityUrl(job: GradingJob, accountEmail?: string | null): string {
   const course = encodeClassroomId(job.course_id);
   const activity = encodeClassroomId(job.activity_id);
   // Land on the teacher's submissions grading view (where feedback is pasted),
   // not /details which is the read-only stream card.
-  return `https://classroom.google.com/u/0/c/${course}/a/${activity}/submissions/by-status/and-sort-first-name/all/all`;
+  return withAuthUser(
+    `https://classroom.google.com/c/${course}/a/${activity}/submissions/by-status/and-sort-first-name/all/all`,
+    accountEmail,
+  );
 }

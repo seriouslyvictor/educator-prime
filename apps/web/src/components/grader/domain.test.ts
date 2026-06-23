@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classroomActivityUrl, scoreColor, scoreOf, studentLabel } from "./domain";
+import { classroomActivityUrl, scoreColor, scoreOf, studentLabel, withAuthUser } from "./domain";
 import type { GradingJob, GradingSubmission } from "../../types";
 
 function submission(overrides: Partial<GradingSubmission>): GradingSubmission {
@@ -61,7 +61,28 @@ describe("grader domain helpers", () => {
     // Classroom web routes need base64-encoded IDs; raw numeric IDs hang on an
     // endless loading screen. Lands on the teacher submissions grading view.
     expect(classroomActivityUrl(job)).toBe(
-      "https://classroom.google.com/u/0/c/Nzk0MDIwNzQyNzcx/a/Nzk2NDExODgwODg1/submissions/by-status/and-sort-first-name/all/all",
+      "https://classroom.google.com/c/Nzk0MDIwNzQyNzcx/a/Nzk2NDExODgwODg1/submissions/by-status/and-sort-first-name/all/all",
     );
+  });
+
+  it("pins the Classroom URL to the signed-in account via authuser", () => {
+    const job = {
+      course_id: "794020742771",
+      activity_id: "796411880885",
+    } as GradingJob;
+
+    expect(classroomActivityUrl(job, "teacher@school.edu.br")).toBe(
+      "https://classroom.google.com/c/Nzk0MDIwNzQyNzcx/a/Nzk2NDExODgwODg1/submissions/by-status/and-sort-first-name/all/all?authuser=teacher%40school.edu.br",
+    );
+  });
+
+  it("appends authuser without clobbering existing query params", () => {
+    expect(withAuthUser("https://classroom.google.com/c/abc/details", "a@b.com")).toBe(
+      "https://classroom.google.com/c/abc/details?authuser=a%40b.com",
+    );
+    expect(withAuthUser("https://x.test/p?foo=1", "a@b.com")).toBe(
+      "https://x.test/p?foo=1&authuser=a%40b.com",
+    );
+    expect(withAuthUser("https://x.test/p", null)).toBe("https://x.test/p");
   });
 });

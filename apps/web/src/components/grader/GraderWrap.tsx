@@ -4,7 +4,7 @@ import { api } from "../../lib/api";
 import type { GradingJob, GradingSubmission } from "../../types";
 import { AppIcon } from "../icons";
 import { GraderTopbar } from "./GraderTopbar";
-import { classroomActivityUrl, scoreOf, studentLabel } from "./domain";
+import { classroomActivityUrl, scoreOf, studentLabel, withAuthUser } from "./domain";
 import { safeStatusLabel } from "./graderStatus";
 import graderStyles from "./Grader.module.css";
 import { PostingPiP } from "./pip/PostingPiP";
@@ -18,6 +18,7 @@ function postingClipboardText(submission: GradingSubmission): string {
 export function GraderWrap({
   job,
   busy,
+  accountEmail,
   onBack,
   onQueue,
   onDeleteCache,
@@ -25,6 +26,7 @@ export function GraderWrap({
 }: {
   job: GradingJob;
   busy: boolean;
+  accountEmail: string | null;
   onBack: () => void;
   onQueue: () => void;
   onDeleteCache: () => void;
@@ -127,7 +129,8 @@ export function GraderWrap({
     pipQueueRef.current = pipQueue;
     // Deep-link straight to the Classroom assignment screen so the teacher lands
     // where they'll paste feedback; the grid companion handles copy-only.
-    window.open(classroomActivityUrl(job), "classroom-posting");
+    // authuser pins it to the account signed into the tool.
+    window.open(classroomActivityUrl(job, accountEmail), "classroom-posting");
     await openPiP();
   }
 
@@ -255,7 +258,9 @@ export function GraderWrap({
               <div className="classroom-post-list">
                 {gradedSubmissions.map((submission) => {
                   const score = scoreOf(submission);
-                  const classroomUrl = submission.alternate_link ?? classroomActivityUrl(job);
+                  const classroomUrl = submission.alternate_link
+                    ? withAuthUser(submission.alternate_link, accountEmail)
+                    : classroomActivityUrl(job, accountEmail);
                   const postedBusy = postingBusyId === submission.id;
                   return (
                     <div key={submission.id} className="classroom-post-row">

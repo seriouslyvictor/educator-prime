@@ -432,6 +432,7 @@ export function App() {
             <GraderWrap
               job={gradingJob}
               busy={graderBusy}
+              accountEmail={auth?.email ?? null}
               onBack={() => setView("graderReview")}
               onQueue={() => navigate("graderQueue")}
               onDeleteCache={() => void deleteGradingCache()}
