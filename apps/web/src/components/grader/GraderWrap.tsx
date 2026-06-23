@@ -127,11 +127,17 @@ export function GraderWrap({
   async function handleOpenPiP() {
     // Snapshot queue at open time so auto-marking doesn't reshuffle mid-session
     pipQueueRef.current = pipQueue;
-    // Deep-link straight to the Classroom assignment screen so the teacher lands
-    // where they'll paste feedback; the grid companion handles copy-only.
-    // authuser pins it to the account signed into the tool.
+    // Order matters. documentPictureInPicture.requestWindow() requires the
+    // opener to be visible + user-activated; window.open()'s new tab makes the
+    // opener hidden. So kick off the PiP request FIRST (synchronously, while the
+    // opener is still visible), then open the Classroom tab in the SAME gesture
+    // turn so neither popup is blocked. Awaiting before window.open would let the
+    // new tab hide the opener and the PiP would silently fail to render.
+    const pipReady = openPiP();
+    // Deep-link to the assignment grading screen; authuser pins it to the
+    // account signed into the tool.
     window.open(classroomActivityUrl(job, accountEmail), "classroom-posting");
-    await openPiP();
+    await pipReady;
   }
 
   async function handlePiPMarkPosted(submission: GradingSubmission) {
