@@ -21,10 +21,47 @@ TEXT_MIME_PREFIXES = ("text/",)
 TEXT_MIME_TYPES = {
     "application/json",
     "application/javascript",
+    "application/x-javascript",  # legacy variant Drive returns for .js uploads
+    "application/ecmascript",
     "application/x-python-code",
     "application/xml",
     "application/yaml",
     "application/x-yaml",
+}
+# When Drive reports a vague or legacy mime (application/octet-stream,
+# application/x-javascript, ...) we fall back to the source extension so clearly
+# textual code submissions aren't rejected. Only reached after _decode_text has
+# already confirmed the bytes decode as text, so binaries can't slip through.
+# Mirrors the archive path's GRADEABLE_ZIP_EXTENSIONS allowlist.
+TEXT_SOURCE_EXTENSIONS = {
+    ".c",
+    ".cjs",
+    ".cpp",
+    ".cs",
+    ".css",
+    ".csv",
+    ".h",
+    ".hpp",
+    ".htm",
+    ".html",
+    ".ipynb",
+    ".java",
+    ".js",
+    ".json",
+    ".jsx",
+    ".kt",
+    ".md",
+    ".mjs",
+    ".php",
+    ".py",
+    ".rb",
+    ".sql",
+    ".ts",
+    ".tsx",
+    ".txt",
+    ".xml",
+    ".yaml",
+    ".yml",
 }
 DEGRADED_MIME_TYPES: set[str] = set()
 SAFE_SOURCE_EXTENSIONS = {
@@ -148,11 +185,18 @@ def extract_submission_content(
             error="unsupported_binary_submission",
         )
 
-    if mime_type.startswith(TEXT_MIME_PREFIXES) or mime_type in TEXT_MIME_TYPES:
+    source_suffix = Path(cache_file.source_name).suffix.lower()
+    if (
+        mime_type.startswith(TEXT_MIME_PREFIXES)
+        or mime_type in TEXT_MIME_TYPES
+        or source_suffix in TEXT_SOURCE_EXTENSIONS
+    ):
         log_event(
             logger,
             "content.extract.supported",
             cache_file_id=cache_file.id,
+            mime_type=mime_type,
+            source_suffix=source_suffix,
             char_count=len(text),
             text_preview=text_preview(text),
         )

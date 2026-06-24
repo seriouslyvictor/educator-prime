@@ -2404,6 +2404,40 @@ def test_content_extraction_corrupt_docx_returns_unsupported(tmp_path: Path) -> 
     assert result.error == "office_parse_failed"
 
 
+def test_content_extraction_js_legacy_mime_returns_supported(tmp_path: Path) -> None:
+    # Drive hydrates some .js uploads to the legacy application/x-javascript mime,
+    # which used to fall through to unsupported_file_type. It must be supported.
+    cache = _make_cache_file(
+        tmp_path, b"console.log('oi');\n", "application/x-javascript", "Script.JS"
+    )
+    result = extract_submission_content(cache)
+    assert result.status == "supported"
+    assert result.error is None
+    assert "console.log" in result.text
+
+
+def test_content_extraction_js_octet_stream_falls_back_to_extension(tmp_path: Path) -> None:
+    # When Drive can't classify the file it reports application/octet-stream;
+    # the .js extension fallback (on decodable text) keeps it gradeable.
+    cache = _make_cache_file(
+        tmp_path, b"const x = 1;\n", "application/octet-stream", "solucao.js"
+    )
+    result = extract_submission_content(cache)
+    assert result.status == "supported"
+    assert result.error is None
+
+
+def test_content_extraction_octet_stream_binary_still_unsupported(tmp_path: Path) -> None:
+    # The extension fallback must not rescue genuine binaries: undecodable bytes
+    # are rejected as unsupported_binary before the extension check is reached.
+    cache = _make_cache_file(
+        tmp_path, b"\x00\x01\x02\xff\xfe", "application/octet-stream", "mystery.bin"
+    )
+    result = extract_submission_content(cache)
+    assert result.status == "unsupported"
+    assert result.error == "unsupported_binary_submission"
+
+
 # ---------------------------------------------------------------------------
 # Lane B — content_extraction: PDF → pending_vision / unsupported
 # ---------------------------------------------------------------------------
