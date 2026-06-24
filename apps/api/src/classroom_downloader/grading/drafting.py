@@ -4,15 +4,19 @@ from datetime import UTC, datetime
 from sqlmodel import Session, select
 
 from ..content_extraction import ExtractedSubmissionContent
-from ..grading_engine import GradingEngine, GradingEngineRequest
+from ..grading_engine import GradingEngine, GradingEngineRequest, OutlierBatchRequest, OutlierSubmission
 from ..google_provider import GoogleProvider, SubmissionFile
 from ..llm_errors import LlmCallError, classify_llm_exception
 from ..models import (
     GradingAiAttempt,
+    GradingAiAttemptPayload,
     GradingCriterion,
+    GradingFileCache,
     GradingJob,
+    GradingScrubCache,
     GradingStatus,
     GradingSubmission,
+    GradingSubmissionFile,
 )
 from ..observability import get_logger, log_debug, log_error, log_event, safe_fields, text_preview
 from ..privacy import ScrubbedSubmission
@@ -312,7 +316,7 @@ def _draft_submission(
     auto_accept = (
         job.teacher_loop == "auto"
         and result.confidence >= settings.grading_auto_accept_confidence
-        and not result.flags
+        and not privacy_flags
         and result.score is not None
     )
     submission.ai_score = None if cowrite else result.score
@@ -323,10 +327,9 @@ def _draft_submission(
         submission.final_score = result.score if reset_review else submission.final_score or result.score
     submission.feedback = result.feedback if reset_review else submission.feedback or result.feedback
     submission.reviewed = auto_accept if reset_review else submission.reviewed or auto_accept
-    # The single badge prefers the engine's human-review flags; privacy
-    # redaction categories (name/cpf/...) are informational and only used as a
-    # fallback when the engine raised no review flag of its own.
-    badge_flags = grading_flags or privacy_flags
+    # Pass-1 keeps only mechanical privacy/extraction signals in the badge.
+    # Whole-class outliers are reviewed after all drafts complete.
+    badge_flags = privacy_flags
     submission.flag = None if auto_accept else badge_flags[0] if badge_flags else None
     submission.error = None
     submission.updated_at = datetime.now(UTC)
@@ -345,6 +348,195 @@ def _draft_submission(
         error=submission.error,
     )
     return stats
+
+
+def _json_list(value: str | None) -> list[str]:
+    import json
+
+    if not value:
+        return []
+    try:
+        parsed = json.loads(value)
+    except json.JSONDecodeError:
+        return []
+    return [item for item in parsed if isinstance(item, str)] if isinstance(parsed, list) else []
+
+
+def _latest_grading_attempts(session: Session, job_id: str) -> dict[str, GradingAiAttempt]:
+    attempts = session.exec(
+        select(GradingAiAttempt)
+        .where(GradingAiAttempt.job_id == job_id)
+        .where(GradingAiAttempt.stage == "grading")
+        .order_by(GradingAiAttempt.created_at.desc())
+    ).all()
+    latest: dict[str, GradingAiAttempt] = {}
+    for attempt in attempts:
+        latest.setdefault(attempt.submission_id, attempt)
+    return latest
+
+
+def _outlier_review_already_completed(session: Session, job_id: str) -> bool:
+    return (
+        session.exec(
+            select(GradingAiAttempt)
+            .where(GradingAiAttempt.job_id == job_id)
+            .where(GradingAiAttempt.stage == "outlier_review")
+            .where(GradingAiAttempt.status == "completed")
+        ).first()
+        is not None
+    )
+
+
+def _mechanical_flag_for_attempt(attempt: GradingAiAttempt | None) -> str | None:
+    if attempt is None:
+        return None
+    privacy_flags = _json_list(attempt.privacy_flags_json)
+    if privacy_flags:
+        return privacy_flags[0]
+    if attempt.extraction_status not in {"supported", "ok", "clean"}:
+        return attempt.extraction_status
+    if attempt.privacy_status not in {"clean", "redacted"}:
+        return attempt.privacy_status
+    return None
+
+
+def _scrubbed_content_for_outlier_review(session: Session, submission: GradingSubmission) -> str | None:
+    files = session.exec(
+        select(GradingSubmissionFile).where(GradingSubmissionFile.submission_id == submission.id)
+    ).all()
+    sections: list[str] = []
+    for index, file in enumerate(files, start=1):
+        cache_file = session.exec(
+            select(GradingFileCache)
+            .where(GradingFileCache.job_id == submission.job_id)
+            .where(GradingFileCache.submission_id == submission.id)
+            .where(GradingFileCache.source_file_id == file.source_file_id)
+            .where(GradingFileCache.deleted_at.is_(None))
+            .order_by(GradingFileCache.created_at.desc())
+        ).first()
+        if cache_file is None:
+            continue
+        scrub_cache = session.exec(
+            select(GradingScrubCache)
+            .where(GradingScrubCache.job_id == submission.job_id)
+            .where(GradingScrubCache.submission_id == submission.id)
+            .where(GradingScrubCache.content_hash == cache_file.content_hash)
+            .order_by(GradingScrubCache.created_at.desc())
+        ).first()
+        if scrub_cache is None or scrub_cache.privacy_status == "failed" or not scrub_cache.scrubbed_content.strip():
+            continue
+        content = scrub_cache.scrubbed_content.strip()
+        if len(files) > 1:
+            sections.append(f"=== Arquivo {index} ===\n{content}")
+        else:
+            sections.append(content)
+    return "\n\n".join(sections) if sections else None
+
+
+def _outlier_candidates(
+    session: Session,
+    job: GradingJob,
+) -> tuple[list[OutlierSubmission], dict[str, GradingAiAttempt]]:
+    attempts_by_submission = _latest_grading_attempts(session, job.id)
+    candidates: list[OutlierSubmission] = []
+    submissions = session.exec(
+        select(GradingSubmission).where(GradingSubmission.job_id == job.id)
+    ).all()
+    for submission in submissions:
+        attempt = attempts_by_submission.get(submission.id)
+        if attempt is None or attempt.status != "completed" or submission.error:
+            continue
+        content = _scrubbed_content_for_outlier_review(session, submission)
+        if content is None:
+            payload = session.get(GradingAiAttemptPayload, attempt.id)
+            content = payload.prompt_text if payload is not None and payload.prompt_text else None
+        if not content:
+            continue
+        candidates.append(
+            OutlierSubmission(
+                id=submission.id,
+                student_label=submission.student_name or submission.student_email or submission.source_name,
+                score=submission.ai_score,
+                feedback=submission.feedback or "",
+                content=content,
+            )
+        )
+    return candidates, attempts_by_submission
+
+
+def review_outliers_for_job(
+    session: Session,
+    job: GradingJob,
+    grading_engine: GradingEngine,
+) -> list[dict[str, str]]:
+    settings = get_settings()
+    if settings.grading_outlier_review != "on":
+        attempts_by_submission = _latest_grading_attempts(session, job.id)
+        for submission in session.exec(select(GradingSubmission).where(GradingSubmission.job_id == job.id)).all():
+            if not submission.error:
+                submission.flag = _mechanical_flag_for_attempt(attempts_by_submission.get(submission.id))
+                submission.updated_at = datetime.now(UTC)
+                session.add(submission)
+        _refresh_counts(session, job)
+        session.commit()
+        return []
+    if _outlier_review_already_completed(session, job.id):
+        return []
+    candidates, attempts_by_submission = _outlier_candidates(session, job)
+    if not candidates:
+        return []
+    reviewer = getattr(grading_engine, "review_outliers", None)
+    if not callable(reviewer):
+        flags = []
+    else:
+        flags = reviewer(
+            OutlierBatchRequest(
+                job_id=job.id,
+                activity_title=job.activity_title,
+                submissions=candidates,
+            )
+        ) or []
+    flag_reasons = {flag.id: flag.reason for flag in flags}
+    candidate_ids = {candidate.id for candidate in candidates}
+    for submission in session.exec(select(GradingSubmission).where(GradingSubmission.job_id == job.id)).all():
+        if submission.id not in candidate_ids or submission.error:
+            continue
+        submission.flag = flag_reasons.get(submission.id) or _mechanical_flag_for_attempt(attempts_by_submission.get(submission.id))
+        submission.updated_at = datetime.now(UTC)
+        session.add(submission)
+    marker_submission = session.get(GradingSubmission, candidates[0].id)
+    if marker_submission is not None:
+        metadata = _attempt_metadata(grading_engine)
+        _record_attempt(
+            session=session,
+            job=job,
+            submission=marker_submission,
+            engine=grading_engine,
+            status="completed",
+            extraction_status="supported",
+            privacy_status="clean",
+            flags=[flag.reason for flag in flags],
+            privacy_flags=[],
+            retry_count=0,
+            stage="outlier_review",
+            prompt_tokens=metadata["prompt_tokens"],
+            completion_tokens=metadata["completion_tokens"],
+            token_count=metadata["token_count"],
+            cached_prompt_tokens=metadata["cached_prompt_tokens"],
+            cache_write_tokens=metadata["cache_write_tokens"],
+            cost_cents=metadata["cost_cents"],
+            latency_ms=metadata["latency_ms"],
+        )
+    _refresh_counts(session, job)
+    session.commit()
+    log_event(
+        logger,
+        "grading.outlier_review.complete",
+        job_id=job.id,
+        candidates=len(candidates),
+        flags=len(flags),
+    )
+    return [{"id": flag.id, "reason": flag.reason} for flag in flags]
 
 
 def _vision_extractor_for_job(
@@ -415,6 +607,7 @@ def draft_grading_job(
     on_submission=None,
     on_queued=None,
     on_submission_start=None,
+    on_outlier_progress=None,
 ) -> GradingJob:
     from classroom_downloader import grading as _grading_pkg
     grading_engine = grading_engine or _grading_pkg.get_grading_engine()
@@ -479,6 +672,18 @@ def draft_grading_job(
         if on_submission:
             on_submission(index, total, submission.source_name, grading_submission_snapshot(session, submission))
 
+    if on_outlier_progress:
+        on_outlier_progress(total, total, "Analisando exce\u00e7\u00f5es")
+    outlier_flags = review_outliers_for_job(session, job, grading_engine)
+    for flag in outlier_flags:
+        submission = session.get(GradingSubmission, flag["id"])
+        if submission is None:
+            continue
+        snapshot = grading_submission_snapshot(session, submission)
+        if on_outlier_progress:
+            on_outlier_progress(total, total, "Analisando exce\u00e7\u00f5es", snapshot)
+        elif on_submission:
+            on_submission(total, total, "Analisando exce\u00e7\u00f5es", snapshot)
     _refresh_counts(session, job)
     _refresh_cost_rollup(session, job, grading_engine, started)
     job.status = GradingStatus.completed if job.reviewed_submissions == job.total_submissions and job.total_submissions else GradingStatus.reviewing

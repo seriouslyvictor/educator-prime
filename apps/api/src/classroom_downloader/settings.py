@@ -64,6 +64,9 @@ class Settings(BaseSettings):
     grading_auto_accept_confidence: float = 0.85
     grading_structured_output: Literal["auto", "json_object"] = "auto"
     grading_batch_mode: Literal["per_submission", "class_batch"] = "per_submission"
+    grading_outlier_review: Literal["on", "off"] = "on"
+    grading_outlier_batch_max_submissions: int = 30
+    grading_outlier_context_fraction: float = 0.8
     rubric_infer_sample_size: int = 4
     rubric_description_min_chars: int = 200
     rubric_description_min_words: int = 25

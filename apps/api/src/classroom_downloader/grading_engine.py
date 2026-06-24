@@ -45,6 +45,28 @@ class RubricInferenceRequest:
 
 
 @dataclass(frozen=True)
+class OutlierSubmission:
+    id: str
+    student_label: str
+    score: float | None
+    feedback: str
+    content: str
+
+
+@dataclass(frozen=True)
+class OutlierBatchRequest:
+    job_id: str
+    activity_title: str
+    submissions: list[OutlierSubmission]
+
+
+@dataclass(frozen=True)
+class OutlierFlag:
+    id: str
+    reason: str
+
+
+@dataclass(frozen=True)
 class VisionExtractionRequest:
     job_id: str
     submission_id: str
@@ -74,6 +96,10 @@ class GradingEngine(Protocol):
         self, request: RubricInferenceRequest
     ) -> list[dict[str, str | int | None]]:
         ...
+
+    def review_outliers(self, request: OutlierBatchRequest) -> list[OutlierFlag]:
+        ...
+
 
     def extract_image(
         self, request: VisionExtractionRequest
@@ -166,6 +192,28 @@ class MockGradingEngine:
             {"name": "Racioc\u00ednio", "weight": 25, "description": "Explica como as evid\u00eancias sustentam a conclus\u00e3o."},
             {"name": "Organiza\u00e7\u00e3o", "weight": 15, "description": "Mant\u00e9m a resposta organizada, leg\u00edvel e correta."},
         ]
+
+
+    def review_outliers(self, request: OutlierBatchRequest) -> list[OutlierFlag]:
+        log_event(
+            logger,
+            "grading_engine.mock.review_outliers",
+            job_id=request.job_id,
+            activity_title=request.activity_title,
+            submission_count=len(request.submissions),
+        )
+        scored = [row.score for row in request.submissions if row.score is not None]
+        average = sum(scored) / len(scored) if scored else None
+        flags: list[OutlierFlag] = []
+        for row in request.submissions:
+            content = row.content.lower()
+            if "wrong exercise" in content or "exerc\u00edcio errado" in content or "exercicio errado" in content:
+                flags.append(OutlierFlag(id=row.id, reason="Poss\u00edvel entrega de exerc\u00edcio errado."))
+            elif average is not None and row.score is not None and row.score <= average - 25:
+                flags.append(OutlierFlag(id=row.id, reason="Nota muito abaixo do padr\u00e3o da turma."))
+        self.last_prompt_text = f"outlier_submissions={len(request.submissions)}"
+        self.last_response_text = f"flags={[(flag.id, flag.reason) for flag in flags]}"
+        return flags
 
     def extract_image(
         self, request: VisionExtractionRequest

@@ -90,3 +90,86 @@ def test_submission_preview_unknown_job_is_404() -> None:
         response = client.get("/api/grading/jobs/missing/submissions/missing/preview")
 
     assert response.status_code == 404
+
+
+def test_draft_resume_does_not_double_run_outlier_review(tmp_path) -> None:
+    from uuid import uuid4
+
+    from sqlmodel import Session, select
+
+    from classroom_downloader.database import engine, init_db
+    from classroom_downloader.google_provider import MockGoogleProvider, SubmissionFile
+    from classroom_downloader.grading import draft_grading_job, ensure_default_criteria
+    from classroom_downloader.grading_engine import GradingEngineResult, OutlierFlag
+    from classroom_downloader.models import GradingAiAttempt, GradingJob, GradingStatus
+    from classroom_downloader.settings import get_settings
+
+    class CountingEngine:
+        name = "counting"
+        model = None
+
+        def __init__(self):
+            self.review_count = 0
+
+        def grade(self, request):
+            return GradingEngineResult(
+                score=80,
+                confidence=0.9,
+                feedback="ok",
+                flags=[],
+                criterion_notes=[],
+            )
+
+        def infer_rubric(self, request):
+            return []
+
+        def review_outliers(self, request):
+            self.review_count += 1
+            return [OutlierFlag(id=request.submissions[0].id, reason="Revisar excecao.")]
+
+        def extract_image(self, request):  # pragma: no cover
+            raise NotImplementedError
+
+    get_settings().grading_cache_path = str(tmp_path / "grading")
+    init_db()
+    provider = MockGoogleProvider()
+    provider.files = [
+        SubmissionFile(
+            "file-1",
+            "course-resume",
+            "activity-resume",
+            None,
+            "Student One",
+            "drive-1",
+            "submission.txt",
+            "text/plain",
+            b"answer text",
+        )
+    ]
+    engine_instance = CountingEngine()
+    with Session(engine) as session:
+        job = GradingJob(
+            id=str(uuid4()),
+            course_id="course-resume",
+            course_name="Course Resume",
+            activity_id="activity-resume",
+            activity_title="Activity Resume",
+            rubric_mode="brief",
+            teacher_loop="approve",
+            status=GradingStatus.ready,
+        )
+        session.add(job)
+        ensure_default_criteria(session, job.id, None)
+        session.commit()
+        session.refresh(job)
+
+        draft_grading_job(session, job, provider, engine_instance)
+        draft_grading_job(session, job, provider, engine_instance)
+        markers = session.exec(
+            select(GradingAiAttempt)
+            .where(GradingAiAttempt.job_id == job.id)
+            .where(GradingAiAttempt.stage == "outlier_review")
+        ).all()
+
+    assert engine_instance.review_count == 1
+    assert len(markers) == 1

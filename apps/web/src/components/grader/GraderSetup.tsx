@@ -50,7 +50,7 @@ export function GraderSetup({
   busy: boolean;
   audit: PrivacyAudit | null;
   progress: {
-    phase: "audit" | "criteria" | "draft";
+    phase: "audit" | "criteria" | "draft" | "outlier_review";
     processed: number;
     total: number;
     current: string;

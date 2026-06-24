@@ -12,6 +12,9 @@ from xml.sax.saxutils import escape, quoteattr
 from .grading_engine import (
     GradingEngineRequest,
     GradingEngineResult,
+    OutlierBatchRequest,
+    OutlierFlag,
+    OutlierSubmission,
     RubricInferenceRequest,
     VisionExtractionRequest,
     VisionExtractionResult,
@@ -166,6 +169,64 @@ class LiteLlmGradingEngine:
         )
         return criteria
 
+    def review_outliers(self, request: OutlierBatchRequest) -> list[OutlierFlag]:
+        settings = get_settings()
+        chunks = chunk_outlier_submissions(
+            request,
+            model=self.model,
+            max_input_tokens=self.catalog_model.max_input_tokens or 128000,
+            context_fraction=settings.grading_outlier_context_fraction,
+            max_submissions=settings.grading_outlier_batch_max_submissions,
+        )
+        flags: list[OutlierFlag] = []
+        self.last_prompt_text = None
+        self.last_response_text = None
+        self.last_response = None
+        self.last_usage = {}
+        log_event(
+            logger,
+            "grading_engine.litellm.review_outliers.plan",
+            job_id=request.job_id,
+            model=self.model,
+            submission_count=len(request.submissions),
+            chunk_count=len(chunks),
+        )
+        for chunk in chunks:
+            chunk_request = OutlierBatchRequest(
+                job_id=request.job_id,
+                activity_title=request.activity_title,
+                submissions=chunk,
+            )
+            messages = build_outlier_messages(chunk_request)
+            started = time.monotonic()
+            response = litellm.completion(
+                model=self.model,
+                messages=messages,
+                timeout=self.timeout_seconds,
+                num_retries=self.max_retries,
+                max_tokens=min(self.max_output_tokens, 2048),
+                response_format=_outlier_response_format(self.catalog_model),
+            )
+            self.last_response = response
+            self.last_latency_ms = int((time.monotonic() - started) * 1000)
+            self.last_usage = _usage_dict(getattr(response, "usage", None))
+            self.last_response_text = _response_content(response)
+            self.last_prompt_text = _safe_messages_text(messages)
+            parsed = parse_outlier_flags(self.last_response_text)
+            valid_ids = {row.id for row in chunk}
+            flags.extend(flag for flag in parsed if flag.id in valid_ids)
+            log_event(
+                logger,
+                "grading_engine.litellm.review_outliers.response",
+                job_id=request.job_id,
+                model=self.model,
+                chunk_size=len(chunk),
+                flags_count=len(parsed),
+                usage=self.last_usage,
+                latency_ms=self.last_latency_ms,
+            )
+        return flags
+
     def extract_image(
         self, request: VisionExtractionRequest
     ) -> VisionExtractionResult:
@@ -226,6 +287,102 @@ class LiteLlmGradingEngine:
             latency_ms=self.last_latency_ms,
         )
         return result
+
+
+def build_outlier_messages(request: OutlierBatchRequest) -> list[dict[str, str]]:
+    blocks: list[str] = []
+    for submission in request.submissions:
+        attrs = (
+            f'id={quoteattr(submission.id)} '
+            f'label={quoteattr(submission.student_label)} '
+            f'score={quoteattr("" if submission.score is None else str(submission.score))}'
+        )
+        body = escape(
+            "Draft feedback:\n"
+            + submission.feedback
+            + "\n\nScrubbed submission:\n"
+            + submission.content
+        )
+        blocks.append(f"<submission {attrs}>\n{body}\n</submission>")
+    return [
+        {
+            "role": "system",
+            "content": (
+                "Review the whole class after draft grading. Return only genuine outliers: "
+                "wrong exercise, delivery far outside the class norm, or a student in clear difficulty. "
+                "Do not restate ordinary rubric feedback. Respond with JSON only as "
+                "{\"flags\":[{\"id\":string,\"reason\":string}]}. Return an empty flags array when there are no true exceptions. "
+                "Write reasons in Brazilian Portuguese."
+            ),
+        },
+        {
+            "role": "user",
+            "content": (
+                f"Activity title: {request.activity_title}\n\n"
+                "Submissions are XML-delimited and already privacy-scrubbed.\n"
+                + "\n".join(blocks)
+            ),
+        },
+    ]
+
+
+def parse_outlier_flags(content: str) -> list[OutlierFlag]:
+    try:
+        payload = json.loads(content)
+    except json.JSONDecodeError as exc:
+        raise ValueError("malformed_llm_response") from exc
+    rows = payload.get("flags") if isinstance(payload, dict) else payload
+    if not isinstance(rows, list):
+        raise ValueError("malformed_llm_response")
+    flags: list[OutlierFlag] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        flag_id = row.get("id")
+        reason = row.get("reason")
+        if isinstance(flag_id, str) and flag_id.strip() and isinstance(reason, str) and reason.strip():
+            flags.append(OutlierFlag(id=flag_id.strip(), reason=reason.strip()))
+    return flags
+
+
+def chunk_outlier_submissions(
+    request: OutlierBatchRequest,
+    *,
+    model: str,
+    max_input_tokens: int,
+    context_fraction: float,
+    max_submissions: int,
+) -> list[list[OutlierSubmission]]:
+    if not request.submissions:
+        return []
+    max_submissions = max(1, max_submissions)
+    budget = max(1, int(max_input_tokens * context_fraction))
+    chunks: list[list[OutlierSubmission]] = []
+    current: list[OutlierSubmission] = []
+    for submission in request.submissions:
+        candidate = [*current, submission]
+        candidate_request = OutlierBatchRequest(request.job_id, request.activity_title, candidate)
+        token_count = _message_token_count(model, build_outlier_messages(candidate_request))
+        reserve = 128 * len(candidate)
+        if current and (len(candidate) > max_submissions or token_count + reserve > budget):
+            chunks.append(current)
+            current = [submission]
+        else:
+            current = candidate
+    if current:
+        chunks.append(current)
+    return chunks
+
+
+def _message_token_count(model: str, messages: list[dict[str, str]]) -> int:
+    try:
+        count = litellm.token_counter(model=model, messages=messages)
+    except Exception:
+        count = len(json.dumps(messages, ensure_ascii=True)) // 4
+    try:
+        return int(count)
+    except (TypeError, ValueError):
+        return len(json.dumps(messages, ensure_ascii=True)) // 4
 
 
 def build_sample_xml(samples: list[dict[str, str]]) -> str:
@@ -319,6 +476,39 @@ def _build_vision_messages(request: VisionExtractionRequest) -> list[dict[str, A
             ],
         },
     ]
+
+
+def _outlier_response_format(model: LlmModelEntry) -> dict[str, Any]:
+    settings = get_settings()
+    if settings.grading_structured_output == "auto" and model.supports_response_schema:
+        litellm.enable_json_schema_validation = True
+        return {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "outlier_flags",
+                "strict": True,
+                "schema": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "flags": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "additionalProperties": False,
+                                "properties": {
+                                    "id": {"type": "string"},
+                                    "reason": {"type": "string"},
+                                },
+                                "required": ["id", "reason"],
+                            },
+                        },
+                    },
+                    "required": ["flags"],
+                },
+            },
+        }
+    return {"type": "json_object"}
 
 
 def _rubric_response_format(model: LlmModelEntry) -> dict[str, Any]:

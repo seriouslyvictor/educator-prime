@@ -16,7 +16,7 @@ from classroom_downloader.database import engine
 from classroom_downloader.content_extraction import extract_submission_content
 from classroom_downloader.google_provider import ClassroomActivity, ClassroomCourse
 from classroom_downloader.main import app, provider_dependency
-from classroom_downloader.grading_engine import GradingEngine, GradingEngineRequest, GradingEngineResult
+from classroom_downloader.grading_engine import GradingEngine, GradingEngineRequest, GradingEngineResult, OutlierFlag
 from classroom_downloader.llm_errors import LlmCallError
 from classroom_downloader.models import (
     GradingAiAttempt,
@@ -444,6 +444,112 @@ def _seed_infer_job(session, *, description, activity_id="activity-infer"):
     session.commit()
     session.refresh(job)
     return job
+
+
+class _OutlierEngine(GradingEngine):
+    name = "outlier-test"
+    model = None
+
+    def __init__(self, flags: list[OutlierFlag] | None = None):
+        self.flags = flags or []
+        self.review_requests = []
+
+    def grade(self, request: GradingEngineRequest) -> GradingEngineResult:
+        score = 40 if "wrong exercise" in request.content.lower() else 90
+        return GradingEngineResult(
+            score=score,
+            confidence=0.9,
+            feedback="Rascunho gerado.",
+            flags=["generic_review_noise"],
+            criterion_notes=[],
+        )
+
+    def infer_rubric(self, request):
+        return []
+
+    def review_outliers(self, request):
+        self.review_requests.append(request)
+        if self.flags:
+            return self.flags
+        return [
+            OutlierFlag(id=row.id, reason="Entrega de outro exercicio.")
+            for row in request.submissions
+            if "wrong exercise" in row.content.lower()
+        ]
+
+    def extract_image(self, request):  # pragma: no cover - not used here
+        raise NotImplementedError
+
+
+def test_outlier_review_applies_only_returned_flags_and_clears_pass1_noise(tmp_path) -> None:
+    from classroom_downloader.grading import draft_grading_job
+
+    get_settings().grading_cache_path = str(tmp_path / "grading")
+    provider = _infer_provider(
+        [
+            _text_submission_file(1, "activity-infer", "completed the requested exercise"),
+            _text_submission_file(2, "activity-infer", "wrong exercise entirely"),
+            _text_submission_file(3, "activity-infer", "also completed the requested exercise"),
+        ]
+    )
+    engine_instance = _OutlierEngine()
+    with Session(engine) as session:
+        job = _seed_infer_job(session, description="Long enough description for drafting.")
+        drafted = draft_grading_job(session, job, provider, engine_instance)
+        submissions = session.exec(select(GradingSubmission).where(GradingSubmission.job_id == drafted.id)).all()
+
+    flags = {row.source_name: row.flag for row in submissions}
+    assert list(flags.values()).count("Entrega de outro exercicio.") == 1
+    assert all(flag != "generic_review_noise" for flag in flags.values())
+    assert engine_instance.review_requests
+    assert len(engine_instance.review_requests[0].submissions) == 3
+
+
+def test_outlier_review_gate_off_keeps_drafting_free_of_outlier_flags(tmp_path) -> None:
+    from classroom_downloader.grading import draft_grading_job
+
+    settings = get_settings()
+    settings.grading_cache_path = str(tmp_path / "grading")
+    settings.grading_outlier_review = "off"
+    provider = _infer_provider([_text_submission_file(1, "activity-infer", "wrong exercise entirely")])
+    engine_instance = _OutlierEngine(flags=[OutlierFlag(id="never", reason="should not run")])
+    with Session(engine) as session:
+        job = _seed_infer_job(session, description="Long enough description for drafting.")
+        drafted = draft_grading_job(session, job, provider, engine_instance)
+        submissions = session.exec(select(GradingSubmission).where(GradingSubmission.job_id == drafted.id)).all()
+
+    assert engine_instance.review_requests == []
+    assert [row.flag for row in submissions] == [None]
+
+
+def test_outlier_review_excludes_blocked_rows(tmp_path) -> None:
+    from classroom_downloader.google_provider import SubmissionFile
+    from classroom_downloader.grading import draft_grading_job
+
+    get_settings().grading_cache_path = str(tmp_path / "grading")
+    files = [
+        _text_submission_file(1, "activity-infer", "completed the requested exercise"),
+        SubmissionFile(
+            "file-bad",
+            "course-infer",
+            "activity-infer",
+            None,
+            "Student Bad",
+            "drive-bad",
+            "bad.bin",
+            "application/octet-stream",
+            b"\xff\x00\x00",
+        ),
+    ]
+    provider = _infer_provider(files)
+    engine_instance = _OutlierEngine()
+    with Session(engine) as session:
+        job = _seed_infer_job(session, description="Long enough description for drafting.")
+        draft_grading_job(session, job, provider, engine_instance)
+
+    assert engine_instance.review_requests
+    assert len(engine_instance.review_requests[0].submissions) == 1
+
 
 
 def test_infer_uses_description_only_when_substantial(tmp_path) -> None:
@@ -1456,7 +1562,7 @@ def test_teacher_loop_auto_holds_low_confidence_drafts(monkeypatch, tmp_path) ->
     assert all(row["ai_score"] == 90 for row in body["submissions"])
 
 
-def test_teacher_loop_auto_holds_flagged_drafts(monkeypatch, tmp_path) -> None:
+def test_teacher_loop_auto_ignores_pass1_review_noise(monkeypatch, tmp_path) -> None:
     settings = get_settings()
     settings.grading_cache_path = str(tmp_path / "grading")
     settings.grading_auto_accept_confidence = 0.85
@@ -1488,9 +1594,9 @@ def test_teacher_loop_auto_holds_flagged_drafts(monkeypatch, tmp_path) -> None:
         monkeypatch.setattr(grading, "get_grading_engine", lambda: FlaggedEngine())
         body = client.post(f"/api/grading/jobs/{job['id']}/draft").json()
 
-    assert body["status"] == "reviewing"
-    assert all(row["reviewed"] is False for row in body["submissions"])
-    assert all(row["flag"] == "needs_human" for row in body["submissions"])
+    assert body["status"] == "completed"
+    assert all(row["reviewed"] is True for row in body["submissions"])
+    assert all(row["flag"] is None for row in body["submissions"])
     assert all(row["ai_score"] == 96 for row in body["submissions"])
 
 
@@ -1617,10 +1723,11 @@ def test_litellm_engine_attempt_metadata_is_persisted(monkeypatch, tmp_path) -> 
     assert submission["ai_cached_prompt_tokens"] == 25
     assert submission["ai_cache_write_tokens"] == 10
     assert submission["ai_cost_cents"] == 12.34
-    assert body["total_prompt_tokens"] == 100 * n
-    assert body["total_completion_tokens"] == 50 * n
-    assert body["total_cached_tokens"] == 25 * n
-    assert round(body["total_cost_cents"], 2) == round(12.34 * n, 2)
+    # Includes the class-level outlier review call in addition to per-submission grading.
+    assert body["total_prompt_tokens"] == 100 * (n + 1)
+    assert body["total_completion_tokens"] == 50 * (n + 1)
+    assert body["total_cached_tokens"] == 25 * (n + 1)
+    assert round(body["total_cost_cents"], 2) == round(12.34 * (n + 1), 2)
     assert body["ai_engine"] == "litellm"
     assert body["ai_model"] == "openai/gpt-5"
     assert body["ai_mode"] == settings.grading_batch_mode
@@ -1952,7 +2059,7 @@ def test_visual_submission_with_consent_is_extracted_scrubbed_cached_and_graded(
             .where(GradingScrubCache.content_hash == image_cache.content_hash)
         ).one()
 
-    assert [attempt.stage for attempt in attempts] == ["extraction", "grading"]
+    assert [attempt.stage for attempt in attempts] == ["extraction", "grading", "outlier_review"]
     assert scrub_cache.extraction_status == "supported"
     assert "Transcricao visual mock" in scrub_cache.scrubbed_content
     assert json.loads(scrub_cache.redaction_counts_json)["name_visible"] == 1

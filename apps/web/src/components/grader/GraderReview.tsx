@@ -38,7 +38,7 @@ export function GraderReview({
   busy: boolean;
   audit: PrivacyAudit | null;
   progress: {
-    phase: "audit" | "criteria" | "draft";
+    phase: "audit" | "criteria" | "draft" | "outlier_review";
     processed: number;
     total: number;
     current: string;
@@ -93,7 +93,7 @@ export function GraderReview({
 
   const total = job.submissions.length || 1;
   const blockedActive = isBlocked(active);
-  const draftInProgress = Boolean(progress?.phase === "draft" && !progress.done);
+  const draftInProgress = Boolean((progress?.phase === "draft" || progress?.phase === "outlier_review") && !progress.done);
   // A submission is still "pending" while the draft run hasn't produced a result for it.
   const isPending = (submission: GradingSubmission | undefined): boolean =>
     Boolean(
@@ -164,7 +164,7 @@ export function GraderReview({
         }
       />
       {audit ? <AuditStrip audit={audit} onOpen={() => setReportOpen(true)} /> : null}
-      {progress?.phase === "draft" && !progress.done ? (
+      {(progress?.phase === "draft" || progress?.phase === "outlier_review") && !progress.done ? (
         <div className="stream-strip">
           <AppIcon name="sparkle" />
           <span>Gerando rascunhos da IA</span>

@@ -77,7 +77,7 @@ function appError(caught: unknown, fallback: string): ApiError {
 }
 
 export type GradingStreamPayload = {
-  phase?: "audit" | "criteria" | "draft";
+  phase?: "audit" | "criteria" | "draft" | "outlier_review";
   processed?: number;
   total?: number;
   current?: string;
@@ -91,7 +91,7 @@ export type GradingStreamPayload = {
 };
 
 export type GradingInlineProgress = {
-  phase: "audit" | "criteria" | "draft";
+  phase: "audit" | "criteria" | "draft" | "outlier_review";
   processed: number;
   total: number;
   current: string;

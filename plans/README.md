@@ -47,7 +47,7 @@ conditions.
 | 019 | C · Review | Review already-drafted students while the queue is still processing | P1 | M | — | DONE |
 | 020 | C · Review | Retry a failed submission preview (image/PDF/text) | P2 | S | — | DONE |
 | 021 | D · Engine | Normalize inferred rubric criteria to pt-BR | P2 | S–M | — | DONE |
-| 022 | D · Engine | Two-pass grading: flag only true outliers in a whole-class second pass | P1 | L | interacts with 019 | TODO |
+| 022 | D · Engine | Two-pass grading: flag only true outliers in a whole-class second pass | P1 | L | interacts with 019 | DONE |
 | 023 | E · Posting | "Postagem guiada" opens the first student's Classroom link | P2 | S | — | TODO |
 
 ### Theme grouping & recommended order

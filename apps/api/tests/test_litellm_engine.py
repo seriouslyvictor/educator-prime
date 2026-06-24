@@ -6,13 +6,16 @@ os.environ["CD_GOOGLE_PROVIDER"] = "mock"
 
 import pytest
 
-from classroom_downloader.grading_engine import GradingEngineRequest, RubricInferenceRequest, VisionExtractionRequest
+from classroom_downloader.grading_engine import GradingEngineRequest, OutlierBatchRequest, OutlierSubmission, RubricInferenceRequest, VisionExtractionRequest
 from classroom_downloader.litellm_engine import (
     DEFAULT_MAX_OUTPUT_TOKENS,
     MAX_PDF_OUTPUT_TOKENS,
     MAX_VISION_OUTPUT_TOKENS,
     LiteLlmGradingEngine,
     _build_messages,
+    build_outlier_messages,
+    chunk_outlier_submissions,
+    parse_outlier_flags,
     parse_vision_extraction_result,
     parse_litellm_result,
 )
@@ -43,6 +46,108 @@ def model_entry(
         notes="",
         raw={},
     )
+
+def _outlier_request() -> OutlierBatchRequest:
+    return OutlierBatchRequest(
+        job_id="job-outliers",
+        activity_title="Lista de exercicios",
+        submissions=[
+            OutlierSubmission(
+                id="sub-1",
+                student_label="student_001",
+                score=92,
+                feedback="Bom trabalho.",
+                content="Resposta coerente com <tags> & detalhes.",
+            ),
+            OutlierSubmission(
+                id="sub-2",
+                student_label="student_002",
+                score=35,
+                feedback="Nao respondeu ao enunciado.",
+                content="wrong exercise entirely",
+            ),
+        ],
+    )
+
+
+def test_outlier_prompt_uses_xml_and_escapes_submission_content() -> None:
+    messages = build_outlier_messages(_outlier_request())
+    rendered = messages[1]["content"]
+
+    assert '<submission id="sub-1"' in rendered
+    assert "Resposta coerente com &lt;tags&gt; &amp; detalhes." in rendered
+    assert "Return only genuine outliers" in messages[0]["content"]
+
+
+def test_parse_outlier_flags_accepts_only_id_reason_rows() -> None:
+    parsed = parse_outlier_flags(
+        json.dumps(
+            {
+                "flags": [
+                    {"id": "sub-2", "reason": "Entrega de outro exercicio."},
+                    {"id": "", "reason": "sem id"},
+                    {"id": "sub-3", "reason": "   "},
+                ]
+            }
+        )
+    )
+
+    assert [(flag.id, flag.reason) for flag in parsed] == [("sub-2", "Entrega de outro exercicio.")]
+
+
+def test_outlier_chunking_splits_when_context_budget_is_low(monkeypatch) -> None:
+    request = OutlierBatchRequest(
+        job_id="job-outliers",
+        activity_title="Atividade",
+        submissions=[
+            OutlierSubmission(str(index), f"student_{index}", 80, "ok", "x" * 120)
+            for index in range(4)
+        ],
+    )
+
+    monkeypatch.setattr(
+        "classroom_downloader.litellm_engine.litellm.token_counter",
+        lambda model, messages: len(messages[1]["content"]),
+    )
+
+    chunks = chunk_outlier_submissions(
+        request,
+        model="openai/gpt-5",
+        max_input_tokens=650,
+        context_fraction=0.8,
+        max_submissions=10,
+    )
+
+    assert len(chunks) > 1
+    assert [row.id for chunk in chunks for row in chunk] == ["0", "1", "2", "3"]
+
+
+def test_engine_review_outliers_calls_litellm_with_schema(monkeypatch) -> None:
+    captured = {}
+
+    def fake_completion(**kwargs):
+        captured.update(kwargs)
+
+        class Choice:
+            message = {"content": json.dumps({"flags": [{"id": "sub-2", "reason": "Fora do padrao da turma."}]})}
+
+        class Response:
+            choices = [Choice()]
+            usage = {"prompt_tokens": 50, "completion_tokens": 10, "total_tokens": 60}
+
+        return Response()
+
+    monkeypatch.setattr("classroom_downloader.litellm_engine.litellm.completion", fake_completion)
+    engine = LiteLlmGradingEngine(model=model_entry(), timeout_seconds=30, max_retries=1)
+
+    flags = engine.review_outliers(_outlier_request())
+
+    assert [(flag.id, flag.reason) for flag in flags] == [("sub-2", "Fora do padrao da turma.")]
+    assert captured["response_format"]["type"] == "json_schema"
+    assert captured["response_format"]["json_schema"]["name"] == "outlier_flags"
+    assert '<submission id="sub-2"' in captured["messages"][1]["content"]
+
+
 
 def test_infer_rubric_prompt_requires_brazilian_portuguese(monkeypatch) -> None:
     captured = {}

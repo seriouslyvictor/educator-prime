@@ -101,5 +101,17 @@ scheduled, land 019 first, then make 022 respect reviewed rows.
 
 
 ## Implementation log
-- Status: BLOCKED (2026-06-24).
-- Reached the plan's required STOP before implementation. Maintainer decision needed: pass-1 `flags` must either be fully dropped from the outlier badge or retained only for mechanical privacy/extraction issues. No code changes made for Plan 022 yet because the plan explicitly requires this product decision before proceeding.
+- Status: DONE (2026-06-24).
+- Product STOP resolved by maintainer: pass-1 flags are retained only for mechanical privacy/extraction issues; per-submission LLM review flags no longer drive the outlier badge.
+- Added `OutlierBatchRequest` / `OutlierSubmission` / `OutlierFlag` to the grading engine contract, plus deterministic mock outlier review.
+- Implemented LiteLLM outlier review with XML submission markers, strict JSON schema when supported, ID filtering, response parsing, and context-aware chunking via `litellm.token_counter`.
+- Added the end-of-draft `review_outliers_for_job(...)` pass: it uses scrubbed cached content only, excludes blocked/error rows, preserves `reviewed` and scores, applies only returned outlier reasons to `submission.flag`, clears non-outliers back to privacy/extraction flags, records one `outlier_review` attempt marker, and skips duplicate pass-2 runs on resume.
+- Added `CD_GRADING_OUTLIER_REVIEW`, max-submission, and context-fraction settings; the off switch keeps drafting free of outlier flags while preserving mechanical flags.
+- Added an SSE `outlier_review` phase and frontend progress handling so review remains active while the final exception pass runs.
+- Updated snapshots to expose row AI/privacy status from the latest `grading` attempt only, so extraction/outlier marker attempts do not corrupt row-level status.
+- Tests added/updated for pass-2 flag application, disabled mode, blocked-row exclusion, resume idempotency, LiteLLM prompt/parse/chunking/schema calls, and visual/extraction attempt history.
+- Verification: `CD_GOOGLE_PROVIDER=mock uv run --extra dev pytest -q` -> 234 passed, 4 skipped.
+- Verification: `pnpm lint` -> 0 errors, 14 existing warnings.
+- Verification: `pnpm test:run` -> 26 passed.
+- Verification: `pnpm build` -> passed.
+- Verification: `pnpm e2e` -> 6 passed.

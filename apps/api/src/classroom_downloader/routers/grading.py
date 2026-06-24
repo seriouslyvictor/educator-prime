@@ -914,6 +914,17 @@ def stream_draft_job(
                         }
                     )
 
+                def on_outlier_progress(processed: int, total: int, label: str, submission=None) -> None:
+                    payload = {
+                        "phase": "outlier_review",
+                        "processed": processed,
+                        "total": total,
+                        "current": label,
+                    }
+                    if submission is not None:
+                        payload["submission"] = submission.model_dump(mode="json")
+                    events.put(payload)
+
                 drafted = draft_grading_job(
                     stream_session,
                     job,
@@ -923,6 +934,7 @@ def stream_draft_job(
                     on_submission=on_submission,
                     on_queued=on_queued,
                     on_submission_start=on_submission_start,
+                    on_outlier_progress=on_outlier_progress,
                 )
                 events.put(
                     {

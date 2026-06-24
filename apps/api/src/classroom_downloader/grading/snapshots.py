@@ -101,6 +101,7 @@ def grading_job_snapshot(session: Session, job: GradingJob) -> GradingJobRead:
     attempts = session.exec(
         select(GradingAiAttempt)
         .where(GradingAiAttempt.job_id == job.id)
+        .where(GradingAiAttempt.stage == "grading")
         .order_by(GradingAiAttempt.created_at.desc())
     ).all()
     latest_attempts: dict[str, GradingAiAttempt] = {}
@@ -177,6 +178,7 @@ def grading_submission_snapshot(
     latest_attempt = session.exec(
         select(GradingAiAttempt)
         .where(GradingAiAttempt.submission_id == submission.id)
+        .where(GradingAiAttempt.stage == "grading")
         .order_by(GradingAiAttempt.created_at.desc())
     ).first()
     return _submission_read(submission, latest_attempt, submission_files(session, submission))
