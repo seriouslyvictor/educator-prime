@@ -80,6 +80,36 @@ function isInlineTextSubmission(sourceName: string, mime: string): boolean {
   return mime === "application/octet-stream" && INLINE_TEXT_EXTENSIONS.has(extensionOf(sourceName));
 }
 
+function retryUrl(url: string, attempt: number): string {
+  if (attempt <= 0) return url;
+  return `${url}${url.includes("?") ? "&" : "?"}r=${attempt}`;
+}
+
+function PreviewErrorState({
+  message,
+  url,
+  onRetry,
+}: {
+  message: string;
+  url: string;
+  onRetry: () => void;
+}) {
+  return (
+    <div className="preview-error-state">
+      <AppIcon name="triangleAlert" />
+      <strong>{message}</strong>
+      <div className="preview-error-actions">
+        <button className="btn btn-ai" type="button" onClick={onRetry}>
+          <AppIcon name="refresh" /> Tentar novamente
+        </button>
+        <a className="btn btn-secondary" href={url} target="_blank" rel="noreferrer">
+          <AppIcon name="download" /> Baixar original
+        </a>
+      </div>
+    </div>
+  );
+}
+
 // A student's submission may carry several attachments; show one tab per file.
 export function SubmissionFiles({ job, submission }: { job: GradingJob; submission: GradingSubmission }) {
   const files: GradingSubmissionFile[] = submission.files?.length
@@ -128,17 +158,13 @@ function SubmissionPreview({
   const title = `Entrega de ${studentLabel(submission)}`;
 
   if (INLINE_IMAGE_MIME.has(mime)) {
-    return (
-      <div className="preview-media">
-        <img className="preview-image" src={url} alt={title} />
-      </div>
-    );
+    return <ImagePreview url={url} title={title} />;
   }
   if (isInlineTextSubmission(file.source_name, mime)) {
     return <SubmissionTextPreview url={url} title={title} fileName={file.source_name} mimeType={file.mime_type} />;
   }
   if (mime === "application/pdf") {
-    return <iframe className="preview-frame" src={url} title={title} />;
+    return <PdfPreview url={url} title={title} />;
   }
   return (
     <div className="preview-card">
@@ -152,6 +178,62 @@ function SubmissionPreview({
       </a>
     </div>
   );
+}
+
+
+function ImagePreview({ url, title }: { url: string; title: string }) {
+  const [attempt, setAttempt] = useState(0);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    setAttempt(0);
+    setFailed(false);
+  }, [url]);
+  const src = retryUrl(url, attempt);
+  if (failed) {
+    return (
+      <PreviewErrorState
+        message="Não foi possível carregar a previsualização."
+        url={url}
+        onRetry={() => {
+          setFailed(false);
+          setAttempt((current) => current + 1);
+        }}
+      />
+    );
+  }
+  return (
+    <div className="preview-media">
+      <img className="preview-image" src={src} alt={title} onError={() => setFailed(true)} />
+    </div>
+  );
+}
+
+function PdfPreview({ url, title }: { url: string; title: string }) {
+  const [attempt, setAttempt] = useState(0);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    setAttempt(0);
+    setFailed(false);
+  }, [url]);
+  useEffect(() => {
+    if (failed) return;
+    const timeout = window.setTimeout(() => setFailed(true), 8000);
+    return () => window.clearTimeout(timeout);
+  }, [attempt, failed]);
+  const src = retryUrl(url, attempt);
+  if (failed) {
+    return (
+      <PreviewErrorState
+        message="Não foi possível carregar a previsualização."
+        url={url}
+        onRetry={() => {
+          setFailed(false);
+          setAttempt((current) => current + 1);
+        }}
+      />
+    );
+  }
+  return <iframe key={attempt} className="preview-frame" src={src} title={title} onLoad={() => setFailed(false)} />;
 }
 
 function SubmissionTextPreview({
@@ -170,11 +252,16 @@ function SubmissionTextPreview({
     content: "",
     error: null,
   });
+  const [attempt, setAttempt] = useState(0);
+
+  useEffect(() => {
+    setAttempt(0);
+  }, [url]);
 
   useEffect(() => {
     let cancelled = false;
     setState({ loading: true, content: "", error: null });
-    fetch(url)
+    fetch(retryUrl(url, attempt))
       .then((response) => {
         if (!response.ok) throw new Error("Falha ao carregar a previsualização.");
         return response.text();
@@ -194,7 +281,7 @@ function SubmissionTextPreview({
     return () => {
       cancelled = true;
     };
-  }, [url]);
+  }, [url, attempt]);
 
   return (
     <div className="preview-code" aria-label={title}>
@@ -212,9 +299,7 @@ function SubmissionTextPreview({
           <AppIcon name="loader" className="ico spin" /> Carregando previsualização
         </div>
       ) : state.error ? (
-        <div className="preview-code-state danger">
-          <AppIcon name="triangleAlert" /> {state.error}
-        </div>
+        <PreviewErrorState message={state.error} url={url} onRetry={() => setAttempt((current) => current + 1)} />
       ) : (
         <pre className="preview-code-body">
           <code>{state.content}</code>

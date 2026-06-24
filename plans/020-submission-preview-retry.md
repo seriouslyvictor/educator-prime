@@ -56,3 +56,15 @@ no way to re-attempt short of switching students and back.
   response and asserts the retry control appears and re-requests on click.
 - Manual: force a preview 500 (or offline), confirm each of image/pdf/text shows a
   retry that recovers once the resource is reachable again.
+
+
+## Implementation log
+- Status: DONE (2026-06-24).
+- Implemented `PreviewErrorState` shared retry/download UI for preview renderer failures.
+- Added cache-busted explicit retry for image previews, PDF previews with timeout fallback, and text/code fetch previews.
+- Added `apps/web/e2e/submission-preview-retry.spec.ts` covering a failed text preview that stays failed until the teacher clicks `Tentar novamente`, then re-requests and recovers.
+- Verification: `pnpm e2e e2e/submission-preview-retry.spec.ts` passed.
+- Verification: `pnpm lint` passed with the existing 14 warnings.
+- Verification: `pnpm build` passed.
+- Verification: `pnpm e2e` passed, 6 tests.
+- Manual substitute: mock e2e forced preview 500 and verified the retry control/recovery path; image/PDF share the same error component and explicit retry pattern.

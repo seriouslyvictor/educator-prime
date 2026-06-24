@@ -45,7 +45,7 @@ conditions.
 | 017 | C · Review | Hide rubric on review for "Orientação simples" (brief mode) | P2 | S | — (coordinate with 018) | DONE |
 | 018 | C · Review | Per-criterion scores as editable progress bars (points, not %) | P2 | L | — (do before/with 017) | TODO |
 | 019 | C · Review | Review already-drafted students while the queue is still processing | P1 | M | — | DONE |
-| 020 | C · Review | Retry a failed submission preview (image/PDF/text) | P2 | S | — | TODO |
+| 020 | C · Review | Retry a failed submission preview (image/PDF/text) | P2 | S | — | DONE |
 | 021 | D · Engine | Normalize inferred rubric criteria to pt-BR | P2 | S–M | — | TODO |
 | 022 | D · Engine | Two-pass grading: flag only true outliers in a whole-class second pass | P1 | L | interacts with 019 | TODO |
 | 023 | E · Posting | "Postagem guiada" opens the first student's Classroom link | P2 | S | — | TODO |
