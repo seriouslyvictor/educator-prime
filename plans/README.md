@@ -28,6 +28,62 @@ advisory session. The advisor does not modify source code.
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED
 (one-line rationale).
 
+## UX polish pass (plans 015–023, added 2026-06-23, base commit `6d6b264`)
+
+Source: Notion "Classroom Downloader - IA grading draft" → TODO list. This is a
+**paper-cuts / UX polish pass** — almost entirely behavior and presentation
+fixes, no big new features except the standalone login screen (015), which must
+**behave identically** to today's connect flow. Plans are grouped by **proximity**
+(shared screens/modules) into five themes. Each plan is a self-contained handoff
+grounded in real files/lines at base `6d6b264`; read it fully and honor its STOP
+conditions.
+
+| Plan | Theme | Title | Priority | Effort | Depends on | Status |
+|------|-------|-------|----------|--------|------------|--------|
+| 015 | A · Auth | Standalone login screen (separate from dashboard shell) | P1 | S–M | — (branch `codex/015-login-auth-gate-revamp` is reference only) | TODO |
+| 016 | B · Turmas | Grade-awareness: detect already-graded work, graded/ungraded counts, partial-grade choice | P1 | M–L | — | TODO |
+| 017 | C · Review | Hide rubric on review for "Orientação simples" (brief mode) | P2 | S | — (coordinate with 018) | TODO |
+| 018 | C · Review | Per-criterion scores as editable progress bars (points, not %) | P2 | L | — (do before/with 017) | TODO |
+| 019 | C · Review | Review already-drafted students while the queue is still processing | P1 | M | — | TODO |
+| 020 | C · Review | Retry a failed submission preview (image/PDF/text) | P2 | S | — | TODO |
+| 021 | D · Engine | Normalize inferred rubric criteria to pt-BR | P2 | S–M | — | TODO |
+| 022 | D · Engine | Two-pass grading: flag only true outliers in a whole-class second pass | P1 | L | interacts with 019 | TODO |
+| 023 | E · Posting | "Postagem guiada" opens the first student's Classroom link | P2 | S | — | TODO |
+
+### Theme grouping & recommended order
+
+- **A · Auth & onboarding** — **015** (login). Standalone; do first if a demo is
+  near. OAuth behavior is frozen; presentation only.
+- **B · Turmas grade-awareness** — **016**. Backend-led (Classroom grades already
+  arrive on the `studentSubmissions` call, just discarded). Independent of the
+  grading-engine work; has one STOP to confirm the "doneView" interpretation.
+- **C · Grading review screen** — **017, 018, 019, 020**. All touch the review
+  screen (`GraderReview.tsx` + `review/`). **018 before 017** (018 restructures the
+  same breakdown block that 017 gates), or do 017 as the trivial gate first — just
+  don't write the gate twice. **019** (review-while-drafting) and **020** (preview
+  retry) are disjoint and can run in parallel with the rubric work.
+- **D · Grading engine quality** — **021, 022**. Both in the grading engine but
+  disjoint files (021 = inference/criteria; 022 = drafting + new outlier pass).
+  **022 interacts with 019**: pass-2 flags must not overwrite a student the teacher
+  already reviewed — land 019 first if both are scheduled. Both have a one-line
+  product STOP.
+- **E · Classroom posting** — **023**. Small, isolated; needs a real Classroom
+  session to fully verify (mock can only assert URL selection).
+
+### Highest-leverage first
+If picking a few: **019** (the live queue is built but defeated by one busy flag —
+high value, contained), **022** (makes flags meaningful — the current flags are
+noise), and **016** (stops re-grading already-graded work). **015** if a demo is
+imminent.
+
+### Environment limitation noted at planning time
+The Notion items for **015** and **018** say to check the "Claude Design –
+Educator Prime" MCP for the target visuals. That MCP was **not connected** in the
+planning environment, so those two plans specify the **data/behavior** precisely
+and require the operator to supply the design (screenshot/spec) before the visual
+is built — each has a STOP-for-design-review condition. Do not invent the visual
+language.
+
 ## Frontend modularity track (plans 008–011, added 2026-06-16, commit `a9713b0`)
 
 Goal set by the maintainer: break the front-end monoliths into reusable
