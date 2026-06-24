@@ -98,3 +98,8 @@ scheduled, land 019 first, then make 022 respect reviewed rows.
 - **STOP** to confirm with the maintainer whether pass-1 `flags` should be fully
   dropped or retained for mechanical (privacy/extraction) issues only — this changes
   what the badge means and is a one-line product decision.
+
+
+## Implementation log
+- Status: BLOCKED (2026-06-24).
+- Reached the plan's required STOP before implementation. Maintainer decision needed: pass-1 `flags` must either be fully dropped from the outlier badge or retained only for mechanical privacy/extraction issues. No code changes made for Plan 022 yet because the plan explicitly requires this product decision before proceeding.
