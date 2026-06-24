@@ -104,6 +104,7 @@ export function GraderReview({
     );
   const activePending = isPending(active);
   const activeDrafting = Boolean(active && active.id === draftingSubmissionId);
+  const usesRubric = job.rubric_mode !== "brief";
   const score = Number(scoreText);
   const hasValidScore = scoreText.trim() !== "" && Number.isFinite(score);
 
@@ -329,24 +330,31 @@ export function GraderReview({
               </div>
             ) : null}
 
-            {job.rubric_mode === "infer" && hasDefaultCriteria(job) ? (
-              <div className="criteria-pending">
-                <AppIcon name="sparkle" />
-                A IA vai sugerir os critérios após analisar as entregas.
-              </div>
-            ) : (
-              <div className="breakdown">
-                {job.criteria.map((criterion) => (
-                  <div key={criterion.id} className="bd-row">
-                    <div className="bd-head">
-                      <span className="bd-name">{criterion.name}</span>
-                      <span className="bd-weight">{criterion.weight}%</span>
+            {usesRubric ? (
+              job.rubric_mode === "infer" && hasDefaultCriteria(job) ? (
+                <div className="criteria-pending">
+                  <AppIcon name="sparkle" />
+                  A IA vai sugerir os criterios apos analisar as entregas.
+                </div>
+              ) : (
+                <div className="breakdown">
+                  {job.criteria.map((criterion) => (
+                    <div key={criterion.id} className="bd-row">
+                      <div className="bd-head">
+                        <span className="bd-name">{criterion.name}</span>
+                        <span className="bd-weight">{criterion.weight}%</span>
+                      </div>
+                      {criterion.latest_ai_note ? <div className="bd-note">{criterion.latest_ai_note}</div> : null}
                     </div>
-                    {criterion.latest_ai_note ? <div className="bd-note">{criterion.latest_ai_note}</div> : null}
-                  </div>
-                ))}
+                  ))}
+                </div>
+              )
+            ) : job.rubric_text ? (
+              <div className="brief-guidance">
+                <span>Orientacao</span>
+                {job.rubric_text}
               </div>
-            )}
+            ) : null}
 
             <label className="score-input">
               <span>{blockedActive ? "Nota manual" : "Nota final"}</span>

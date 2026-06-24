@@ -42,7 +42,7 @@ conditions.
 |------|-------|-------|----------|--------|------------|--------|
 | 015 | A · Auth | Standalone login screen (separate from dashboard shell) | P1 | S–M | — (branch `codex/015-login-auth-gate-revamp` is reference only) | TODO |
 | 016 | B · Turmas | Grade-awareness: detect already-graded work, graded/ungraded counts, partial-grade choice | P1 | M–L | — | DONE |
-| 017 | C · Review | Hide rubric on review for "Orientação simples" (brief mode) | P2 | S | — (coordinate with 018) | TODO |
+| 017 | C · Review | Hide rubric on review for "Orientação simples" (brief mode) | P2 | S | — (coordinate with 018) | DONE |
 | 018 | C · Review | Per-criterion scores as editable progress bars (points, not %) | P2 | L | — (do before/with 017) | TODO |
 | 019 | C · Review | Review already-drafted students while the queue is still processing | P1 | M | — | TODO |
 | 020 | C · Review | Retry a failed submission preview (image/PDF/text) | P2 | S | — | TODO |

@@ -54,3 +54,18 @@ unused default criteria — noise that misrepresents how the grade was produced.
 - Manual/mock: a brief-mode job's review screen shows no weighted-criteria rows;
   an infer/structured job still shows them unchanged.
 - e2e green.
+
+
+## Implementation status - 2026-06-24
+Status: DONE
+
+Implemented to spec:
+- Added a `rubric_mode !== "brief"` display gate in `GraderReview` around both the criteria-pending hint and criteria breakdown.
+- Brief-mode reviews no longer render weighted rubric rows.
+- When brief guidance text exists, the review panel shows it as a lightweight read-only `Orientacao` note instead of a rubric.
+- No backend/data-model/engine behavior was changed.
+
+Verification:
+- `pnpm lint` from `apps/web`: passed with existing warnings only.
+- `pnpm build` from `apps/web`: passed.
+- `pnpm e2e` from `apps/web`: 4 passed.
