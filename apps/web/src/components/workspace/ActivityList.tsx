@@ -66,11 +66,14 @@ export function ActivityList({
               const disabled = busy || !course;
               const grading = gradingByActivity.get(activity.id);
               const gradingStatus = grading ? referenceQueueStatus(grading) : null;
+              const concluded = activity.concluded;
               const primaryLabel = grading?.status === "completed"
                 ? "Abrir revisão"
                 : grading?.latest_job_id
                   ? "Retomar"
-                  : "Corrigir com IA";
+                  : concluded
+                    ? "Reclassificar"
+                    : "Corrigir com IA";
               const primaryIcon = grading?.status === "completed"
                 ? "checkCircle"
                 : grading?.latest_job_id
@@ -93,6 +96,18 @@ export function ActivityList({
                     <span className={`badge ${activity.state === "PUBLISHED" ? "badge-pub" : "badge-draft"}`}>
                       {activity.state === "PUBLISHED" ? "Publicado" : activity.state}
                     </span>
+                    {activity.total_submissions > 0 ? (
+                      <span className="grading-chip grade-count">
+                        <AppIcon name="checkCircle" />
+                        {activity.graded_submissions}/{activity.total_submissions} corrigidas
+                      </span>
+                    ) : null}
+                    {concluded ? (
+                      <span className="grading-chip concluded">
+                        <AppIcon name="checkCircle" />
+                        Concluida
+                      </span>
+                    ) : null}
                     {gradingStatus ? (
                       <span className={`grading-chip ${gradingStatus.cls}`}>
                         <AppIcon name={gradingStatus.icon} />

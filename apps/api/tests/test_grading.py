@@ -820,6 +820,27 @@ def test_brief_mode_sends_rubric_text_and_keeps_default_criteria(monkeypatch, tm
     ]
 
 
+def test_remaining_scope_drafts_only_ungraded_classroom_submissions(tmp_path) -> None:
+    get_settings().grading_cache_path = str(tmp_path / "grading")
+    with TestClient(app) as client:
+        job = client.post(
+            "/api/grading/jobs",
+            json={
+                "course_id": "course-1",
+                "activity_id": "activity-1",
+                "rubric_mode": "brief",
+                "teacher_loop": "approve",
+                "scope": "remaining",
+            },
+        ).json()
+        client.post(f"/api/grading/jobs/{job['id']}/privacy-audit")
+        drafted = client.post(f"/api/grading/jobs/{job['id']}/draft").json()
+
+    assert drafted["total_submissions"] == 1
+    assert [submission["student_name"] for submission in drafted["submissions"]] == ["Bruno Costa"]
+
+
+
 def test_create_job_rejects_unknown_rubric_mode() -> None:
     with TestClient(app) as client:
         response = client.post(

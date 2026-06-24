@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { GradingCriterionInput, GradingJob, GradingQueueItem, PrivacyAudit, RubricMode, TeacherLoopMode } from "../../types";
+import type { GradingCriterionInput, GradingJob, GradingQueueItem, GradingScope, PrivacyAudit, RubricMode, TeacherLoopMode } from "../../types";
 import { AppIcon } from "../icons";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, RadioGroup, RadioItem, Tabs, TabsList, TabsTrigger } from "../ui";
 import { GraderTopbar } from "./GraderTopbar";
@@ -69,6 +69,7 @@ export function GraderSetup({
     teacherLoop: TeacherLoopMode;
     rubricText: string;
     includeVisualSubmissions: boolean;
+    scope?: GradingScope;
     criteria?: GradingCriterionInput[];
   }) => void;
   onContinue: () => void;
@@ -78,11 +79,15 @@ export function GraderSetup({
   const [teacherLoop, setTeacherLoop] = useState<TeacherLoopMode>("approve");
   const [rubricText, setRubricText] = useState("");
   const [includeVisualSubmissions, setIncludeVisualSubmissions] = useState(false);
+  const gradedSubmissions = item.graded_submissions ?? 0;
+  const ungradedSubmissions = item.ungraded_submissions ?? 0;
+  const activityTotalSubmissions = item.total_submissions || item.submission_count;
+  const isPartiallyGraded = gradedSubmissions > 0 && ungradedSubmissions > 0;
+  const [gradingScope, setGradingScope] = useState<GradingScope>(isPartiallyGraded ? "remaining" : "all");
   const [criteria, setCriteria] = useState<GradingCriterionInput[]>([
     { name: "Funcionalidade", weight: 60, description: "Resolve o que foi pedido." },
     { name: "Clareza", weight: 40, description: "Organização, leitura e justificativa." },
   ]);
-  const selectedRubric = rubricModes.find((mode) => mode.id === rubricMode) ?? rubricModes[0];
   // Infer mode runs in two steps: first produce the rubric, then let the teacher
   // edit it. Inference has happened once the job carries non-placeholder criteria.
   const criteriaInferred = rubricMode === "infer" && !!job && job.criteria.length > 0 && !hasDefaultCriteria(job);
@@ -91,6 +96,14 @@ export function GraderSetup({
   useEffect(() => {
     setIncludeVisualSubmissions(job?.include_visual_submissions ?? false);
   }, [job?.id, job?.include_visual_submissions]);
+
+  useEffect(() => {
+    if (job?.grade_scope) {
+      setGradingScope(job.grade_scope);
+      return;
+    }
+    setGradingScope(isPartiallyGraded ? "remaining" : "all");
+  }, [job?.id, job?.grade_scope, isPartiallyGraded]);
 
   // Load the inferred rubric into the editable state so the teacher edits the real
   // criteria (not a throwaway copy). Edits don't change the signature, so they survive.
@@ -249,6 +262,27 @@ export function GraderSetup({
                     </small>
                   </span>
                 </label>
+                {isPartiallyGraded ? (
+                  <div className="grading-scope-choice" role="group" aria-label="Escopo da correcao">
+                    <span>Esta atividade ja tem {gradedSubmissions} de {activityTotalSubmissions} entregas corrigidas no Classroom.</span>
+                    <button
+                      type="button"
+                      className={gradingScope === "remaining" ? "active" : ""}
+                      disabled={preparing || !!job}
+                      onClick={() => setGradingScope("remaining")}
+                    >
+                      Corrigir apenas os {ungradedSubmissions} restantes
+                    </button>
+                    <button
+                      type="button"
+                      className={gradingScope === "all" ? "active" : ""}
+                      disabled={preparing || !!job}
+                      onClick={() => setGradingScope("all")}
+                    >
+                      Corrigir todos os {activityTotalSubmissions}
+                    </button>
+                  </div>
+                ) : null}
                 <div className="setup-footer-actions">
                   <button className="btn btn-ghost" onClick={onBack} disabled={preparing}>
                     Cancelar
@@ -265,7 +299,7 @@ export function GraderSetup({
                   ) : (
                     <button
                       className="btn btn-primary"
-                      onClick={() => onStart({ rubricMode, teacherLoop, rubricText, includeVisualSubmissions, criteria: startCriteria })}
+                      onClick={() => onStart({ rubricMode, teacherLoop, rubricText, includeVisualSubmissions, scope: gradingScope, criteria: startCriteria })}
                       disabled={preparing || !criteriaValid}
                     >
                       <AppIcon name={preparing ? "loader" : "sparkle"} className={preparing ? "ico spin" : "ico"} />

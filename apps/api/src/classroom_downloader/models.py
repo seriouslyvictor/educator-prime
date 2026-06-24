@@ -92,6 +92,7 @@ class GradingJob(SQLModel, table=True):
     activity_description: str | None = None
     rubric_mode: str
     teacher_loop: str
+    grade_scope: str = "all"
     rubric_text: str | None = None
     batch_mode: str = "per_submission"
     include_visual_submissions: bool = False

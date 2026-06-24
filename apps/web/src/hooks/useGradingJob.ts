@@ -8,6 +8,7 @@ import type {
   GradingCriterionInput,
   GradingJob,
   GradingQueueItem,
+  GradingScope,
   GradingSubmission,
   PrivacyAudit,
   RubricMode,
@@ -51,6 +52,9 @@ export function gradingItemFromJob(job: GradingJob): GradingQueueItem {
     queue_state: job.queue_state,
     reviewed_submissions: job.reviewed_submissions,
     total_submissions: job.total_submissions,
+    graded_submissions: 0,
+    ungraded_submissions: job.total_submissions,
+    concluded: false,
   };
 }
 
@@ -281,7 +285,7 @@ export function useGradingJob({
   // otherwise the teacher's mode/rubric change would be silently dropped.
   function matchingReadyJob(
     item: GradingQueueItem,
-    payload: { rubricMode: RubricMode; teacherLoop: TeacherLoopMode; rubricText: string; includeVisualSubmissions: boolean },
+    payload: { rubricMode: RubricMode; teacherLoop: TeacherLoopMode; rubricText: string; includeVisualSubmissions: boolean; scope?: GradingScope },
   ): GradingJob | null {
     const reusable =
       gradingJob?.activity_id === item.activity_id &&
@@ -289,7 +293,8 @@ export function useGradingJob({
       gradingJob.rubric_mode === payload.rubricMode &&
       gradingJob.teacher_loop === payload.teacherLoop &&
       (gradingJob.rubric_text ?? "") === (payload.rubricText ?? "") &&
-      gradingJob.include_visual_submissions === payload.includeVisualSubmissions;
+      gradingJob.include_visual_submissions === payload.includeVisualSubmissions &&
+      gradingJob.grade_scope === (payload.scope ?? "all");
     return reusable ? gradingJob : null;
   }
 
@@ -332,7 +337,10 @@ export function useGradingJob({
       latest_job_id: null,
       queue_state: "active",
       reviewed_submissions: 0,
-      total_submissions: 0,
+      total_submissions: activity.total_submissions,
+      graded_submissions: activity.graded_submissions,
+      ungraded_submissions: activity.ungraded_submissions,
+      concluded: activity.concluded,
     };
     await beginGradingSetup(item);
   }
@@ -356,7 +364,10 @@ export function useGradingJob({
       latest_job_id: existing?.latest_job_id ?? null,
       queue_state: existing?.queue_state ?? "active",
       reviewed_submissions: existing?.reviewed_submissions ?? 0,
-      total_submissions: existing?.total_submissions ?? 0,
+      total_submissions: existing?.total_submissions ?? activity.total_submissions,
+      graded_submissions: activity.graded_submissions,
+      ungraded_submissions: activity.ungraded_submissions,
+      concluded: activity.concluded,
     });
     setView("graderSetup");
   }
@@ -412,7 +423,7 @@ export function useGradingJob({
   // screen so the teacher can edit it before the audit runs.
   async function inferGradingCriteria(
     item: GradingQueueItem,
-    payload: { rubricMode: RubricMode; teacherLoop: TeacherLoopMode; rubricText: string; includeVisualSubmissions: boolean },
+    payload: { rubricMode: RubricMode; teacherLoop: TeacherLoopMode; rubricText: string; includeVisualSubmissions: boolean; scope?: GradingScope },
   ) {
     setGraderBusy(true);
     setError(null);
@@ -435,6 +446,7 @@ export function useGradingJob({
           activity_id: item.activity_id,
           rubric_mode: payload.rubricMode,
           teacher_loop: payload.teacherLoop,
+          scope: payload.scope ?? "all",
           rubric_text: payload.rubricText,
           include_visual_submissions: payload.includeVisualSubmissions,
         });
@@ -467,6 +479,7 @@ export function useGradingJob({
       teacherLoop: TeacherLoopMode;
       rubricText: string;
       includeVisualSubmissions: boolean;
+      scope?: GradingScope;
       criteria?: GradingCriterionInput[];
     },
   ) {
@@ -491,6 +504,7 @@ export function useGradingJob({
           activity_id: item.activity_id,
           rubric_mode: payload.rubricMode,
           teacher_loop: payload.teacherLoop,
+          scope: payload.scope ?? "all",
           rubric_text: payload.rubricText,
           include_visual_submissions: payload.includeVisualSubmissions,
           criteria: payload.criteria,

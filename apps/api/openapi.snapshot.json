@@ -3,6 +3,11 @@
     "schemas": {
       "ActivityRead": {
         "properties": {
+          "concluded": {
+            "default": false,
+            "title": "Concluded",
+            "type": "boolean"
+          },
           "course_id": {
             "title": "Course Id",
             "type": "string"
@@ -29,6 +34,11 @@
             ],
             "title": "Due Label"
           },
+          "graded_submissions": {
+            "default": 0,
+            "title": "Graded Submissions",
+            "type": "integer"
+          },
           "id": {
             "title": "Id",
             "type": "string"
@@ -40,6 +50,16 @@
           "title": {
             "title": "Title",
             "type": "string"
+          },
+          "total_submissions": {
+            "default": 0,
+            "title": "Total Submissions",
+            "type": "integer"
+          },
+          "ungraded_submissions": {
+            "default": 0,
+            "title": "Ungraded Submissions",
+            "type": "integer"
           },
           "work_type": {
             "title": "Work Type",
@@ -969,6 +989,11 @@
             ],
             "title": "Rubric Text"
           },
+          "scope": {
+            "default": "all",
+            "title": "Scope",
+            "type": "string"
+          },
           "teacher_loop": {
             "default": "approve",
             "title": "Teacher Loop",
@@ -1069,6 +1094,11 @@
           "flagged_submissions": {
             "title": "Flagged Submissions",
             "type": "integer"
+          },
+          "grade_scope": {
+            "default": "all",
+            "title": "Grade Scope",
+            "type": "string"
           },
           "id": {
             "title": "Id",

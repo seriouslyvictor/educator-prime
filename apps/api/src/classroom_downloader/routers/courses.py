@@ -22,6 +22,29 @@ logger = get_logger(__name__)
 router = APIRouter()
 
 
+def _activity_read_rows(provider: GoogleProvider, course_id: str, activities: list[Activity]) -> list[ActivityRead]:
+    summaries = provider.submission_grade_summary(course_id, [activity.id for activity in activities])
+    rows: list[ActivityRead] = []
+    for activity in activities:
+        summary = summaries.get(activity.id)
+        rows.append(
+            ActivityRead(
+                id=activity.id,
+                course_id=activity.course_id,
+                title=activity.title,
+                work_type=activity.work_type,
+                state=activity.state,
+                due_label=activity.due_label,
+                description=activity.description,
+                total_submissions=summary.total if summary else 0,
+                graded_submissions=summary.graded if summary else 0,
+                ungraded_submissions=summary.ungraded if summary else 0,
+                concluded=summary.concluded if summary else False,
+            )
+        )
+    return rows
+
+
 @router.get("/api/courses", response_model=list[CourseRead])
 def list_courses(
     refresh: bool = False,
@@ -91,7 +114,7 @@ def list_activities(
     session: Session = Depends(get_session),
     provider: GoogleProvider = Depends(provider_dependency),
     current_session: UserSession = Depends(get_current_session),
-) -> list[Activity]:
+) -> list[ActivityRead]:
     user_email = current_session.user_email
     log_event(logger, "classroom.activities.start", course_id=course_id)
     cached_rows = session.exec(
@@ -101,7 +124,7 @@ def list_activities(
     ).all()
     if cached_rows and not refresh and all(_is_fresh(row.fetched_at, settings.classroom_cache_ttl_minutes) for row in cached_rows):
         log_cache_hit(logger, "classroom.activities", course_id, course_id=course_id, stored_count=len(cached_rows))
-        return cached_rows
+        return _activity_read_rows(provider, course_id, list(cached_rows))
     log_cache_miss(logger, "classroom.activities", course_id, course_id=course_id, stored_count=len(cached_rows))
     try:
         activities = provider.list_activities(course_id)
@@ -115,7 +138,7 @@ def list_activities(
             raise google_failure from error
         if cached_rows:
             log_warning(logger, "classroom.activities.stale_fallback", course_id=course_id, stored_count=len(cached_rows))
-            return cached_rows
+            return _activity_read_rows(provider, course_id, list(cached_rows))
         raise
     log_event(
         logger,
@@ -148,4 +171,4 @@ def list_activities(
         .where(Activity.user_email == user_email)
     ).all()
     log_event(logger, "classroom.activities.complete", course_id=course_id, stored_count=len(rows))
-    return rows
+    return _activity_read_rows(provider, course_id, list(rows))

@@ -371,6 +371,9 @@ def create_grading_job(
     )
     if rubric_mode not in VALID_RUBRIC_MODES:
         raise HTTPException(status_code=422, detail="Unknown rubric mode.")
+    grade_scope = (payload.scope or "all").strip().lower()
+    if grade_scope not in {"all", "remaining"}:
+        raise HTTPException(status_code=422, detail="Unknown grading scope.")
     try:
         course = provider.get_course(payload.course_id)
         activity = provider.get_activity(payload.course_id, payload.activity_id)
@@ -409,6 +412,7 @@ def create_grading_job(
         activity_description=activity.description,
         rubric_mode=rubric_mode,
         teacher_loop=payload.teacher_loop,
+        grade_scope=grade_scope,
         rubric_text=payload.rubric_text,
         batch_mode=settings.grading_batch_mode,
         include_visual_submissions=payload.include_visual_submissions,
@@ -430,6 +434,7 @@ def create_grading_job(
         activity_title=job.activity_title,
         rubric_mode=job.rubric_mode,
         teacher_loop=job.teacher_loop,
+        grade_scope=job.grade_scope,
         rubric_text=job.rubric_text,
         batch_mode=job.batch_mode,
         include_visual_submissions=job.include_visual_submissions,

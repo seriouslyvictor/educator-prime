@@ -20,6 +20,10 @@ class ActivityRead(BaseModel):
     state: str
     due_label: str | None = None
     description: str | None = None
+    total_submissions: int = 0
+    graded_submissions: int = 0
+    ungraded_submissions: int = 0
+    concluded: bool = False
 
 
 class ExportCreate(BaseModel):
@@ -113,6 +117,7 @@ class GradingJobCreate(BaseModel):
     activity_id: str
     rubric_mode: str
     teacher_loop: str = "approve"
+    scope: str = "all"
     rubric_text: str | None = None
     include_visual_submissions: bool = False
     criteria: list[GradingCriterionInput] | None = None
@@ -234,6 +239,7 @@ class GradingJobRead(BaseModel):
     activity_title: str
     rubric_mode: str
     teacher_loop: str
+    grade_scope: str = "all"
     rubric_text: str | None = None
     batch_mode: str = "per_submission"
     include_visual_submissions: bool = False

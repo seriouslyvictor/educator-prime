@@ -29,6 +29,7 @@ from .attempts import _record_attempt, _attempt_metadata
 from .caching import cache_submission_file, scrub_submission_cached
 from .criteria import _apply_criterion_notes
 from .snapshots import grading_submission_snapshot
+from .submission_scope import files_for_grading_scope
 from .submissions import (
     _student_sort_key,
     _group_files,
@@ -436,7 +437,11 @@ def draft_grading_job(
     session.add(job)
     session.commit()
 
-    files = provider.list_submission_files(job.course_id, [job.activity_id])
+    files = files_for_grading_scope(
+        provider,
+        job,
+        provider.list_submission_files(job.course_id, [job.activity_id]),
+    )
     log_event(logger, "grading.draft.files_loaded", job_id=job.id, count=len(files), files=[safe_fields(file) for file in files])
     file_cache_hits = 0
     file_cache_misses = 0

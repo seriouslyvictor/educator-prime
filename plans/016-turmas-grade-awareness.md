@@ -96,3 +96,24 @@ unsure** — the backend tally (steps 1–2) is correct either way and can land 
   unchanged).
 - **STOP** at the end of step 2 to confirm the "doneView" interpretation if there
   is any doubt, before building the UI in steps 3–5.
+
+
+## Implementation status - 2026-06-24
+Status: DONE
+
+Implemented to spec:
+- Added Classroom grade summary support in the real and mock Google providers, using `assignedGrade`/`RETURNED` as the single graded rule and keeping OAuth scopes unchanged.
+- Extended `/api/courses/{course_id}/activities` / `ActivityRead` with total, graded, ungraded, and concluded fields; refreshed the OpenAPI snapshot.
+- Added grade-scope support to grading jobs (`all` vs `remaining`) and filtered privacy audit/drafting inputs when scope is `remaining`.
+- Added Turmas counters and a concluded chip; concluded rows remain re-gradeable.
+- Added the partial-activity setup choice, defaulting to remaining submissions, and threaded the selected scope into job creation.
+
+Verification:
+- `CD_GOOGLE_PROVIDER=mock uv run --extra dev pytest -q` from `apps/api`: 225 passed, 4 skipped.
+- `pnpm test:run src/lib/api.test.ts -t "sends the selected grading scope"` from `apps/web`: 1 passed, 13 skipped.
+- `pnpm lint` from `apps/web`: passed with existing warnings only.
+- `pnpm build` from `apps/web`: passed.
+- `pnpm e2e` from `apps/web`: 4 passed.
+
+STOP note:
+- The plan's doneView interpretation was implemented as the Turmas activity row reflecting Classroom grade state automatically. No contradictory local context was found, so no blocker remains.

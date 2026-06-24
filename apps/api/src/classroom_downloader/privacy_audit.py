@@ -12,6 +12,7 @@ from .grading import (
     cache_submission_file,
     scrub_submission_cached,
 )
+from .grading.submission_scope import files_for_grading_scope
 from .models import GradingJob, GradingSubmission, PrivacyAudit, PrivacyAuditRow
 from .observability import get_logger, log_debug, log_event, safe_fields
 from .privacy import pseudonym_for_submission
@@ -44,7 +45,11 @@ def run_privacy_audit(
     session.commit()
     session.refresh(audit)
 
-    files = provider.list_submission_files(job.course_id, [job.activity_id])
+    files = files_for_grading_scope(
+        provider,
+        job,
+        provider.list_submission_files(job.course_id, [job.activity_id]),
+    )
     log_event(
         logger,
         "privacy_audit.files_loaded",

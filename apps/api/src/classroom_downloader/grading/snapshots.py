@@ -122,6 +122,7 @@ def grading_job_snapshot(session: Session, job: GradingJob) -> GradingJobRead:
         activity_title=job.activity_title,
         rubric_mode=job.rubric_mode,
         teacher_loop=job.teacher_loop,
+        grade_scope=job.grade_scope,
         rubric_text=job.rubric_text,
         batch_mode=job.batch_mode,
         include_visual_submissions=job.include_visual_submissions,

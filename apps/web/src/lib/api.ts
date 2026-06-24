@@ -10,6 +10,7 @@ import type {
   GradingHealth,
   GradingJob,
   GradingCriterionInput,
+  GradingScope,
   GradingQueueItem,
   QueueState,
   PrivacyAudit,
@@ -291,6 +292,7 @@ export const api = {
     activity_id: string;
     rubric_mode: RubricMode;
     teacher_loop: TeacherLoopMode;
+    scope?: GradingScope;
     rubric_text?: string;
     include_visual_submissions?: boolean;
     criteria?: GradingCriterionInput[];

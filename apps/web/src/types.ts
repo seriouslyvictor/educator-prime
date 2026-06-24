@@ -36,6 +36,10 @@ export interface Activity {
   work_type: string;
   state: string;
   due_label: string | null;
+  total_submissions: number;
+  graded_submissions: number;
+  ungraded_submissions: number;
+  concluded: boolean;
 }
 
 export interface ExportFile {
@@ -64,6 +68,7 @@ export interface ExportJob {
 }
 
 export type GradingStatus = "ready" | "drafting" | "reviewing" | "completed";
+export type GradingScope = "all" | "remaining";
 export type QueueState = "active" | "archived" | "hidden";
 export type QueueAction = "restart" | "remove" | "archive" | "hide" | "restore";
 
@@ -79,6 +84,9 @@ export interface GradingQueueItem {
   queue_state: QueueState;
   reviewed_submissions: number;
   total_submissions: number;
+  graded_submissions?: number;
+  ungraded_submissions?: number;
+  concluded?: boolean;
 }
 
 export interface GradingCriterion {
@@ -158,6 +166,7 @@ export interface GradingJob {
   activity_title: string;
   rubric_mode: string;
   teacher_loop: string;
+  grade_scope: GradingScope;
   rubric_text: string | null;
   include_visual_submissions: boolean;
   queue_state: QueueState;

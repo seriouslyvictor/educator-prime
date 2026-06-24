@@ -108,12 +108,14 @@ class _TtlCacheEntry:
 _PROFILE_CACHE: dict[str, _TtlCacheEntry] = {}
 _ACCOUNT_PROFILE_CACHE: dict[str, _TtlCacheEntry] = {}
 _DRIVE_METADATA_CACHE: dict[str, _TtlCacheEntry] = {}
+_GRADE_SUMMARY_CACHE: dict[str, _TtlCacheEntry] = {}
 
 
 def clear_google_provider_caches() -> None:
     _PROFILE_CACHE.clear()
     _ACCOUNT_PROFILE_CACHE.clear()
     _DRIVE_METADATA_CACHE.clear()
+    _GRADE_SUMMARY_CACHE.clear()
     log_event(logger, "google.cache.clear")
 
 
@@ -205,6 +207,29 @@ class AccountProfile:
     picture: str | None
 
 
+@dataclass(frozen=True)
+class SubmissionGradeSummary:
+    total: int
+    graded: int
+    ungraded: int
+    returned: int = 0
+
+    @property
+    def concluded(self) -> bool:
+        return self.total > 0 and self.ungraded == 0
+
+
+def submission_has_classroom_grade(submission: dict) -> bool:
+    return submission.get("assignedGrade") is not None or submission.get("state") == "RETURNED"
+
+
+def _grade_summary_from_submissions(submissions: list[dict]) -> SubmissionGradeSummary:
+    total = len(submissions)
+    graded = sum(1 for submission in submissions if submission_has_classroom_grade(submission))
+    returned = sum(1 for submission in submissions if submission.get("state") == "RETURNED")
+    return SubmissionGradeSummary(total=total, graded=graded, ungraded=max(total - graded, 0), returned=returned)
+
+
 class GoogleProvider:
     def account_profile(self) -> AccountProfile:
         return AccountProfile(name=None, email=None, picture=None)
@@ -229,6 +254,14 @@ class GoogleProvider:
     def list_submission_links(
         self, course_id: str, activity_id: str
     ) -> list[SubmissionLink]:
+        raise NotImplementedError
+
+    def submission_grade_summary(
+        self, course_id: str, activity_ids: list[str]
+    ) -> dict[str, SubmissionGradeSummary]:
+        raise NotImplementedError
+
+    def ungraded_submission_ids(self, course_id: str, activity_id: str) -> set[str]:
         raise NotImplementedError
 
     def get_file_content(self, file_id: str) -> tuple[bytes, str]:
@@ -580,22 +613,9 @@ class GoogleApiProvider(GoogleProvider):
         files: list[SubmissionFile] = []
         activities = activity_ids or [activity.id for activity in self.list_activities(course_id)]
         for activity_id in activities:
-            page_token = None
             page = 0
-            while True:
+            for response in self._student_submission_pages(course_id, activity_id):
                 page += 1
-                response = (
-                    self.classroom.courses()
-                    .courseWork()
-                    .studentSubmissions()
-                    .list(
-                        courseId=course_id,
-                        courseWorkId=activity_id,
-                        pageSize=100,
-                        pageToken=page_token,
-                    )
-                    .execute()
-                )
                 for submission in response.get("studentSubmissions", []):
                     email, name = self._student_identity(
                         course_id=course_id,
@@ -620,9 +640,6 @@ class GoogleApiProvider(GoogleProvider):
                     accumulated_file_count=len(files),
                     next_page=bool(response.get("nextPageToken")),
                 )
-                page_token = response.get("nextPageToken")
-                if not page_token:
-                    break
         log_event(
             logger,
             "google.submission_files.complete",
@@ -633,20 +650,9 @@ class GoogleApiProvider(GoogleProvider):
         )
         return files
 
-    def list_submission_links(
-        self, course_id: str, activity_id: str
-    ) -> list[SubmissionLink]:
-        log_debug(
-            logger,
-            "google.submission_links.start",
-            course_id=course_id,
-            activity_id=activity_id,
-        )
-        links: list[SubmissionLink] = []
+    def _student_submission_pages(self, course_id: str, activity_id: str):
         page_token = None
-        page = 0
         while True:
-            page += 1
             response = (
                 self.classroom.courses()
                 .courseWork()
@@ -659,6 +665,58 @@ class GoogleApiProvider(GoogleProvider):
                 )
                 .execute()
             )
+            yield response
+            page_token = response.get("nextPageToken")
+            if not page_token:
+                break
+
+    def submission_grade_summary(
+        self, course_id: str, activity_ids: list[str]
+    ) -> dict[str, SubmissionGradeSummary]:
+        settings = get_settings()
+        summaries: dict[str, SubmissionGradeSummary] = {}
+        for activity_id in activity_ids:
+            cache_key = f"{course_id}:{activity_id}"
+            cached = _GRADE_SUMMARY_CACHE.get(cache_key)
+            if _cache_hit(cached) and isinstance(cached.value, SubmissionGradeSummary):
+                summaries[activity_id] = cached.value
+                log_cache_hit(logger, "google.submission_grade_summary", cache_key)
+                continue
+            log_cache_miss(logger, "google.submission_grade_summary", cache_key)
+            submissions: list[dict] = []
+            for response in self._student_submission_pages(course_id, activity_id):
+                submissions.extend(response.get("studentSubmissions", []))
+            summary = _grade_summary_from_submissions(submissions)
+            _GRADE_SUMMARY_CACHE[cache_key] = _TtlCacheEntry(
+                summary,
+                _ttl(settings.google_profile_cache_ttl_minutes),
+            )
+            summaries[activity_id] = summary
+        return summaries
+
+    def ungraded_submission_ids(self, course_id: str, activity_id: str) -> set[str]:
+        ids: set[str] = set()
+        for response in self._student_submission_pages(course_id, activity_id):
+            for submission in response.get("studentSubmissions", []):
+                if not submission_has_classroom_grade(submission):
+                    submission_id = submission.get("id")
+                    if submission_id:
+                        ids.add(submission_id)
+        return ids
+
+    def list_submission_links(
+        self, course_id: str, activity_id: str
+    ) -> list[SubmissionLink]:
+        log_debug(
+            logger,
+            "google.submission_links.start",
+            course_id=course_id,
+            activity_id=activity_id,
+        )
+        links: list[SubmissionLink] = []
+        page = 0
+        for response in self._student_submission_pages(course_id, activity_id):
+            page += 1
             for submission in response.get("studentSubmissions", []):
                 email, _ = self._student_identity(
                     course_id=course_id,
@@ -860,6 +918,17 @@ class MockGoogleProvider(GoogleProvider):
         ),
     ]
 
+
+    graded_submission_ids = {
+        "course-1": {
+            "activity-1": {"export-file-1"},
+            "activity-2": {"export-file-3"},
+        }
+    }
+
+    def _mock_submission_id(self, file: SubmissionFile) -> str:
+        return file.classroom_submission_id or file.id
+
     files = [
         SubmissionFile(
             "export-file-1",
@@ -1031,6 +1100,41 @@ class MockGoogleProvider(GoogleProvider):
             links=[safe_fields(link) for link in links],
         )
         return links
+
+
+    def submission_grade_summary(
+        self, course_id: str, activity_ids: list[str]
+    ) -> dict[str, SubmissionGradeSummary]:
+        summaries: dict[str, SubmissionGradeSummary] = {}
+        for activity_id in activity_ids:
+            submissions = [
+                {
+                    "id": self._mock_submission_id(file),
+                    "assignedGrade": 100 if self._mock_submission_id(file) in self.graded_submission_ids.get(course_id, {}).get(activity_id, set()) else None,
+                    "state": "RETURNED" if self._mock_submission_id(file) in self.graded_submission_ids.get(course_id, {}).get(activity_id, set()) else "TURNED_IN",
+                }
+                for file in self.files
+                if file.course_id == course_id and file.activity_id == activity_id
+            ]
+            summaries[activity_id] = _grade_summary_from_submissions(submissions)
+        log_event(
+            logger,
+            "mock.submission_grade_summary",
+            course_id=course_id,
+            activity_ids=activity_ids,
+            summaries={key: safe_fields(value) for key, value in summaries.items()},
+        )
+        return summaries
+
+    def ungraded_submission_ids(self, course_id: str, activity_id: str) -> set[str]:
+        graded = self.graded_submission_ids.get(course_id, {}).get(activity_id, set())
+        return {
+            self._mock_submission_id(file)
+            for file in self.files
+            if file.course_id == course_id
+            and file.activity_id == activity_id
+            and self._mock_submission_id(file) not in graded
+        }
 
     def get_file_content(self, file_id: str) -> tuple[bytes, str]:
         log_event(logger, "mock.file_content.start", file_id=file_id)

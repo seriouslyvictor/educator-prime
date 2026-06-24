@@ -136,6 +136,25 @@ describe("cache behavior", () => {
   });
 });
 
+describe("grading jobs", () => {
+  it("sends the selected grading scope when creating a job", async () => {
+    const fetch = vi.fn().mockResolvedValue(jsonResponse({ id: "job-1" }));
+    vi.stubGlobal("fetch", fetch);
+
+    await mod.api.createGradingJob({
+      course_id: "course-1",
+      activity_id: "activity-1",
+      rubric_mode: "brief",
+      teacher_loop: "approve",
+      scope: "remaining",
+    });
+
+    expect(JSON.parse(String(fetch.mock.calls[0][1]?.body))).toMatchObject({
+      scope: "remaining",
+    });
+  });
+});
+
 describe("fetchJson error mapping", () => {
   it("maps thrown fetch errors to unreachable ApiError", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network failed")));

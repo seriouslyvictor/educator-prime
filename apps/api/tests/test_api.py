@@ -49,6 +49,23 @@ def test_course_cache_logs_standard_hit_miss_pair(caplog) -> None:
     assert any("cache.hit cache='classroom.courses' key='active'" in message for message in messages)
 
 
+def test_activities_include_classroom_grade_summary() -> None:
+    with TestClient(app) as client:
+        response = client.get("/api/courses/course-1/activities?refresh=true")
+
+    assert response.status_code == 200
+    rows = {activity["id"]: activity for activity in response.json()}
+    assert rows["activity-1"]["total_submissions"] == 2
+    assert rows["activity-1"]["graded_submissions"] == 1
+    assert rows["activity-1"]["ungraded_submissions"] == 1
+    assert rows["activity-1"]["concluded"] is False
+    assert rows["activity-2"]["total_submissions"] == 1
+    assert rows["activity-2"]["graded_submissions"] == 1
+    assert rows["activity-2"]["ungraded_submissions"] == 0
+    assert rows["activity-2"]["concluded"] is True
+
+
+
 def test_export_creates_email_first_manifest_paths() -> None:
     with TestClient(app) as client:
         response = client.post(
