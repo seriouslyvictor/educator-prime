@@ -265,7 +265,9 @@ def _build_rubric_messages(request: RubricInferenceRequest) -> list[dict[str, st
                 "description when it is informative and the sample submissions when it "
                 "is thin. Respond with JSON only: an object with a 'criteria' array of "
                 "{name, weight, description}, where weight is an integer percentage and "
-                "all weights sum to 100. return a maximum of 6 criteria."
+                "all weights sum to 100. Return a maximum of 6 criteria. "
+                "Always write criterion names and descriptions in Brazilian Portuguese, "
+                "regardless of the assignment language, rubric notes, or sample submissions."
             ),
         },
         {"role": "user", "content": user_content},

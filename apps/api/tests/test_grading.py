@@ -744,7 +744,7 @@ def test_criteria_stream_infers_before_audit(tmp_path) -> None:
     assert terminal["job"]["id"] == job["id"]
     names = [row["name"] for row in terminal["job"]["criteria"]]
     weights = [row["weight"] for row in terminal["job"]["criteria"]]
-    assert names == ["Thesis", "Evidence", "Reasoning", "Mechanics"]
+    assert names == ["Tese", "Evid\u00eancias", "Racioc\u00ednio", "Organiza\u00e7\u00e3o"]
     assert sum(weights) == 100
 
 
@@ -764,7 +764,7 @@ def test_draft_no_longer_infers_criteria_inline(tmp_path) -> None:
         body = client.post(f"/api/grading/jobs/{job['id']}/draft").json()
 
     names = [row["name"] for row in body["criteria"]]
-    assert names == ["Understanding", "Evidence", "Reasoning", "Clarity"]
+    assert names == ["Compreens\u00e3o", "Evid\u00eancias", "Racioc\u00ednio", "Clareza"]
 
 
 def test_brief_mode_sends_rubric_text_and_keeps_default_criteria(monkeypatch, tmp_path) -> None:
@@ -804,19 +804,19 @@ def test_brief_mode_sends_rubric_text_and_keeps_default_criteria(monkeypatch, tm
 
     assert body["rubric_mode"] == "brief"
     assert [row["name"] for row in body["criteria"]] == [
-        "Understanding",
-        "Evidence",
-        "Reasoning",
-        "Clarity",
+        "Compreens\u00e3o",
+        "Evid\u00eancias",
+        "Racioc\u00ednio",
+        "Clareza",
     ]
     assert captured
     assert all(request.rubric_mode == "brief" for request in captured)
     assert all(request.rubric_text == "Priorize a clareza e exemplos." for request in captured)
     assert [c["name"] for c in captured[0].criteria] == [
-        "Understanding",
-        "Evidence",
-        "Reasoning",
-        "Clarity",
+        "Compreens\u00e3o",
+        "Evid\u00eancias",
+        "Racioc\u00ednio",
+        "Clareza",
     ]
 
 
@@ -1244,10 +1244,10 @@ def test_defaults_used_when_no_criteria_and_engine_silent(monkeypatch, tmp_path)
         body = client.post(f"/api/grading/jobs/{job['id']}/draft").json()
 
     assert [row["name"] for row in body["criteria"]] == [
-        "Understanding",
-        "Evidence",
-        "Reasoning",
-        "Clarity",
+        "Compreens\u00e3o",
+        "Evid\u00eancias",
+        "Racioc\u00ednio",
+        "Clareza",
     ]
 
 

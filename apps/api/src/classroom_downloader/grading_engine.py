@@ -161,10 +161,10 @@ class MockGradingEngine:
         )
         # Deterministic rubric whose weights sum to 100; stable for tests.
         return [
-            {"name": "Thesis", "weight": 30, "description": "States a clear, arguable claim."},
-            {"name": "Evidence", "weight": 30, "description": "Supports the claim with relevant evidence."},
-            {"name": "Reasoning", "weight": 25, "description": "Explains how evidence backs the claim."},
-            {"name": "Mechanics", "weight": 15, "description": "Organized, readable, and correct."},
+            {"name": "Tese", "weight": 30, "description": "Apresenta uma afirma\u00e7\u00e3o clara e defens\u00e1vel."},
+            {"name": "Evid\u00eancias", "weight": 30, "description": "Sustenta a resposta com evid\u00eancias relevantes."},
+            {"name": "Racioc\u00ednio", "weight": 25, "description": "Explica como as evid\u00eancias sustentam a conclus\u00e3o."},
+            {"name": "Organiza\u00e7\u00e3o", "weight": 15, "description": "Mant\u00e9m a resposta organizada, leg\u00edvel e correta."},
         ]
 
     def extract_image(

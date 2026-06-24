@@ -386,5 +386,5 @@ export function GraderSetup({
 function hasDefaultCriteria(job: GradingJob): boolean {
   const names = job.criteria.map((criterion) => criterion.name).join("|");
   const weights = job.criteria.map((criterion) => criterion.weight).join("|");
-  return names === "Understanding|Evidence|Reasoning|Clarity" && weights === "30|25|30|15";
+  return names === "Compreens\u00e3o|Evid\u00eancias|Racioc\u00ednio|Clareza" && weights === "30|25|30|15";
 }

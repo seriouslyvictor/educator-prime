@@ -6,7 +6,7 @@ os.environ["CD_GOOGLE_PROVIDER"] = "mock"
 
 import pytest
 
-from classroom_downloader.grading_engine import GradingEngineRequest, VisionExtractionRequest
+from classroom_downloader.grading_engine import GradingEngineRequest, RubricInferenceRequest, VisionExtractionRequest
 from classroom_downloader.litellm_engine import (
     DEFAULT_MAX_OUTPUT_TOKENS,
     MAX_PDF_OUTPUT_TOKENS,
@@ -43,6 +43,52 @@ def model_entry(
         notes="",
         raw={},
     )
+
+def test_infer_rubric_prompt_requires_brazilian_portuguese(monkeypatch) -> None:
+    captured = {}
+
+    def fake_completion(**kwargs):
+        captured.update(kwargs)
+
+        class Choice:
+            message = {
+                "content": json.dumps(
+                    {
+                        "criteria": [
+                            {
+                                "name": "Clareza",
+                                "weight": 100,
+                                "description": "Comunica as ideias com organiza\u00e7\u00e3o.",
+                            }
+                        ]
+                    }
+                )
+            }
+
+        class Response:
+            choices = [Choice()]
+            usage = {"prompt_tokens": 40, "completion_tokens": 20, "total_tokens": 60}
+
+        return Response()
+
+    monkeypatch.setattr("classroom_downloader.litellm_engine.litellm.completion", fake_completion)
+    engine = LiteLlmGradingEngine(model=model_entry(), timeout_seconds=30, max_retries=1)
+
+    engine.infer_rubric(
+        RubricInferenceRequest(
+            job_id="job-criteria",
+            activity_title="Essay Draft",
+            activity_description="Write an argumentative essay.",
+            rubric_text=None,
+            samples=[],
+            description_only=True,
+        )
+    )
+
+    system_prompt = captured["messages"][0]["content"]
+    assert "criterion names and descriptions" in system_prompt
+    assert "Brazilian Portuguese" in system_prompt
+
 
 
 def _request(

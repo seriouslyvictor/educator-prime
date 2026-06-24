@@ -65,3 +65,19 @@ both the names and the weight signature before changing.
 - Frontend build/test/lint green; the infer-mode "criteria pending" hint still
   appears for a fresh job (sentinel updated) and disappears once real criteria land.
 - Manual/mock: a freshly inferred rubric shows Portuguese criterion names.
+
+
+## Implementation log
+- Status: DONE (2026-06-24).
+- Updated the LiteLLM rubric inference prompt to require criterion names and descriptions in Brazilian Portuguese regardless of assignment/sample language.
+- Translated backend `DEFAULT_CRITERIA` to pt-BR and kept `_criteria_match_defaults` anchored to the canonical defaults.
+- Updated both frontend `hasDefaultCriteria` sentinel signatures to the pt-BR default names with the same weights.
+- Updated the mock grading engine rubric output so mock/manual inferred criteria are Portuguese.
+- Added backend coverage asserting the LiteLLM inference prompt requests Brazilian Portuguese, and updated default/mock criteria assertions.
+- Verification: targeted backend criteria tests passed.
+- Verification: `CD_GOOGLE_PROVIDER=mock uv run --extra dev pytest -q` passed, 226 passed and 4 skipped.
+- Verification: `pnpm test:run` passed, 26 tests.
+- Verification: `pnpm lint` passed with the existing 14 warnings.
+- Verification: `pnpm build` passed.
+- Verification: `pnpm e2e` passed, 6 tests.
+- Historical rows are not migrated; the change affects new defaults and future inferences only, per plan.

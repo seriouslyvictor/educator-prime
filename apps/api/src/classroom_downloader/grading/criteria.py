@@ -12,24 +12,24 @@ logger = get_logger(__name__)
 
 DEFAULT_CRITERIA = [
     GradingCriterionInput(
-        name="Understanding",
+        name="Compreens\u00e3o",
         weight=30,
-        description="Shows command of the core concepts in the assignment.",
+        description="Demonstra dom\u00ednio dos conceitos centrais da atividade.",
     ),
     GradingCriterionInput(
-        name="Evidence",
+        name="Evid\u00eancias",
         weight=25,
-        description="Uses relevant details, sources, examples, or artifacts.",
+        description="Usa detalhes, fontes, exemplos ou artefatos relevantes.",
     ),
     GradingCriterionInput(
-        name="Reasoning",
+        name="Racioc\u00ednio",
         weight=30,
-        description="Connects evidence to conclusions with clear logic.",
+        description="Conecta evid\u00eancias a conclus\u00f5es com l\u00f3gica clara.",
     ),
     GradingCriterionInput(
-        name="Clarity",
+        name="Clareza",
         weight=15,
-        description="Communicates in an organized, readable way.",
+        description="Comunica as ideias de forma organizada e leg\u00edvel.",
     ),
 ]
 
