@@ -698,7 +698,7 @@ class GoogleApiProvider(GoogleProvider):
             request = self.drive.files().export_media(fileId=file_id, mimeType=export[0])
             media_type = export[0]
         else:
-            request = self.drive.files().get_media(fileId=file_id)
+            request = self.drive.files().get_media(fileId=file_id, supportsAllDrives=True)
             media_type = metadata.get("mimeType", "application/octet-stream")
 
         buffer = BytesIO()
@@ -765,7 +765,9 @@ class GoogleApiProvider(GoogleProvider):
         log_debug(logger, "google.drive.metadata.start", file_id=file_id)
         metadata = (
             self.drive.files()
-            .get(fileId=file_id, fields="id,name,mimeType")
+            # supportsAllDrives so files stored in a Shared/Team Drive resolve
+            # instead of 404ing (Drive v3 defaults the flag to false).
+            .get(fileId=file_id, fields="id,name,mimeType", supportsAllDrives=True)
             .execute()
         )
         _DRIVE_METADATA_CACHE[file_id] = _TtlCacheEntry(
