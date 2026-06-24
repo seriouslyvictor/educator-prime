@@ -120,6 +120,7 @@ export function App() {
     activeGradingSubmissionId,
     setActiveGradingSubmissionId,
     draftingSubmissionId,
+    acceptingSubmissionId,
     gradingProgress,
     clearActiveJob,
     getActiveJobId,
@@ -413,6 +414,7 @@ export function App() {
               progress={gradingProgress}
               activeSubmissionId={activeGradingSubmissionId}
               draftingSubmissionId={draftingSubmissionId}
+              acceptingSubmissionId={acceptingSubmissionId}
               onActiveSubmission={setActiveGradingSubmissionId}
               onBack={() => setView("workspace")}
               onWrap={() => setView("graderWrap")}

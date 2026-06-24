@@ -27,6 +27,7 @@ export function GraderReview({
   progress,
   activeSubmissionId,
   draftingSubmissionId,
+  acceptingSubmissionId,
   onActiveSubmission,
   onBack,
   onWrap,
@@ -46,6 +47,7 @@ export function GraderReview({
   } | null;
   activeSubmissionId: string | null;
   draftingSubmissionId: string | null;
+  acceptingSubmissionId: string | null;
   onActiveSubmission: (id: string) => void;
   onBack: () => void;
   onWrap: () => void;
@@ -104,6 +106,7 @@ export function GraderReview({
     );
   const activePending = isPending(active);
   const activeDrafting = Boolean(active && active.id === draftingSubmissionId);
+  const activeAccepting = Boolean(active && active.id === acceptingSubmissionId);
   const usesRubric = job.rubric_mode !== "brief";
   const score = Number(scoreText);
   const hasValidScore = scoreText.trim() !== "" && Number.isFinite(score);
@@ -117,7 +120,7 @@ export function GraderReview({
   };
 
   const accept = () => {
-    if (active && hasValidScore && !busy) onAccept(active, score, feedback);
+    if (active && hasValidScore && !activePending && !activeAccepting) onAccept(active, score, feedback);
   };
 
   // Keyboard review: J/K to move, Enter to accept — ignored while typing in a field.
@@ -372,13 +375,13 @@ export function GraderReview({
 
             <div className="suggestion-actions">
               {!blockedActive || active.error_retryable ? (
-                <button className="btn btn-secondary" onClick={() => onRetry(active)} disabled={busy}>
+                <button className="btn btn-secondary" onClick={() => onRetry(active)} disabled={busy || activePending}>
                   <AppIcon name={busy ? "loader" : "refresh"} className={busy ? "ico spin" : "ico"} />
                   {blockedActive ? "Tentar novamente" : "Repetir"}
                 </button>
               ) : null}
-              <button className="btn btn-ai" onClick={accept} disabled={!hasValidScore || busy}>
-                <AppIcon name="check" />
+              <button className="btn btn-ai" onClick={accept} disabled={!hasValidScore || activePending || activeAccepting}>
+                <AppIcon name={activeAccepting ? "loader" : "check"} className={activeAccepting ? "ico spin" : "ico"} />
                 {blockedActive ? "Salvar nota manual" : "Aceitar e avançar"}
               </button>
             </div>

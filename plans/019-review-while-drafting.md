@@ -71,3 +71,21 @@ student should disable only that action briefly, not the whole screen.
   screen.
 - Regression: when drafting fails mid-stream, the resume path (`progress.error` →
   "Retomar na fila") still works and partially-reviewed work is preserved.
+
+
+## Implementation status - 2026-06-24
+Status: DONE
+
+Implemented to spec:
+- `continueToGradingDraft` no longer holds the global `graderBusy` flag for the entire draft stream.
+- `GraderReview` disables Accept only when the active row is still pending or that row is currently being accepted.
+- Added per-submission `acceptingSubmissionId` state so Accept shows a row-local spinner instead of freezing the whole review screen.
+- Late draft payloads are merged without overwriting rows the teacher already reviewed.
+- Existing resume/progress handling remains on the same SSE path.
+
+Verification:
+- Red/green unit test: `pnpm test:run src/hooks/useGradingJob.test.ts -t "does not downgrade"` from `apps/web`: failed before helper implementation, then passed.
+- `pnpm build` from `apps/web`: passed.
+- `pnpm lint` from `apps/web`: passed with existing warnings only.
+- `pnpm e2e e2e/review-while-drafting.spec.ts` from `apps/web`: 1 passed.
+- `pnpm e2e` from `apps/web`: 5 passed.

@@ -37,6 +37,20 @@ export function writeStoredJobId(jobId: string | null): void {
   }
 }
 
+export function mergeDraftSubmission(
+  currentSubmissions: GradingSubmission[],
+  incoming: GradingSubmission,
+): GradingSubmission[] {
+  let found = false;
+  const submissions = currentSubmissions.map((row) => {
+    if (row.id !== incoming.id) return row;
+    found = true;
+    return row.reviewed ? row : incoming;
+  });
+  if (!found) submissions.push(incoming);
+  return submissions;
+}
+
 // Build the lightweight queue item the Setup screen needs from a full job — used
 // when resuming a not-yet-drafted ("ready") job back into the Setup/prepare screen.
 export function gradingItemFromJob(job: GradingJob): GradingQueueItem {
@@ -114,6 +128,7 @@ export function useGradingJob({
   const [privacyAudit, setPrivacyAudit] = useState<PrivacyAudit | null>(null);
   const [activeGradingSubmissionId, setActiveGradingSubmissionId] = useState<string | null>(null);
   const [draftingSubmissionId, setDraftingSubmissionId] = useState<string | null>(null);
+  const [acceptingSubmissionId, setAcceptingSubmissionId] = useState<string | null>(null);
   const [gradingProgress, setGradingProgress] = useState<GradingInlineProgress | null>(null);
 
   // Keep the reload pointer in sync with whichever job is open.
@@ -250,12 +265,7 @@ export function useGradingJob({
   function applyDraftSubmission(submission: GradingSubmission) {
     setGradingJob((current) => {
       if (!current) return current;
-      const submissions = current.submissions.map((row) =>
-        row.id === submission.id ? submission : row,
-      );
-      if (!submissions.some((row) => row.id === submission.id)) {
-        submissions.push(submission);
-      }
+      const submissions = mergeDraftSubmission(current.submissions, submission);
       return {
         ...current,
         submissions,
@@ -595,7 +605,6 @@ export function useGradingJob({
 
   async function continueToGradingDraft() {
     if (!gradingJob) return;
-    setGraderBusy(true);
     setError(null);
     setDraftingSubmissionId(null);
     try {
@@ -632,13 +641,12 @@ export function useGradingJob({
       setError(appError(caught, "Falha ao gerar rascunhos de notas."));
     } finally {
       setDraftingSubmissionId(null);
-      setGraderBusy(false);
     }
   }
 
   async function acceptGradingDraft(submission: GradingSubmission, score: number, feedback: string) {
     if (!gradingJob) return;
-    setGraderBusy(true);
+    setAcceptingSubmissionId(submission.id);
     setError(null);
     try {
       const updated = await api.reviewGradingSubmission(gradingJob.id, submission.id, {
@@ -661,7 +669,7 @@ export function useGradingJob({
     } catch (caught) {
       setError(appError(caught, "Falha ao salvar a revisão."));
     } finally {
-      setGraderBusy(false);
+      setAcceptingSubmissionId(null);
     }
   }
 
@@ -700,6 +708,7 @@ export function useGradingJob({
     activeGradingSubmissionId,
     setActiveGradingSubmissionId,
     draftingSubmissionId,
+    acceptingSubmissionId,
     gradingProgress,
     clearActiveJob,
     getActiveJobId,
