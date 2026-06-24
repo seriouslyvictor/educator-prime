@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classroomActivityUrl, scoreColor, scoreOf, studentLabel, withAuthUser } from "./domain";
+import { classroomActivityUrl, firstStudentPostingUrl, scoreColor, scoreOf, studentLabel, withAuthUser } from "./domain";
 import type { GradingJob, GradingSubmission } from "../../types";
 
 function submission(overrides: Partial<GradingSubmission>): GradingSubmission {
@@ -73,6 +73,47 @@ describe("grader domain helpers", () => {
 
     expect(classroomActivityUrl(job, "teacher@school.edu.br")).toBe(
       "https://classroom.google.com/c/Nzk0MDIwNzQyNzcx/a/Nzk2NDExODgwODg1/submissions/by-status/and-sort-first-name/all/all?authuser=teacher%40school.edu.br",
+    );
+  });
+
+
+  it("opens guided posting at the first student's Classroom link when prepared", () => {
+    const job = {
+      course_id: "794020742771",
+      activity_id: "796411880885",
+    } as GradingJob;
+
+    expect(
+      firstStudentPostingUrl(
+        [
+          submission({
+            id: "first",
+            alternate_link: "https://classroom.google.com/c/course/sm/submission-1/details",
+          }),
+          submission({
+            id: "second",
+            alternate_link: "https://classroom.google.com/c/course/sm/submission-2/details",
+          }),
+        ],
+        job,
+        "teacher@school.edu.br",
+      ),
+    ).toBe(
+      "https://classroom.google.com/c/course/sm/submission-1/details?authuser=teacher%40school.edu.br",
+    );
+  });
+
+  it("falls back to the assignment URL when the first student link is not prepared", () => {
+    const job = {
+      course_id: "794020742771",
+      activity_id: "796411880885",
+    } as GradingJob;
+
+    expect(firstStudentPostingUrl([submission({ alternate_link: null })], job, "teacher@school.edu.br")).toBe(
+      classroomActivityUrl(job, "teacher@school.edu.br"),
+    );
+    expect(firstStudentPostingUrl([], job, "teacher@school.edu.br")).toBe(
+      classroomActivityUrl(job, "teacher@school.edu.br"),
     );
   });
 

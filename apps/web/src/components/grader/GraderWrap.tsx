@@ -4,7 +4,7 @@ import { api } from "../../lib/api";
 import type { GradingJob, GradingSubmission } from "../../types";
 import { AppIcon } from "../icons";
 import { GraderTopbar } from "./GraderTopbar";
-import { classroomActivityUrl, scoreOf, studentLabel, withAuthUser } from "./domain";
+import { classroomActivityUrl, firstStudentPostingUrl, scoreOf, studentLabel, withAuthUser } from "./domain";
 import { safeStatusLabel } from "./graderStatus";
 import graderStyles from "./Grader.module.css";
 import { PostingPiP } from "./pip/PostingPiP";
@@ -134,9 +134,8 @@ export function GraderWrap({
     // turn so neither popup is blocked. Awaiting before window.open would let the
     // new tab hide the opener and the PiP would silently fail to render.
     const pipReady = openPiP();
-    // Deep-link to the assignment grading screen; authuser pins it to the
-    // account signed into the tool.
-    window.open(classroomActivityUrl(job, accountEmail), "classroom-posting");
+    const target = firstStudentPostingUrl(pipQueueRef.current, job, accountEmail);
+    window.open(target, "classroom-posting");
     await pipReady;
   }
 

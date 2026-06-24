@@ -39,3 +39,14 @@ export function classroomActivityUrl(job: GradingJob, accountEmail?: string | nu
     accountEmail,
   );
 }
+
+export function firstStudentPostingUrl(
+  queue: GradingSubmission[],
+  job: GradingJob,
+  accountEmail?: string | null,
+): string {
+  const first = queue[0];
+  return first?.alternate_link
+    ? withAuthUser(first.alternate_link, accountEmail)
+    : classroomActivityUrl(job, accountEmail);
+}

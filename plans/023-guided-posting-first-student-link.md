@@ -75,3 +75,15 @@ Classroom URL prepared by `prepareClassroomLinks` (used per row at
   ordering preserved).
 - A unit test on the URL-selection helper: returns the first student's authuser link
   when `alternate_link` exists, the assignment URL otherwise.
+
+## Implementation log
+- Status: DONE (2026-06-24).
+- Confirmed `prepareClassroomLinks` stores Google Classroom `alternateLink` on each submission, and mock links are already per-submission details URLs.
+- Added `firstStudentPostingUrl(queue, job, accountEmail)` to choose the first pending student's `alternate_link` with `authuser`, falling back to the assignment grading URL when no prepared link exists.
+- Updated `handleOpenPiP` to snapshot the queue, start `openPiP()`, compute the target URL, call `window.open(target, "classroom-posting")`, then await PiP readiness; popup/PiP gesture ordering is preserved.
+- Added unit coverage for first-student link selection and assignment fallback.
+- Verification: `pnpm test:run` -> 28 passed.
+- Verification: `pnpm lint` -> 0 errors, 14 existing warnings.
+- Verification: `pnpm build` -> passed.
+- Verification: `pnpm e2e` -> 6 passed.
+- Real Classroom smoke was not run in this environment; mock/unit coverage verifies the selected URL and existing e2e verifies PiP/review flows in mock mode.
