@@ -552,6 +552,41 @@ def test_outlier_review_excludes_blocked_rows(tmp_path) -> None:
 
 
 
+class _RaisingOutlierEngine(_OutlierEngine):
+    def review_outliers(self, request):
+        raise RuntimeError("simulated outlier-pass failure")
+
+
+def test_outlier_review_failure_does_not_fail_drafting(tmp_path) -> None:
+    from classroom_downloader.grading import draft_grading_job
+    from classroom_downloader.grading.drafting import _outlier_review_already_completed
+
+    get_settings().grading_cache_path = str(tmp_path / "grading")
+    provider = _infer_provider(
+        [
+            _text_submission_file(1, "activity-infer", "completed the requested exercise"),
+            _text_submission_file(2, "activity-infer", "another completed exercise"),
+        ]
+    )
+    engine_instance = _RaisingOutlierEngine()
+    with Session(engine) as session:
+        job = _seed_infer_job(session, description="Long enough description for drafting.")
+        # Must not raise even though review_outliers raises.
+        drafted = draft_grading_job(session, job, provider, engine_instance)
+        submissions = session.exec(select(GradingSubmission).where(GradingSubmission.job_id == drafted.id)).all()
+        already_completed = _outlier_review_already_completed(session, drafted.id)
+
+    # Job must be in a reviewable/completed state, not failed.
+    assert drafted.status in {GradingStatus.reviewing, GradingStatus.completed}
+    # Pass-1 drafts are intact — every submission still has score and feedback.
+    assert all(sub.ai_score is not None for sub in submissions)
+    assert all(sub.feedback for sub in submissions)
+    # No outlier flag was applied (fell back to mechanical/None).
+    assert all(sub.flag is None for sub in submissions)
+    # Marker was recorded with status="failed" so a future re-draft can retry.
+    assert already_completed is False
+
+
 def test_infer_uses_description_only_when_substantial(tmp_path) -> None:
     from classroom_downloader.grading import infer_job_criteria
 

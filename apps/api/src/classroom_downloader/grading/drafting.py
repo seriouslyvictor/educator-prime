@@ -486,16 +486,22 @@ def review_outliers_for_job(
     if not candidates:
         return []
     reviewer = getattr(grading_engine, "review_outliers", None)
+    review_failed = False
     if not callable(reviewer):
         flags = []
     else:
-        flags = reviewer(
-            OutlierBatchRequest(
-                job_id=job.id,
-                activity_title=job.activity_title,
-                submissions=candidates,
-            )
-        ) or []
+        try:
+            flags = reviewer(
+                OutlierBatchRequest(
+                    job_id=job.id,
+                    activity_title=job.activity_title,
+                    submissions=candidates,
+                )
+            ) or []
+        except Exception:
+            review_failed = True
+            flags = []
+            log_error(logger, "grading.outlier_review.failed", job_id=job.id)
     flag_reasons = {flag.id: flag.reason for flag in flags}
     candidate_ids = {candidate.id for candidate in candidates}
     for submission in session.exec(select(GradingSubmission).where(GradingSubmission.job_id == job.id)).all():
@@ -512,7 +518,7 @@ def review_outliers_for_job(
             job=job,
             submission=marker_submission,
             engine=grading_engine,
-            status="completed",
+            status="failed" if review_failed else "completed",
             extraction_status="supported",
             privacy_status="clean",
             flags=[flag.reason for flag in flags],
