@@ -84,6 +84,50 @@ and require the operator to supply the design (screenshot/spec) before the visua
 is built — each has a STOP-for-design-review condition. Do not invent the visual
 language.
 
+## Post-implementation quality pass (plans 024–026, added 2026-06-24, base commit `9bac651`)
+
+Source: `improve` skill, focused audit of the just-shipped UX-polish plans
+(016, 017, 019, 020, 021, 022, 023). Plan 018 is still unimplemented and out of
+scope for this pass. The audit found one correctness bug, one regression-test gap,
+and one performance regression — all introduced by the polish pass itself.
+
+A separate working-tree fix (not a plan) was already applied during the review: the
+`PdfPreview` load-timeout in `SubmissionPreview.tsx` was flipping a successfully
+loaded PDF to the error state after 8s; fixed with a `loaded` flag. **Commit that
+fix alongside plan 025**, which adds the regression test that guards it.
+
+| Plan | Title | Priority | Effort | Depends on | Status |
+|------|-------|----------|--------|------------|--------|
+| 024 | Make pass-2 outlier review best-effort so a failed exception pass never blocks drafting | P1 | S | — | DONE — branch `worktree-agent-adb56182611db2fa1` (commit 7cc2d79); reviewer re-ran suite: 235 passed, 4 skipped; scope clean; awaiting user merge |
+| 025 | Add e2e coverage for image + PDF preview retry (incl. the PDF load-timeout regression) | P2 | S | — (bundles the PdfPreview `loaded`-flag fix as Step 0) | DONE — branch `worktree-agent-a5f19f44aa584bf9f` (commits 689d971, 8cb7950); 1 revision round (PDF test now drives load synthetically — headless Chromium won't fire iframe onLoad for PDFs); reviewer re-ran: e2e 8p, lint 0 err; scope clean; awaiting user merge. FOLLOW-UP: verify on real Chrome that a valid PDF stays visible (if real Chrome also never fires iframe onLoad for PDFs, the 8s guard still flips good PDFs to error — fix is no-worse-than-before but PDF load detection may need redesign) |
+| 026 | Stop the Turmas activities list from blocking on one Classroom call per activity | P2 | M | — | DONE — branch `worktree-agent-afd897ae2a7228b44` (commit 293fd40); reviewer re-ran all gates: pytest 235p/4s, lint 0 err, build ok, e2e 6p; scope clean; awaiting user merge |
+
+### Recommended order & rationale
+- **024 first** — highest leverage. A transient/persistent failure in the *advisory*
+  outlier pass (`drafting.py:677`, unguarded `litellm.completion` + JSON parse)
+  currently reports "Drafting failed" and can permanently block the teacher from
+  reviewing work the AI already graded. Small, low-risk, contained.
+- **025** — cheap regression net for the PDF-preview fix just made; the bug shipped
+  precisely because only the *text* preview had an e2e test. Commit the working-tree
+  fix with it.
+- **026** — real perf regression from plan 016 (opening a course now fires N
+  sequential Classroom calls before the list renders), but lower urgency than the
+  correctness bug. Backend + small frontend; makes the counts lazy/non-blocking.
+
+The three are independent (disjoint files) and can be done in any order; 024 is
+just the one to do if only one gets done.
+
+### Findings considered and rejected (this pass)
+- **`remaining`-scope ID matching** (`grading/submission_scope.py:14`): verified
+  correct. `ungraded_submission_ids` returns the Classroom studentSubmission id, and
+  `group_key_for(file)` resolves to the same `classroom_submission_id` for the real
+  provider; the dual `or file.id in ungraded_ids` check covers the mock. Not a bug.
+- **Grade-summary cache staleness** (30-min TTL not invalidated after the tool posts
+  grades): real but low impact; counts can lag up to 30 min after guided posting.
+  Noted in plan 026's maintenance notes, not planned on its own.
+- **Outlier-progress copy** (review strip shows "Gerando rascunhos da IA" while
+  pass 2 runs): cosmetic wording only. Not worth a plan.
+
 ## Frontend modularity track (plans 008–011, added 2026-06-16, commit `a9713b0`)
 
 Goal set by the maintainer: break the front-end monoliths into reusable
