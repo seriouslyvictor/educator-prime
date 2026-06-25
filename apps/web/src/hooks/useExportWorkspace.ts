@@ -100,6 +100,31 @@ export function useExportWorkspace({
       setActivities(activityList);
       setSelectedActivityIds([]);
       await loadGradingQueue();
+      // Lazy, non-blocking: counts are decoration; a failure must not wipe the list.
+      void api
+        .activityGradeSummaries(courseId)
+        .then((summaries) => {
+          const byId = new Map(summaries.map((s) => [s.activity_id, s]));
+          setActivities((current) => {
+            // Guard against stale merge if the user switched courses before this resolved.
+            if (current.length > 0 && current[0]?.course_id !== courseId) return current;
+            return current.map((a) => {
+              const s = byId.get(a.id);
+              return s
+                ? {
+                    ...a,
+                    total_submissions: s.total_submissions,
+                    graded_submissions: s.graded_submissions,
+                    ungraded_submissions: s.ungraded_submissions,
+                    concluded: s.concluded,
+                  }
+                : a;
+            });
+          });
+        })
+        .catch(() => {
+          /* counts are best-effort; leave activities as-is */
+        });
     } catch (caught) {
       setActivities([]);
       setError(appError(caught, "Falha ao carregar atividades."));
