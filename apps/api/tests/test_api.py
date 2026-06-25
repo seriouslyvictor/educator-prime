@@ -49,16 +49,35 @@ def test_course_cache_logs_standard_hit_miss_pair(caplog) -> None:
     assert any("cache.hit cache='classroom.courses' key='active'" in message for message in messages)
 
 
-def test_activities_include_classroom_grade_summary() -> None:
+def test_activities_returns_zero_counts_without_classroom_calls() -> None:
     with TestClient(app) as client:
         response = client.get("/api/courses/course-1/activities?refresh=true")
 
     assert response.status_code == 200
     rows = {activity["id"]: activity for activity in response.json()}
+    # Activities endpoint no longer calls submission_grade_summary; counts default to 0.
+    assert rows["activity-1"]["total_submissions"] == 0
+    assert rows["activity-1"]["graded_submissions"] == 0
+    assert rows["activity-1"]["concluded"] is False
+    assert rows["activity-2"]["total_submissions"] == 0
+    assert rows["activity-2"]["graded_submissions"] == 0
+    assert rows["activity-2"]["concluded"] is False
+
+
+def test_activity_grade_summary_endpoint_returns_counts() -> None:
+    with TestClient(app) as client:
+        # Populate the DB first by fetching activities.
+        client.get("/api/courses/course-1/activities?refresh=true")
+        response = client.get("/api/courses/course-1/activities/grade-summary")
+
+    assert response.status_code == 200
+    rows = {row["activity_id"]: row for row in response.json()}
+    # activity-1: 2 submissions, 1 graded, 1 ungraded, not all graded → not concluded.
     assert rows["activity-1"]["total_submissions"] == 2
     assert rows["activity-1"]["graded_submissions"] == 1
     assert rows["activity-1"]["ungraded_submissions"] == 1
     assert rows["activity-1"]["concluded"] is False
+    # activity-2: 1 submission, 1 graded, 0 ungraded, all graded → concluded.
     assert rows["activity-2"]["total_submissions"] == 1
     assert rows["activity-2"]["graded_submissions"] == 1
     assert rows["activity-2"]["ungraded_submissions"] == 0

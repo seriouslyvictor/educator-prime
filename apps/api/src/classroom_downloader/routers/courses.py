@@ -13,7 +13,7 @@ from ..database import get_session
 from ..google_provider import GoogleProvider
 from ..models import Activity, Course, UserSession
 from ..observability import get_logger, log_cache_hit, log_cache_miss, log_event, log_warning, safe_fields
-from ..schemas import ActivityRead, CourseRead
+from ..schemas import ActivityGradeSummaryRead, ActivityRead, CourseRead
 from ..settings import get_settings
 
 settings = get_settings()
@@ -22,11 +22,9 @@ logger = get_logger(__name__)
 router = APIRouter()
 
 
-def _activity_read_rows(provider: GoogleProvider, course_id: str, activities: list[Activity]) -> list[ActivityRead]:
-    summaries = provider.submission_grade_summary(course_id, [activity.id for activity in activities])
+def _activity_read_rows(activities: list[Activity]) -> list[ActivityRead]:
     rows: list[ActivityRead] = []
     for activity in activities:
-        summary = summaries.get(activity.id)
         rows.append(
             ActivityRead(
                 id=activity.id,
@@ -36,10 +34,6 @@ def _activity_read_rows(provider: GoogleProvider, course_id: str, activities: li
                 state=activity.state,
                 due_label=activity.due_label,
                 description=activity.description,
-                total_submissions=summary.total if summary else 0,
-                graded_submissions=summary.graded if summary else 0,
-                ungraded_submissions=summary.ungraded if summary else 0,
-                concluded=summary.concluded if summary else False,
             )
         )
     return rows
@@ -124,7 +118,7 @@ def list_activities(
     ).all()
     if cached_rows and not refresh and all(_is_fresh(row.fetched_at, settings.classroom_cache_ttl_minutes) for row in cached_rows):
         log_cache_hit(logger, "classroom.activities", course_id, course_id=course_id, stored_count=len(cached_rows))
-        return _activity_read_rows(provider, course_id, list(cached_rows))
+        return _activity_read_rows(list(cached_rows))
     log_cache_miss(logger, "classroom.activities", course_id, course_id=course_id, stored_count=len(cached_rows))
     try:
         activities = provider.list_activities(course_id)
@@ -138,7 +132,7 @@ def list_activities(
             raise google_failure from error
         if cached_rows:
             log_warning(logger, "classroom.activities.stale_fallback", course_id=course_id, stored_count=len(cached_rows))
-            return _activity_read_rows(provider, course_id, list(cached_rows))
+            return _activity_read_rows(list(cached_rows))
         raise
     log_event(
         logger,
@@ -171,4 +165,34 @@ def list_activities(
         .where(Activity.user_email == user_email)
     ).all()
     log_event(logger, "classroom.activities.complete", course_id=course_id, stored_count=len(rows))
-    return _activity_read_rows(provider, course_id, list(rows))
+    return _activity_read_rows(list(rows))
+
+
+@router.get(
+    "/api/courses/{course_id}/activities/grade-summary",
+    response_model=list[ActivityGradeSummaryRead],
+)
+def activity_grade_summary(
+    course_id: str,
+    session: Session = Depends(get_session),
+    provider: GoogleProvider = Depends(provider_dependency),
+    current_session: UserSession = Depends(get_current_session),
+) -> list[ActivityGradeSummaryRead]:
+    user_email = current_session.user_email
+    activities = session.exec(
+        select(Activity)
+        .where(Activity.course_id == course_id)
+        .where(Activity.user_email == user_email)
+    ).all()
+    summaries = provider.submission_grade_summary(course_id, [a.id for a in activities])
+    rows: list[ActivityGradeSummaryRead] = []
+    for activity in activities:
+        summary = summaries.get(activity.id)
+        rows.append(ActivityGradeSummaryRead(
+            activity_id=activity.id,
+            total_submissions=summary.total if summary else 0,
+            graded_submissions=summary.graded if summary else 0,
+            ungraded_submissions=summary.ungraded if summary else 0,
+            concluded=summary.concluded if summary else False,
+        ))
+    return rows

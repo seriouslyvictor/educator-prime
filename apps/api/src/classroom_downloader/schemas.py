@@ -26,6 +26,14 @@ class ActivityRead(BaseModel):
     concluded: bool = False
 
 
+class ActivityGradeSummaryRead(BaseModel):
+    activity_id: str
+    total_submissions: int = 0
+    graded_submissions: int = 0
+    ungraded_submissions: int = 0
+    concluded: bool = False
+
+
 class ExportCreate(BaseModel):
     course_id: str
     activity_ids: list[str] | None = None

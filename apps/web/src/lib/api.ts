@@ -265,6 +265,14 @@ export const api = {
     request<Activity[]>(`/api/courses/${courseId}/activities`, undefined, {
       ttlMs: 120_000,
     }),
+  activityGradeSummaries: (courseId: string) =>
+    request<{
+      activity_id: string;
+      total_submissions: number;
+      graded_submissions: number;
+      ungraded_submissions: number;
+      concluded: boolean;
+    }[]>(`/api/courses/${courseId}/activities/grade-summary`, undefined, { ttlMs: 30_000 }),
   createExport: async (courseId: string, activityIds: string[]) => {
     const response = await request<ExportJob>("/api/exports", {
       method: "POST",

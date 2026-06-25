@@ -1,6 +1,39 @@
 {
   "components": {
     "schemas": {
+      "ActivityGradeSummaryRead": {
+        "properties": {
+          "activity_id": {
+            "title": "Activity Id",
+            "type": "string"
+          },
+          "concluded": {
+            "default": false,
+            "title": "Concluded",
+            "type": "boolean"
+          },
+          "graded_submissions": {
+            "default": 0,
+            "title": "Graded Submissions",
+            "type": "integer"
+          },
+          "total_submissions": {
+            "default": 0,
+            "title": "Total Submissions",
+            "type": "integer"
+          },
+          "ungraded_submissions": {
+            "default": 0,
+            "title": "Ungraded Submissions",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "activity_id"
+        ],
+        "title": "ActivityGradeSummaryRead",
+        "type": "object"
+      },
       "ActivityRead": {
         "properties": {
           "concluded": {
@@ -2480,6 +2513,49 @@
           }
         },
         "summary": "List Activities"
+      }
+    },
+    "/api/courses/{course_id}/activities/grade-summary": {
+      "get": {
+        "operationId": "activity_grade_summary_api_courses__course_id__activities_grade_summary_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "course_id",
+            "required": true,
+            "schema": {
+              "title": "Course Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ActivityGradeSummaryRead"
+                  },
+                  "title": "Response Activity Grade Summary Api Courses  Course Id  Activities Grade Summary Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Activity Grade Summary"
       }
     },
     "/api/exports": {
