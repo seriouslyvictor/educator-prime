@@ -211,15 +211,20 @@ function ImagePreview({ url, title }: { url: string; title: string }) {
 function PdfPreview({ url, title }: { url: string; title: string }) {
   const [attempt, setAttempt] = useState(0);
   const [failed, setFailed] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   useEffect(() => {
     setAttempt(0);
     setFailed(false);
+    setLoaded(false);
   }, [url]);
+  // iframes don't reliably fire onError, so guard load with a timeout. Once the
+  // frame fires onLoad we stop the guard — otherwise a slow-but-successful PDF
+  // would be flipped to the error state after the timeout elapses.
   useEffect(() => {
-    if (failed) return;
+    if (failed || loaded) return;
     const timeout = window.setTimeout(() => setFailed(true), 8000);
     return () => window.clearTimeout(timeout);
-  }, [attempt, failed]);
+  }, [attempt, failed, loaded]);
   const src = retryUrl(url, attempt);
   if (failed) {
     return (
@@ -228,12 +233,13 @@ function PdfPreview({ url, title }: { url: string; title: string }) {
         url={url}
         onRetry={() => {
           setFailed(false);
+          setLoaded(false);
           setAttempt((current) => current + 1);
         }}
       />
     );
   }
-  return <iframe key={attempt} className="preview-frame" src={src} title={title} onLoad={() => setFailed(false)} />;
+  return <iframe key={attempt} className="preview-frame" src={src} title={title} onLoad={() => setLoaded(true)} />;
 }
 
 function SubmissionTextPreview({
