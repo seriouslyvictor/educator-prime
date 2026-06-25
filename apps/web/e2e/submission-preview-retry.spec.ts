@@ -221,14 +221,22 @@ test("keeps a loaded PDF preview visible past the load timeout", async ({ page }
   await page.getByRole("button", { name: /Auditar e preparar/ }).click();
   await page.getByRole("button", { name: /rascunhos? e revisar/ }).click();
 
-  // The iframe should be visible after the PDF loads
-  await expect(page.locator("iframe.preview-frame")).toBeVisible({ timeout: 15_000 });
+  // The iframe should be visible after the PDF mounts
+  const iframe = page.locator("iframe.preview-frame");
+  await expect(iframe).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText("Não foi possível carregar a previsualização.")).not.toBeVisible();
 
-  // Wait past the 8-second guard — before the fix the error state would appear here
+  // Headless Chromium's PDF plugin does not fire the iframe load event, so we
+  // deliver the load signal directly to exercise the component's `loaded` guard.
+  await page.evaluate(() => {
+    const f = document.querySelector("iframe.preview-frame");
+    if (f) f.dispatchEvent(new Event("load"));
+  });
+
+  // Wait past the 8-second guard — before the loaded-flag fix the error state would appear here
   await page.waitForTimeout(9000);
 
   // Regression check: the iframe should still be visible and no error shown
-  await expect(page.locator("iframe.preview-frame")).toBeVisible();
+  await expect(iframe).toBeVisible();
   await expect(page.getByText("Não foi possível carregar a previsualização.")).not.toBeVisible();
 });
