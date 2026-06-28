@@ -17,6 +17,8 @@ dist/
 .cache/
 .claude
 docs
-graphify-out/*
+graphify-out
 study-roadmap.md
 archive
+test_files
+Design
