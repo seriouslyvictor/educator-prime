@@ -129,3 +129,78 @@ def test_draft_persists_criterion_scores_and_review_derives_final_score(tmp_path
         (crit_ids[0], 60.0),
         (crit_ids[1], 25.0),
     }
+
+
+def test_apply_criterion_scores_is_idempotent(tmp_path) -> None:
+    """_apply_criterion_scores must delete existing rows before inserting,
+    so calling it twice in a row yields the same final state (no duplicates)."""
+    import os
+    from uuid import uuid4
+
+    from sqlmodel import Session, select
+
+    os.environ["CD_DATABASE_URL"] = "sqlite:///:memory:"
+    from classroom_downloader.database import engine, init_db
+    from classroom_downloader.grading.drafting import _apply_criterion_scores
+    from classroom_downloader.models import (
+        GradingCriterion,
+        GradingJob,
+        GradingStatus,
+        GradingSubmission,
+        GradingSubmissionCriterionScore,
+    )
+
+    init_db()
+    job_id = str(uuid4())
+    submission_id = str(uuid4())
+    crit_id = str(uuid4())
+
+    with Session(engine) as session:
+        job = GradingJob(
+            id=job_id,
+            course_id="c",
+            course_name="C",
+            activity_id="a",
+            activity_title="A",
+            rubric_mode="structured",
+            teacher_loop="approve",
+            status=GradingStatus.ready,
+        )
+        submission = GradingSubmission(
+            id=submission_id,
+            job_id=job_id,
+            source_file_id="f",
+            source_name="s.txt",
+            mime_type="text/plain",
+        )
+        criterion = GradingCriterion(
+            id=crit_id,
+            job_id=job_id,
+            name="Lógica",
+            weight=100,
+        )
+        session.add(job)
+        session.add(submission)
+        session.add(criterion)
+        session.commit()
+
+        criterion_scores = [{"criterion": "Lógica", "earned": 80}]
+
+        # First call: creates one row
+        total1 = _apply_criterion_scores(session, submission, [criterion], criterion_scores)
+        session.commit()
+
+        # Second call: must delete stale row and insert fresh one (idempotent)
+        total2 = _apply_criterion_scores(session, submission, [criterion], criterion_scores)
+        session.commit()
+
+        rows = session.exec(
+            select(GradingSubmissionCriterionScore).where(
+                GradingSubmissionCriterionScore.submission_id == submission_id
+            )
+        ).all()
+
+    assert total1 == 80.0
+    assert total2 == 80.0
+    assert len(rows) == 1, f"Expected 1 row after idempotent re-call, got {len(rows)}"
+    assert rows[0].earned == 80.0
