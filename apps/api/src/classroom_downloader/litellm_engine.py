@@ -21,7 +21,7 @@ from .grading_engine import (
 )
 from .llm_catalog import LlmModelEntry
 from .llm_errors import LlmCallError, classify_llm_exception
-from .observability import get_logger, log_event, log_warning, text_preview
+from .observability import get_logger, log_event
 from .settings import get_settings
 
 
@@ -34,29 +34,6 @@ logger = get_logger(__name__)
 DEFAULT_MAX_OUTPUT_TOKENS = 4096
 MAX_VISION_OUTPUT_TOKENS = 8192
 MAX_PDF_OUTPUT_TOKENS = 32768
-# Extra re-calls when a grading response comes back charset-corrupted (Gemini
-# mojibake). Fires only on detected corruption, so the cost is rare.
-_MOJIBAKE_MAX_RETRIES = 2
-
-
-def _response_looks_corrupted(
-    request: GradingEngineRequest, result: GradingEngineResult
-) -> bool:
-    """Heuristic for Gemini's intermittent charset mojibake (non-ASCII -> '3').
-
-    The model echoes the rubric's criterion names; when the majority of them no
-    longer match the job's criteria (e.g. 'Inicializa33o' vs 'Inicialização'),
-    the response was garbled in transit. Only detectable in structured mode —
-    brief-mode feedback corruption has no rubric to compare against."""
-    if not request.criteria or not result.criterion_scores:
-        return False
-    expected = {str(c.get("name", "")).strip() for c in request.criteria}
-    returned = [str(c.get("criterion", "")).strip() for c in result.criterion_scores]
-    if not returned:
-        return False
-    matched = sum(1 for name in returned if name in expected)
-    # If fewer than half the echoed names match the rubric, treat it as corrupted.
-    return matched < (len(returned) + 1) // 2
 
 
 class LiteLlmGradingEngine:
@@ -123,47 +100,22 @@ class LiteLlmGradingEngine:
         )
 
         started = time.monotonic()
-        # Gemini intermittently returns charset-corrupted text (non-ASCII mangled
-        # to "3", e.g. "Inicializa33o"). It's server-side and per-request, so a
-        # plain re-call usually comes back clean. Detect it and retry a couple of
-        # times; after that keep the best-effort result (positional criterion
-        # matching still yields correct bars — only feedback text may be garbled).
-        result: GradingEngineResult | None = None
-        for attempt in range(_MOJIBAKE_MAX_RETRIES + 1):
-            response = litellm.completion(
-                model=self.model,
-                messages=messages,
-                timeout=self.timeout_seconds,
-                num_retries=self.max_retries,
-                max_tokens=self.max_output_tokens,
-                response_format=_response_format(self.catalog_model),
-            )
-            self.last_response = response
-            self.last_latency_ms = int((time.monotonic() - started) * 1000)
-            self.last_usage = _usage_dict(getattr(response, "usage", None))
-            self.last_response_text = _response_content(response)
-            result = parse_litellm_result(
-                self.last_response_text,
-                request_score=request.request_score,
-            )
-            if not _response_looks_corrupted(request, result):
-                break
-            if attempt < _MOJIBAKE_MAX_RETRIES:
-                log_warning(
-                    logger,
-                    "grading_engine.litellm.mojibake_retry",
-                    job_id=request.job_id,
-                    submission_id=request.submission_id,
-                    attempt=attempt + 1,
-                )
-            else:
-                log_warning(
-                    logger,
-                    "grading_engine.litellm.mojibake_persisted",
-                    job_id=request.job_id,
-                    submission_id=request.submission_id,
-                    response_sample=text_preview(self.last_response_text),
-                )
+        response = litellm.completion(
+            model=self.model,
+            messages=messages,
+            timeout=self.timeout_seconds,
+            num_retries=self.max_retries,
+            max_tokens=self.max_output_tokens,
+            response_format=_response_format(self.catalog_model),
+        )
+        self.last_response = response
+        self.last_latency_ms = int((time.monotonic() - started) * 1000)
+        self.last_usage = _usage_dict(getattr(response, "usage", None))
+        self.last_response_text = _response_content(response)
+        result = parse_litellm_result(
+            self.last_response_text,
+            request_score=request.request_score,
+        )
 
         log_event(
             logger,
@@ -884,10 +836,6 @@ def _build_messages(request: GradingEngineRequest) -> list[dict[str, str]]:
                     if structured
                     else "Return a single holistic numeric draft score from 0 to 100."
                 )
-                + " Output the JSON as ASCII only: encode every non-ASCII character "
-                "(accents and letters like á, é, í, ó, ú, ã, õ, ç) as a \\uXXXX unicode "
-                "escape sequence (for example \\u00f3 for ó). Never emit raw accented "
-                "bytes — this avoids charset corruption in transit."
             ),
         },
         {

@@ -15,6 +15,10 @@ dependencies = [
   "google-auth>=2.40.0",
   "google-auth-oauthlib>=1.2.0",
   "litellm>=1.80.0",
+  # Not a hard dependency of litellm >=1.86, but its completion_with_retries path
+  # (triggered whenever we pass num_retries and a call hits a transient error)
+  # does `import tenacity` and crashes without it.
+  "tenacity>=8.0.0",
   "python-dotenv>=1.0.0",
   "pillow>=12.2.0",
   "python-docx>=1.1.0",

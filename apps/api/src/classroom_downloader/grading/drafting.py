@@ -78,8 +78,9 @@ def _apply_criterion_scores(
         return None
 
     # The engine returns scores in the same order it received the criteria, so when
-    # the counts line up we match by POSITION — robust to the model garbling the
-    # echoed criterion names (Gemini mojibake). Otherwise fall back to name match.
+    # the counts line up we match by POSITION — keeps the bars correct even when the
+    # provider garbles the echoed criterion names (e.g. charset corruption in the
+    # feedback text). Otherwise fall back to name match.
     use_positional = len(criterion_scores) == len(criteria)
     criteria_by_name = {c.name: c for c in criteria}
     total: float | None = None

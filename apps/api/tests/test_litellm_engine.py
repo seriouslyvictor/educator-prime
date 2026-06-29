@@ -18,7 +18,6 @@ from classroom_downloader.litellm_engine import (
     parse_outlier_flags,
     parse_vision_extraction_result,
     parse_litellm_result,
-    _response_looks_corrupted,
 )
 from classroom_downloader.llm_errors import LlmCallError
 from classroom_downloader.llm_catalog import LlmModelEntry
@@ -272,38 +271,6 @@ def test_parse_litellm_result_returns_criterion_scores_unscaled() -> None:
     )
     assert parsed.criterion_scores is not None
     assert [c["earned"] for c in parsed.criterion_scores] == [50, 40]
-
-
-def _moji_req(names: list[str]):
-    from types import SimpleNamespace
-
-    return SimpleNamespace(criteria=[{"name": n, "weight": 10} for n in names])
-
-
-def _moji_res(names: list[str]):
-    from types import SimpleNamespace
-
-    return SimpleNamespace(criterion_scores=[{"criterion": n, "earned": 5} for n in names])
-
-
-def test_response_looks_corrupted_flags_garbled_names() -> None:
-    # Gemini mojibake corrupts the echoed criterion names (ç/ã/ó -> "3").
-    req = _moji_req(["Inicialização da Lista", "Validação de Limite"])
-    res = _moji_res(["Inicializa33o da Lista", "Valida33o de Limite"])
-    assert _response_looks_corrupted(req, res) is True
-
-
-def test_response_looks_corrupted_passes_clean_echo() -> None:
-    req = _moji_req(["Inicialização da Lista", "Validação de Limite"])
-    res = _moji_res(["Inicialização da Lista", "Validação de Limite"])
-    assert _response_looks_corrupted(req, res) is False
-
-
-def test_response_looks_corrupted_ignores_brief_mode() -> None:
-    from types import SimpleNamespace
-
-    # No criteria (brief mode): nothing to compare against, never flagged.
-    assert _response_looks_corrupted(SimpleNamespace(criteria=[]), _moji_res([])) is False
 
 
 def test_parse_vision_extraction_result_requires_structured_shape() -> None:
