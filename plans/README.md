@@ -15,7 +15,7 @@ starting, honor STOP conditions, and update the status row when done.
 | 030 | Extract a testable grading EventSource client and reducer | P1 | M | none | DONE |
 | 031 | Split the web API client into transport, cache, and endpoint modules | P2 | M | 030 recommended | DONE |
 | 032 | Split Google provider implementation from mocks, credentials, and cache helpers | P2 | M | 028 | DONE |
-| 033 | Split the grading drafting pipeline into policy, submission, outlier, and job services | P2 | L | 028, 029 | TODO |
+| 033 | Split the grading drafting pipeline into policy, submission, outlier, and job services | P2 | L | 028, 029 | DONE |
 | 034 | Split the shared grader CSS module by screen/component | P3 | M | archive/008, archive/009 completed | TODO |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) |

@@ -12,12 +12,15 @@
 
 ## Status
 
+**Status**: DONE
+
 - **Priority**: P2
 - **Effort**: L
 - **Risk**: HIGH
 - **Depends on**: plans/028-split-grading-backend-tests.md, plans/029-extract-grading-router-services.md
 - **Category**: tech-debt
 - **Planned at**: commit `035af04`, 2026-06-29
+- **Completed at**: commit `advisor/codebase-quality-028-034`, 2026-06-29
 
 ## Why this matters
 
