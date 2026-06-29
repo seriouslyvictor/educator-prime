@@ -11,6 +11,13 @@ It currently achieves:
 
 Privacy is a product requirement. Audit reports do not store extracted submission text, scrubbed text, prompts, raw student names, or student emails. AI grading remains draft-only and does not post grades or comments back to Classroom.
 
+## Documentation
+
+Project documentation lives in [`docs/`](docs/index.md). Start with
+[docs/architecture.md](docs/architecture.md) for the system overview and
+[docs/constraints.md](docs/constraints.md) for what the tool can and cannot do (and
+why). The conceptual docs are written in pt-BR.
+
 ## Stack
 
 - Frontend: Vite, React, TypeScript, shadcn-style local UI primitives

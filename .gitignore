@@ -16,7 +16,6 @@ dist/
 .superpowers/
 .cache/
 .claude
-docs
 graphify-out
 study-roadmap.md
 archive
