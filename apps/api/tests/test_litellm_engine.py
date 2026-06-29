@@ -242,6 +242,53 @@ def test_parse_litellm_result_rejects_malformed_json() -> None:
         parse_litellm_result("not json")
 
 
+def _scored_payload(criterion_scores: list[dict], score: int = 80) -> str:
+    return json.dumps(
+        {
+            "score": score,
+            "confidence": 0.8,
+            "feedback": "ok",
+            "criterion_notes": [],
+            "criterion_scores": criterion_scores,
+            "flags": [],
+        }
+    )
+
+
+def test_parse_litellm_result_normalizes_criterion_scores_to_score() -> None:
+    # Model's parts don't sum to its own score (50+40=90 != 80); they must be
+    # scaled so the bars reconcile with the authoritative overall score.
+    parsed = parse_litellm_result(
+        _scored_payload(
+            [
+                {"criterion": "Lógica", "earned": 50},
+                {"criterion": "Estilo", "earned": 40},
+            ],
+            score=80,
+        )
+    )
+    assert parsed.criterion_scores is not None
+    earned = [c["earned"] for c in parsed.criterion_scores]
+    assert round(sum(earned), 1) == 80.0
+    # Relative split is preserved (Lógica still larger than Estilo).
+    assert earned[0] > earned[1]
+
+
+def test_parse_litellm_result_drops_criterion_scores_when_parts_are_zero() -> None:
+    # All-zero parts but a positive score: there is no honest split, so the bars
+    # are dropped rather than shown contradicting the score.
+    parsed = parse_litellm_result(
+        _scored_payload(
+            [
+                {"criterion": "Lógica", "earned": 0},
+                {"criterion": "Estilo", "earned": 0},
+            ],
+            score=80,
+        )
+    )
+    assert parsed.criterion_scores is None
+
+
 def test_parse_vision_extraction_result_requires_structured_shape() -> None:
     parsed = parse_vision_extraction_result(
         json.dumps(

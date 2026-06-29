@@ -1,5 +1,6 @@
 import time
 from datetime import UTC, datetime
+from uuid import uuid4
 
 from sqlmodel import Session, select
 
@@ -56,8 +57,6 @@ def _apply_criterion_scores(
     Matches engine output (keyed by criterion name) against the job's
     GradingCriterion rows (keyed by id).  Unmatched names are silently
     ignored.  Idempotent: deletes existing rows for this submission first."""
-    from uuid import uuid4
-
     # Always clear stale rows first so a retry produces clean state.
     existing = session.exec(
         select(GradingSubmissionCriterionScore).where(

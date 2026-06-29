@@ -703,6 +703,25 @@ def parse_litellm_result(
         if valid:
             criterion_scores = valid
 
+    # The overall score is authoritative: scale the per-criterion earned points
+    # so they always sum to it. The review bars must reconcile with the score —
+    # never show parts that contradict the total the teacher sees.
+    if score is not None and criterion_scores:
+        total = sum(float(c["earned"]) for c in criterion_scores)
+        if total > 0:
+            scaled = [round(float(c["earned"]) * score / total, 1) for c in criterion_scores]
+            drift = round(score - sum(scaled), 1)
+            if drift:
+                # Absorb rounding drift into the largest part so none goes negative.
+                idx = max(range(len(scaled)), key=lambda i: scaled[i])
+                scaled[idx] = round(scaled[idx] + drift, 1)
+            for c, earned_scaled in zip(criterion_scores, scaled):
+                c["earned"] = earned_scaled
+        elif score > 0:
+            # All-zero parts but a positive score: no honest split exists without
+            # weights, so drop the bars rather than show ones that cannot sum.
+            criterion_scores = None
+
     return GradingEngineResult(
         score=score,
         confidence=confidence,

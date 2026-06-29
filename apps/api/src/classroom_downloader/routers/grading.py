@@ -989,7 +989,23 @@ def review_submission(
     # When per-criterion points are provided the overall score is DERIVED from
     # them (single source of truth).  Replace stored criterion rows atomically.
     if payload.criterion_scores is not None:
-        from uuid import uuid4
+        # Reject criterion ids that don't belong to this job rather than storing
+        # orphan rows that would never reconcile against the job's criteria.
+        valid_criterion_ids = {
+            row.id
+            for row in session.exec(
+                select(GradingCriterion).where(GradingCriterion.job_id == job.id)
+            ).all()
+        }
+        unknown = [
+            cs.criterion_id
+            for cs in payload.criterion_scores
+            if cs.criterion_id not in valid_criterion_ids
+        ]
+        if unknown:
+            raise HTTPException(
+                status_code=400, detail="Unknown criterion id in review payload."
+            )
 
         existing_cs = session.exec(
             select(GradingSubmissionCriterionScore).where(
