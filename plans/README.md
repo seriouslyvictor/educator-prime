@@ -12,7 +12,7 @@ starting, honor STOP conditions, and update the status row when done.
 |------|-------|----------|--------|------------|--------|
 | 028 | Split the monolithic grading backend test module | P1 | M | none | DONE |
 | 029 | Extract grading router services and shared SSE runner | P1 | M | 028 | TODO |
-| 030 | Extract a testable grading EventSource client and reducer | P1 | M | none | TODO |
+| 030 | Extract a testable grading EventSource client and reducer | P1 | M | none | DONE |
 | 031 | Split the web API client into transport, cache, and endpoint modules | P2 | M | 030 recommended | TODO |
 | 032 | Split Google provider implementation from mocks, credentials, and cache helpers | P2 | M | 028 | TODO |
 | 033 | Split the grading drafting pipeline into policy, submission, outlier, and job services | P2 | L | 028, 029 | TODO |
