@@ -118,6 +118,10 @@ export function GraderReview({
   const usesRubric = job.rubric_mode !== "brief";
   const score = Number(scoreText);
   const hasValidScore = scoreText.trim() !== "" && Number.isFinite(score);
+  // Brief mode ("Orientação simples") grades holistically: a single ##/100 bar,
+  // driven by the editable overall score.
+  const briefScore = hasValidScore ? Math.round(score) : null;
+  const briefBarPct = briefScore != null ? Math.min(100, Math.max(0, briefScore)) : 0;
 
   const goRelative = (delta: number) => {
     if (!active) return;
@@ -373,18 +377,19 @@ export function GraderReview({
                                 type="number"
                                 min={0}
                                 max={criterion.weight}
-                                step={0.5}
+                                step={1}
                                 value={earned ?? ""}
                                 aria-label={`Pontos para ${criterion.name}`}
                                 onChange={(e) => {
                                   const val = parseFloat(e.target.value);
                                   if (!Number.isFinite(val)) return;
-                                  const clamped = Math.min(criterion.weight, Math.max(0, val));
+                                  // Whole points only — score a whole point or not.
+                                  const clamped = Math.min(criterion.weight, Math.max(0, Math.round(val)));
                                   const next = { ...criterionScores, [criterion.id]: clamped };
                                   setCriterionScores(next);
-                                  // Derive overall score from sum of parts.
+                                  // Overall score is derived from the sum of parts.
                                   const sum = Object.values(next).reduce((a, b) => a + b, 0);
-                                  setScoreText(String(Math.round(sum * 10) / 10));
+                                  setScoreText(String(Math.round(sum)));
                                 }}
                               />
                             ) : "—"}
@@ -402,12 +407,30 @@ export function GraderReview({
                   })}
                 </div>
               )
-            ) : job.rubric_text ? (
-              <div className="brief-guidance">
-                <span>Orientacao</span>
-                {job.rubric_text}
-              </div>
-            ) : null}
+            ) : (
+              <>
+                <div className="breakdown">
+                  <div className="bd-row">
+                    <div className="bd-head">
+                      <span className="bd-name">Nota</span>
+                      <span className="bd-score">
+                        <strong>{briefScore != null ? briefScore : "—"}</strong>
+                        <span className="bd-score-max">/100</span>
+                      </span>
+                    </div>
+                    <div className="bd-bar">
+                      <div className="bd-bar-fill" style={{ width: `${briefBarPct}%` }} />
+                    </div>
+                  </div>
+                </div>
+                {job.rubric_text ? (
+                  <div className="brief-guidance">
+                    <span>Orientacao</span>
+                    {job.rubric_text}
+                  </div>
+                ) : null}
+              </>
+            )}
 
             <label className="score-input">
               <span>{blockedActive ? "Nota manual" : "Nota final"}</span>

@@ -18,6 +18,7 @@ from classroom_downloader.litellm_engine import (
     parse_outlier_flags,
     parse_vision_extraction_result,
     parse_litellm_result,
+    _response_looks_corrupted,
 )
 from classroom_downloader.llm_errors import LlmCallError
 from classroom_downloader.llm_catalog import LlmModelEntry
@@ -255,9 +256,11 @@ def _scored_payload(criterion_scores: list[dict], score: int = 80) -> str:
     )
 
 
-def test_parse_litellm_result_normalizes_criterion_scores_to_score() -> None:
-    # Model's parts don't sum to its own score (50+40=90 != 80); they must be
-    # scaled so the bars reconcile with the authoritative overall score.
+def test_parse_litellm_result_returns_criterion_scores_unscaled() -> None:
+    # The per-criterion points are the source of truth and must be returned as-is,
+    # even when they disagree with the model's separate holistic score (here parts
+    # sum to 90 but score=80). Reconciliation (sum/clamp) happens downstream in
+    # drafting, where the criterion weights are known — never by scaling here.
     parsed = parse_litellm_result(
         _scored_payload(
             [
@@ -268,25 +271,39 @@ def test_parse_litellm_result_normalizes_criterion_scores_to_score() -> None:
         )
     )
     assert parsed.criterion_scores is not None
-    earned = [c["earned"] for c in parsed.criterion_scores]
-    assert round(sum(earned), 1) == 80.0
-    # Relative split is preserved (Lógica still larger than Estilo).
-    assert earned[0] > earned[1]
+    assert [c["earned"] for c in parsed.criterion_scores] == [50, 40]
 
 
-def test_parse_litellm_result_drops_criterion_scores_when_parts_are_zero() -> None:
-    # All-zero parts but a positive score: there is no honest split, so the bars
-    # are dropped rather than shown contradicting the score.
-    parsed = parse_litellm_result(
-        _scored_payload(
-            [
-                {"criterion": "Lógica", "earned": 0},
-                {"criterion": "Estilo", "earned": 0},
-            ],
-            score=80,
-        )
-    )
-    assert parsed.criterion_scores is None
+def _moji_req(names: list[str]):
+    from types import SimpleNamespace
+
+    return SimpleNamespace(criteria=[{"name": n, "weight": 10} for n in names])
+
+
+def _moji_res(names: list[str]):
+    from types import SimpleNamespace
+
+    return SimpleNamespace(criterion_scores=[{"criterion": n, "earned": 5} for n in names])
+
+
+def test_response_looks_corrupted_flags_garbled_names() -> None:
+    # Gemini mojibake corrupts the echoed criterion names (ç/ã/ó -> "3").
+    req = _moji_req(["Inicialização da Lista", "Validação de Limite"])
+    res = _moji_res(["Inicializa33o da Lista", "Valida33o de Limite"])
+    assert _response_looks_corrupted(req, res) is True
+
+
+def test_response_looks_corrupted_passes_clean_echo() -> None:
+    req = _moji_req(["Inicialização da Lista", "Validação de Limite"])
+    res = _moji_res(["Inicialização da Lista", "Validação de Limite"])
+    assert _response_looks_corrupted(req, res) is False
+
+
+def test_response_looks_corrupted_ignores_brief_mode() -> None:
+    from types import SimpleNamespace
+
+    # No criteria (brief mode): nothing to compare against, never flagged.
+    assert _response_looks_corrupted(SimpleNamespace(criteria=[]), _moji_res([])) is False
 
 
 def test_parse_vision_extraction_result_requires_structured_shape() -> None:

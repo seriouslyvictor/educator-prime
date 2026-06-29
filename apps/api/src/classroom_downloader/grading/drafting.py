@@ -51,12 +51,20 @@ def _apply_criterion_scores(
     submission: GradingSubmission,
     criteria: list[GradingCriterion],
     criterion_scores: list[dict[str, str | float]],
-) -> None:
-    """Replace per-criterion earned-points rows for this submission.
+) -> float | None:
+    """Replace per-criterion earned-points rows for this submission and return the
+    derived overall score (the sum of the stored whole-point earned values), or
+    None when no criterion matched (brief mode, or a response whose criterion
+    names didn't match the rubric — caller then keeps the holistic score).
+
+    The per-criterion judgement is the source of truth: earned points are stored
+    as WHOLE NUMBERS (no fractional granularity) clamped to [0, weight], and the
+    overall score is DERIVED from their sum rather than the model's separate (and
+    sometimes contradictory) holistic number.
 
     Matches engine output (keyed by criterion name) against the job's
-    GradingCriterion rows (keyed by id).  Unmatched names are silently
-    ignored.  Idempotent: deletes existing rows for this submission first."""
+    GradingCriterion rows.  Idempotent: deletes existing rows for this submission
+    first."""
     # Always clear stale rows first so a retry produces clean state.
     existing = session.exec(
         select(GradingSubmissionCriterionScore).where(
@@ -67,27 +75,37 @@ def _apply_criterion_scores(
         session.delete(row)
 
     if not criterion_scores:
-        return
+        return None
 
+    # The engine returns scores in the same order it received the criteria, so when
+    # the counts line up we match by POSITION — robust to the model garbling the
+    # echoed criterion names (Gemini mojibake). Otherwise fall back to name match.
+    use_positional = len(criterion_scores) == len(criteria)
     criteria_by_name = {c.name: c for c in criteria}
-    for entry in criterion_scores:
-        name = entry.get("criterion", "")
+    total: float | None = None
+    for index, entry in enumerate(criterion_scores):
         earned = entry.get("earned")
-        if not isinstance(name, str) or not name.strip():
-            continue
         if earned is None:
             continue
-        criterion = criteria_by_name.get(name)
+        if use_positional:
+            criterion = criteria[index]
+        else:
+            name = entry.get("criterion", "")
+            criterion = criteria_by_name.get(name) if isinstance(name, str) and name.strip() else None
         if criterion is None:
             continue
+        # Whole points only, clamped to the criterion's maximum (its weight).
+        earned_pts = float(max(0, min(int(round(float(earned))), criterion.weight)))
         session.add(
             GradingSubmissionCriterionScore(
                 id=str(uuid4()),
                 submission_id=submission.id,
                 criterion_id=criterion.id,
-                earned=float(earned),
+                earned=earned_pts,
             )
         )
+        total = (total or 0.0) + earned_pts
+    return total
 
 
 def _combine_submission_content(
@@ -358,20 +376,25 @@ def _draft_submission(
         response_text=getattr(grading_engine, "last_response_text", None),
     )
     _apply_criterion_notes(session, criteria, result.criterion_notes or [])
-    _apply_criterion_scores(session, submission, criteria, result.criterion_scores or [])
+    derived_score = _apply_criterion_scores(session, submission, criteria, result.criterion_scores or [])
     cowrite = job.teacher_loop == "cowrite"
+    # Per-criterion points are the source of truth: when the engine returned a
+    # matched breakdown, the overall score is their sum, not the model's separate
+    # (and sometimes contradictory) holistic number. Brief mode and responses with
+    # no matched criteria fall back to the holistic score.
+    overall_score = result.score if derived_score is None else derived_score
     auto_accept = (
         job.teacher_loop == "auto"
         and result.confidence >= settings.grading_auto_accept_confidence
         and not privacy_flags
-        and result.score is not None
+        and overall_score is not None
     )
-    submission.ai_score = None if cowrite else result.score
+    submission.ai_score = None if cowrite else overall_score
     submission.confidence = result.confidence
     if cowrite:
         submission.final_score = None if reset_review else submission.final_score
     else:
-        submission.final_score = result.score if reset_review else submission.final_score or result.score
+        submission.final_score = overall_score if reset_review else submission.final_score or overall_score
     submission.feedback = result.feedback if reset_review else submission.feedback or result.feedback
     submission.reviewed = auto_accept if reset_review else submission.reviewed or auto_accept
     # Pass-1 keeps only mechanical privacy/extraction signals in the badge.

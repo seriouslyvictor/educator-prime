@@ -21,7 +21,7 @@ from .grading_engine import (
 )
 from .llm_catalog import LlmModelEntry
 from .llm_errors import LlmCallError, classify_llm_exception
-from .observability import get_logger, log_event
+from .observability import get_logger, log_event, log_warning, text_preview
 from .settings import get_settings
 
 
@@ -34,6 +34,29 @@ logger = get_logger(__name__)
 DEFAULT_MAX_OUTPUT_TOKENS = 4096
 MAX_VISION_OUTPUT_TOKENS = 8192
 MAX_PDF_OUTPUT_TOKENS = 32768
+# Extra re-calls when a grading response comes back charset-corrupted (Gemini
+# mojibake). Fires only on detected corruption, so the cost is rare.
+_MOJIBAKE_MAX_RETRIES = 2
+
+
+def _response_looks_corrupted(
+    request: GradingEngineRequest, result: GradingEngineResult
+) -> bool:
+    """Heuristic for Gemini's intermittent charset mojibake (non-ASCII -> '3').
+
+    The model echoes the rubric's criterion names; when the majority of them no
+    longer match the job's criteria (e.g. 'Inicializa33o' vs 'Inicialização'),
+    the response was garbled in transit. Only detectable in structured mode —
+    brief-mode feedback corruption has no rubric to compare against."""
+    if not request.criteria or not result.criterion_scores:
+        return False
+    expected = {str(c.get("name", "")).strip() for c in request.criteria}
+    returned = [str(c.get("criterion", "")).strip() for c in result.criterion_scores]
+    if not returned:
+        return False
+    matched = sum(1 for name in returned if name in expected)
+    # If fewer than half the echoed names match the rubric, treat it as corrupted.
+    return matched < (len(returned) + 1) // 2
 
 
 class LiteLlmGradingEngine:
@@ -100,22 +123,47 @@ class LiteLlmGradingEngine:
         )
 
         started = time.monotonic()
-        response = litellm.completion(
-            model=self.model,
-            messages=messages,
-            timeout=self.timeout_seconds,
-            num_retries=self.max_retries,
-            max_tokens=self.max_output_tokens,
-            response_format=_response_format(self.catalog_model),
-        )
-        self.last_response = response
-        self.last_latency_ms = int((time.monotonic() - started) * 1000)
-        self.last_usage = _usage_dict(getattr(response, "usage", None))
-        self.last_response_text = _response_content(response)
-        result = parse_litellm_result(
-            self.last_response_text,
-            request_score=request.request_score,
-        )
+        # Gemini intermittently returns charset-corrupted text (non-ASCII mangled
+        # to "3", e.g. "Inicializa33o"). It's server-side and per-request, so a
+        # plain re-call usually comes back clean. Detect it and retry a couple of
+        # times; after that keep the best-effort result (positional criterion
+        # matching still yields correct bars — only feedback text may be garbled).
+        result: GradingEngineResult | None = None
+        for attempt in range(_MOJIBAKE_MAX_RETRIES + 1):
+            response = litellm.completion(
+                model=self.model,
+                messages=messages,
+                timeout=self.timeout_seconds,
+                num_retries=self.max_retries,
+                max_tokens=self.max_output_tokens,
+                response_format=_response_format(self.catalog_model),
+            )
+            self.last_response = response
+            self.last_latency_ms = int((time.monotonic() - started) * 1000)
+            self.last_usage = _usage_dict(getattr(response, "usage", None))
+            self.last_response_text = _response_content(response)
+            result = parse_litellm_result(
+                self.last_response_text,
+                request_score=request.request_score,
+            )
+            if not _response_looks_corrupted(request, result):
+                break
+            if attempt < _MOJIBAKE_MAX_RETRIES:
+                log_warning(
+                    logger,
+                    "grading_engine.litellm.mojibake_retry",
+                    job_id=request.job_id,
+                    submission_id=request.submission_id,
+                    attempt=attempt + 1,
+                )
+            else:
+                log_warning(
+                    logger,
+                    "grading_engine.litellm.mojibake_persisted",
+                    job_id=request.job_id,
+                    submission_id=request.submission_id,
+                    response_sample=text_preview(self.last_response_text),
+                )
 
         log_event(
             logger,
@@ -703,25 +751,11 @@ def parse_litellm_result(
         if valid:
             criterion_scores = valid
 
-    # The overall score is authoritative: scale the per-criterion earned points
-    # so they always sum to it. The review bars must reconcile with the score —
-    # never show parts that contradict the total the teacher sees.
-    if score is not None and criterion_scores:
-        total = sum(float(c["earned"]) for c in criterion_scores)
-        if total > 0:
-            scaled = [round(float(c["earned"]) * score / total, 1) for c in criterion_scores]
-            drift = round(score - sum(scaled), 1)
-            if drift:
-                # Absorb rounding drift into the largest part so none goes negative.
-                idx = max(range(len(scaled)), key=lambda i: scaled[i])
-                scaled[idx] = round(scaled[idx] + drift, 1)
-            for c, earned_scaled in zip(criterion_scores, scaled):
-                c["earned"] = earned_scaled
-        elif score > 0:
-            # All-zero parts but a positive score: no honest split exists without
-            # weights, so drop the bars rather than show ones that cannot sum.
-            criterion_scores = None
-
+    # The per-criterion points are the source of truth and are returned as-is; the
+    # overall score is reconciled with them downstream (drafting derives the score
+    # from the sum of whole-point parts, clamped to each criterion's weight). We do
+    # NOT scale the parts to the model's separate holistic score here — that would
+    # distort a correctly-graded criterion when the model's two outputs disagree.
     return GradingEngineResult(
         score=score,
         confidence=confidence,
@@ -794,8 +828,15 @@ def parse_vision_extraction_result(content: str) -> VisionExtractionResult:
 
 def _build_messages(request: GradingEngineRequest) -> list[dict[str, str]]:
     cowrite = not request.request_score
+    structured = bool(request.criteria)
     required_json_shape = {
-        "score": "omit or null in cowrite mode; otherwise number from 0 to 100",
+        "score": (
+            "omit or null in cowrite mode"
+            if cowrite
+            else "number equal to the EXACT SUM of criterion_scores.earned (0 to 100)"
+            if structured
+            else "number from 0 to 100 (single holistic grade)"
+        ),
         "confidence": "number from 0 to 1",
         "feedback": "Teacher facing feedback, this feedback must be objective, direct and concise, pointing out only what is missing",
         "inferred_criteria": (
@@ -830,13 +871,23 @@ def _build_messages(request: GradingEngineRequest) -> list[dict[str, str]]:
                 "Draft grades for the teacher to review. Respond with JSON only. "
                 "Use the rubric text and criteria when present. "
                 "This is not a final grade; the teacher must review and approve it. "
-                "Your response must always be in PT-BR"
+                "Your response must always be in PT-BR. "
                 + (
                     "In cowrite mode, do not assign a numeric score; return reasoning "
                     "and criterion notes for the teacher to grade."
                     if cowrite
-                    else "Return a numeric draft score."
+                    else "When criteria are provided, grade each criterion independently by "
+                    "awarding whole-number earned points from 0 to that criterion's weight, "
+                    "and set the overall score to the EXACT SUM of those earned points — do "
+                    "not grade the submission holistically as a separate number. When no "
+                    "criteria are provided, return a single holistic score from 0 to 100."
+                    if structured
+                    else "Return a single holistic numeric draft score from 0 to 100."
                 )
+                + " Output the JSON as ASCII only: encode every non-ASCII character "
+                "(accents and letters like á, é, í, ó, ú, ã, õ, ç) as a \\uXXXX unicode "
+                "escape sequence (for example \\u00f3 for ó). Never emit raw accented "
+                "bytes — this avoids charset corruption in transit."
             ),
         },
         {
