@@ -141,7 +141,7 @@ def test_apply_criterion_scores_is_idempotent(tmp_path) -> None:
 
     os.environ["CD_DATABASE_URL"] = "sqlite:///:memory:"
     from classroom_downloader.database import engine, init_db
-    from classroom_downloader.grading.drafting import _apply_criterion_scores
+    from classroom_downloader.grading.scoring import _apply_criterion_scores
     from classroom_downloader.models import (
         GradingCriterion,
         GradingJob,
