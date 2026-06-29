@@ -20,5 +20,5 @@ docs
 graphify-out
 study-roadmap.md
 archive
-test_files
+# test_files intentionally tracked (real-file corpus, low/no PII)
 Design

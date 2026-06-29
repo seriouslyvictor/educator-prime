@@ -109,6 +109,11 @@ export interface GradingSubmissionFile {
   mime_type: string;
 }
 
+export interface GradingCriterionScore {
+  criterion_id: string;
+  earned: number;
+}
+
 export interface GradingSubmission {
   id: string;
   student_email: string | null;
@@ -144,6 +149,7 @@ export interface GradingSubmission {
   ai_cache_write_tokens?: number | null;
   ai_cost_cents?: number | null;
   ai_latency_ms?: number | null;
+  criterion_scores?: GradingCriterionScore[];
 }
 
 export interface GradingFileCache {

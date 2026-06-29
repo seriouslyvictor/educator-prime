@@ -99,6 +99,39 @@ GOOGLE_NATIVE_EXPORTS = {
 }
 
 
+# ---------------------------------------------------------------------------
+# Real-corpus guarded loader (used by MockGoogleProvider for course-real).
+# The loader is best-effort: returns b"" if the corpus or a specific file is
+# absent, so the module import never crashes even without the corpus on disk.
+# ---------------------------------------------------------------------------
+
+def _find_corpus_root_for_provider() -> "Path | None":
+    """Walk up from this file to find the repo root containing test_files/."""
+    current = Path(__file__).resolve().parent
+    for _ in range(10):
+        candidate = current / "test_files"
+        if candidate.is_dir():
+            return candidate
+        parent = current.parent
+        if parent == current:
+            break
+        current = parent
+    return None
+
+
+_CORPUS_ROOT_PROVIDER: "Path | None" = _find_corpus_root_for_provider()
+
+
+def _corpus_bytes(relative: str) -> bytes:
+    """Read bytes from the corpus; return b'' silently if unavailable."""
+    if _CORPUS_ROOT_PROVIDER is None:
+        return b""
+    try:
+        return (_CORPUS_ROOT_PROVIDER / relative).read_bytes()
+    except OSError:
+        return b""
+
+
 @dataclass
 class _TtlCacheEntry:
     value: object
@@ -877,6 +910,7 @@ class MockGoogleProvider(GoogleProvider):
         ClassroomCourse("course-1", "Biology 101", "Morning", "ACTIVE"),
         ClassroomCourse("course-2", "Literature Seminar", "Afternoon", "ACTIVE"),
         ClassroomCourse("course-archived", "Archived Algebra", None, "ARCHIVED"),
+        ClassroomCourse("course-real", "Projetos Reais", "Turma Real", "ACTIVE"),
     ]
 
     activities = [
@@ -915,6 +949,20 @@ class MockGoogleProvider(GoogleProvider):
             "PUBLISHED",
             "Jun 5",
             description="Envie as duas partes do projeto como anexos.",
+        ),
+        ClassroomActivity(
+            "activity-real",
+            "course-real",
+            "Trabalho Final de Programação",
+            "ASSIGNMENT",
+            "PUBLISHED",
+            "Jun 28",
+            description=(
+                "Desenvolva um projeto de software completo. Entregue o código-fonte "
+                "bem organizado, com documentação clara e exemplos de uso. O projeto "
+                "será avaliado por lógica de programação, organização do código, "
+                "completude da implementação e qualidade da documentação apresentada."
+            ),
         ),
     ]
 
@@ -1021,6 +1069,62 @@ class MockGoogleProvider(GoogleProvider):
             "text/plain",
             b"Parte 2: conclusao do projeto final de Julia.\n",
             classroom_submission_id="sub-julia",
+        ),
+        # --- course-real: real corpus files (guarded — content = b"" if missing) ---
+        SubmissionFile(
+            "real-file-docx",
+            "course-real",
+            "activity-real",
+            "aluno.docx@escola.edu",
+            "Aluno Documento",
+            "real-drive-docx",
+            "PIM_I_FINAL_CORRIGIDO.docx",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            _corpus_bytes("submissions-office-suite/PIM_I_FINAL_CORRIGIDO.docx"),
+        ),
+        SubmissionFile(
+            "real-file-html",
+            "course-real",
+            "activity-real",
+            "aluno.html@escola.edu",
+            "Aluno HTML",
+            "real-drive-html",
+            "index.html",
+            "text/html",
+            _corpus_bytes("submissions-code/tcc_golpe_zero/index.html"),
+        ),
+        SubmissionFile(
+            "real-file-xlsx",
+            "course-real",
+            "activity-real",
+            "aluno.xlsx@escola.edu",
+            "Aluno Planilha",
+            "real-drive-xlsx",
+            "05 - FÓRMULAS E FUNÇÕES.xlsx",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            _corpus_bytes("submissions-office-suite/05 - FÓRMULAS E FUNÇÕES.xlsx"),
+        ),
+        SubmissionFile(
+            "real-file-pdf",
+            "course-real",
+            "activity-real",
+            "aluno.pdf@escola.edu",
+            "Aluno PDF",
+            "real-drive-pdf",
+            "PIM I - FINAL.pdf",
+            "application/pdf",
+            _corpus_bytes("submissions-office-suite/PIM I - FINAL.pdf"),
+        ),
+        SubmissionFile(
+            "real-file-zip",
+            "course-real",
+            "activity-real",
+            "aluno.zip@escola.edu",
+            "Aluno ZIP",
+            "real-drive-zip",
+            "greenfit.zip",
+            "application/zip",
+            _corpus_bytes("submissions-code/greenfit.zip"),
         ),
     ]
 

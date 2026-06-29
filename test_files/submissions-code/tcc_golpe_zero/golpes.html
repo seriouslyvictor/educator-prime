@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tipos de Golpes — GolpeZero</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    svg.ico { width: 1em; height: 1em; flex-shrink: 0; vertical-align: -0.125em; }
+
+    /* ===== GOLPES.HTML — estilos específicos ===== */
+
+    .golpes-page {
+      min-height: 100vh;
+      padding-top: 64px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Hero ── */
+    .golpes-hero {
+      background: linear-gradient(135deg, var(--color-bg) 0%, #0d1526 100%);
+      border-bottom: 1px solid rgba(37,99,235,0.12);
+      padding: var(--space-3xl) var(--space-lg) var(--space-2xl);
+      text-align: center;
+    }
+
+    .golpes-hero__badge {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-sm);
+      background: rgba(37,99,235,0.15);
+      border: 1px solid rgba(37,99,235,0.3);
+      color: var(--color-primary-light);
+      font-size: 0.78rem;
+      font-weight: 600;
+      padding: var(--space-xs) var(--space-md);
+      border-radius: 999px;
+      margin-bottom: var(--space-lg);
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .golpes-hero__title {
+      font-size: clamp(1.8rem, 3.5vw, 2.6rem);
+      font-weight: 800;
+      color: var(--color-white);
+      margin-bottom: var(--space-md);
+    }
+
+    .golpes-hero__title span { color: var(--color-primary-light); }
+
+    .golpes-hero__sub {
+      color: var(--color-gray-500);
+      font-size: 1rem;
+      max-width: 520px;
+      margin: 0 auto;
+      line-height: 1.7;
+    }
+
+    /* ── Barra de busca + filtros ── */
+    .golpes-toolbar {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: var(--space-2xl) var(--space-lg) 0;
+      width: 100%;
+    }
+
+    .golpes-search {
+      position: relative;
+      margin-bottom: var(--space-lg);
+    }
+
+    .golpes-search__icon {
+      position: absolute;
+      left: 18px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 1.1rem;
+      pointer-events: none;
+    }
+
+    .golpes-search__input {
+      width: 100%;
+      background: var(--color-bg-card);
+      border: 1.5px solid rgba(37,99,235,0.2);
+      border-radius: var(--radius-lg);
+      padding: 16px 18px 16px 48px;
+      font-size: 1rem;
+      font-family: var(--font-main);
+      color: var(--color-white);
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .golpes-search__input::placeholder { color: var(--color-gray-500); }
+
+    .golpes-search__input:focus {
+      border-color: var(--color-primary);
+      box-shadow: 0 0 0 3px rgba(37,99,235,0.15);
+    }
+
+    /* Contador de resultados */
+    .golpes-count {
+      font-size: 0.82rem;
+      color: var(--color-gray-500);
+      position: absolute;
+      right: 18px;
+      top: 50%;
+      transform: translateY(-50%);
+      pointer-events: none;
+    }
+
+    /* Filtros */
+    .golpes-filters {
+      display: flex;
+      gap: var(--space-sm);
+      flex-wrap: wrap;
+      margin-bottom: var(--space-lg);
+    }
+
+    .filtro-btn {
+      background: var(--color-bg-card);
+      border: 1.5px solid rgba(255,255,255,0.08);
+      color: var(--color-gray-300);
+      font-size: 0.82rem;
+      font-weight: 600;
+      padding: var(--space-sm) var(--space-md);
+      border-radius: 999px;
+      cursor: pointer;
+      font-family: var(--font-main);
+      transition: background 0.2s, border-color 0.2s, color 0.2s, transform 0.15s;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .filtro-btn:hover {
+      border-color: rgba(37,99,235,0.4);
+      color: var(--color-white);
+      transform: scale(1.03);
+    }
+
+    .filtro-btn.ativo {
+      background: var(--color-primary);
+      border-color: var(--color-primary);
+      color: var(--color-white);
+      box-shadow: 0 4px 14px rgba(37,99,235,0.35);
+    }
+
+    /* ── Grid de cards ── */
+    .golpes-main {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: var(--space-lg) var(--space-lg) var(--space-3xl);
+      width: 100%;
+      flex: 1;
+    }
+
+    .golpes-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: var(--space-lg);
+    }
+
+    /* Card de golpe */
+    .card-golpe {
+      background: var(--color-bg-card);
+      border: 1px solid rgba(37,99,235,0.1);
+      border-radius: var(--radius-lg);
+      padding: var(--space-xl);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-md);
+      box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+      transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+      cursor: default;
+    }
+
+    .card-golpe:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 15px 40px rgba(37,99,235,0.2);
+      border-color: rgba(37,99,235,0.3);
+    }
+
+    .card-golpe__top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-sm);
+    }
+
+    .card-golpe__categoria {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--color-primary-light);
+      background: rgba(37,99,235,0.12);
+      padding: 3px 10px;
+      border-radius: 999px;
+    }
+
+    .card-golpe__risco {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 3px 10px;
+      border-radius: 999px;
+    }
+
+    .card-golpe__risco--alto   { background: rgba(239,68,68,0.12);  color: #F87171; }
+    .card-golpe__risco--medio  { background: rgba(245,158,11,0.12); color: #FBBF24; }
+    .card-golpe__risco--baixo  { background: rgba(34,197,94,0.12);  color: #4ADE80; }
+
+    .card-golpe__icon {
+      font-size: 2rem;
+    }
+
+    .card-golpe__nome {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--color-white);
+    }
+
+    .card-golpe__desc {
+      font-size: 0.88rem;
+      color: var(--color-gray-500);
+      line-height: 1.65;
+      flex: 1;
+    }
+
+    .card-golpe__sinais {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .card-golpe__sinal {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      font-size: 0.82rem;
+      color: var(--color-gray-300);
+    }
+
+    .card-golpe__sinal::before {
+      content: "";
+      width: 13px;
+      height: 13px;
+      flex-shrink: 0;
+      margin-top: 3px;
+      background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fbbf24' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3L2 20h20L12 3z'/%3E%3Cline x1='12' y1='9' x2='12' y2='13.5'/%3E%3Cline x1='12' y1='16.6' x2='12' y2='17'/%3E%3C/svg%3E") no-repeat center / contain;
+    }
+
+    .card-golpe__btn {
+      margin-top: auto;
+      background: rgba(37,99,235,0.1);
+      border: 1.5px solid rgba(37,99,235,0.25);
+      color: var(--color-primary-light);
+      font-size: 0.85rem;
+      font-weight: 600;
+      padding: 10px 16px;
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      font-family: var(--font-main);
+      transition: background 0.2s, transform 0.15s;
+      text-align: center;
+    }
+
+    .card-golpe__btn:hover {
+      background: rgba(37,99,235,0.2);
+      transform: scale(1.02);
+    }
+
+    /* Sem resultados */
+    .sem-resultados {
+      grid-column: 1 / -1;
+      text-align: center;
+      padding: var(--space-3xl);
+      color: var(--color-gray-500);
+    }
+
+    .sem-resultados__icon { font-size: 3rem; margin-bottom: var(--space-md); }
+    .sem-resultados p     { font-size: 1rem; }
+
+    /* ── Modal de detalhe ── */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.75);
+      backdrop-filter: blur(6px);
+      z-index: 200;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: var(--space-lg);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease;
+    }
+
+    .modal-overlay.aberto {
+      opacity: 1;
+      pointer-events: all;
+    }
+
+    .modal {
+      background: var(--color-bg-card);
+      border: 1px solid rgba(37,99,235,0.2);
+      border-radius: var(--radius-xl);
+      padding: var(--space-2xl);
+      max-width: 560px;
+      width: 100%;
+      max-height: 90vh;
+      overflow-y: auto;
+      transform: translateY(20px);
+      transition: transform 0.25s ease;
+      position: relative;
+    }
+
+    .modal-overlay.aberto .modal {
+      transform: translateY(0);
+    }
+
+    .modal__fechar {
+      position: absolute;
+      top: var(--space-md);
+      right: var(--space-md);
+      background: var(--color-bg-elevated);
+      border: none;
+      color: var(--color-gray-300);
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s;
+    }
+
+    .modal__fechar:hover { background: var(--color-gray-700); color: var(--color-white); }
+
+    .modal__icon  { font-size: 2.5rem; margin-bottom: var(--space-md); }
+    .modal__nome  { font-size: 1.4rem; font-weight: 800; color: var(--color-white); margin-bottom: var(--space-sm); }
+    .modal__tags  { display: flex; gap: var(--space-sm); flex-wrap: wrap; margin-bottom: var(--space-lg); }
+
+    .modal__section { margin-bottom: var(--space-lg); }
+    .modal__label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--color-primary-light);
+      margin-bottom: var(--space-sm);
+    }
+
+    .modal__text { font-size: 0.92rem; color: var(--color-gray-300); line-height: 1.7; }
+
+    .modal__lista {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-sm);
+    }
+
+    .modal__lista li {
+      display: flex;
+      align-items: flex-start;
+      gap: var(--space-sm);
+      font-size: 0.88rem;
+      color: var(--color-gray-300);
+      line-height: 1.5;
+    }
+
+    .modal__dica {
+      background: rgba(34,197,94,0.08);
+      border: 1px solid rgba(34,197,94,0.2);
+      border-radius: var(--radius-md);
+      padding: var(--space-md) var(--space-lg);
+      font-size: 0.9rem;
+      color: #4ADE80;
+      line-height: 1.6;
+    }
+
+    /* ── Responsivo ── */
+    @media (max-width: 1024px) {
+      .golpes-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    @media (max-width: 640px) {
+      .golpes-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- NAVBAR -->
+  <header class="navbar" id="navbar">
+    <div class="navbar__container">
+      <a href="index.html" class="navbar__logo">
+        <span class="navbar__logo-icon"><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M12 2.5L4.5 5.5V11.2C4.5 16.1 7.5 19.9 12 21.5C16.5 19.9 19.5 16.1 19.5 11.2V5.5L12 2.5Z'/><path d='M9 12L11.2 14.2L15.5 9.5'/></svg></span>
+        Golpe<span class="navbar__logo-accent">Zero</span>
+      </a>
+      <nav class="navbar__menu" id="navMenu">
+        <a href="index.html"     class="navbar__link">Home</a>
+        <a href="golpes.html"    class="navbar__link active">Tipos de Golpes</a>
+        <a href="simulador.html" class="navbar__link">Simulador</a>
+        <a href="dicas.html"     class="navbar__link">Dicas de Segurança</a>
+        <a href="noticias.html"  class="navbar__link">Notícias</a>
+        <a href="faq.html"       class="navbar__link">FAQ</a>
+        <a href="contato.html"   class="navbar__link navbar__link--cta">Contato</a>
+      </nav>
+      <button class="navbar__hamburger" id="hamburger" aria-label="Abrir menu" aria-expanded="false">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </header>
+
+  <div class="golpes-page">
+
+    <!-- HERO -->
+    <section class="golpes-hero">
+      <span class="golpes-hero__badge"><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><circle cx='10.5' cy='10.5' r='6.5'/><line x1='15.3' y1='15.3' x2='20' y2='20'/></svg> Biblioteca de Golpes</span>
+      <h1 class="golpes-hero__title">Conheça os <span>Golpes Digitais</span></h1>
+      <p class="golpes-hero__sub">
+        Pesquise, filtre por categoria e aprenda a identificar
+        as fraudes digitais mais comuns no Brasil.
+      </p>
+    </section>
+
+    <!-- TOOLBAR: PESQUISA + FILTROS -->
+    <div class="golpes-toolbar">
+      <div class="golpes-search">
+        <span class="golpes-search__icon"><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><circle cx='10.5' cy='10.5' r='6.5'/><line x1='15.3' y1='15.3' x2='20' y2='20'/></svg></span>
+        <input
+          type="text"
+          id="campoPesquisa"
+          class="golpes-search__input"
+          placeholder="Pesquisar golpe... ex: PIX, phishing, marketplace"
+          autocomplete="off"
+        />
+        <span class="golpes-count" id="contadorResultados"></span>
+      </div>
+
+      <div class="golpes-filters" id="filtros"></div>
+    </div>
+
+    <!-- GRID DE CARDS -->
+    <main class="golpes-main">
+      <div class="golpes-grid" id="listaGolpes"></div>
+    </main>
+
+  </div>
+
+  <!-- MODAL DE DETALHE -->
+  <div class="modal-overlay" id="modalOverlay" role="dialog" aria-modal="true" aria-labelledby="modalNome">
+    <div class="modal" id="modalConteudo">
+      <button class="modal__fechar" id="modalFechar" aria-label="Fechar">✕</button>
+      <div id="modalBody"></div>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <footer class="footer">
+    <div class="footer__container">
+      <div class="footer__brand">
+        <span class="navbar__logo" style="margin-bottom:12px;display:inline-flex;">
+          <svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M12 2.5L4.5 5.5V11.2C4.5 16.1 7.5 19.9 12 21.5C16.5 19.9 19.5 16.1 19.5 11.2V5.5L12 2.5Z'/><path d='M9 12L11.2 14.2L15.5 9.5'/></svg> Golpe<span class="navbar__logo-accent">Zero</span>
+        </span>
+        <p class="footer__desc">
+          O GolpeZero é uma iniciativa educacional criada para conscientizar
+          usuários da internet sobre golpes digitais e promover boas práticas de segurança online.
+        </p>
+      </div>
+      <div class="footer__links">
+        <h4>Navegação</h4>
+        <a href="golpes.html">Tipos de Golpes</a>
+        <a href="simulador.html">Simulador</a>
+        <a href="dicas.html">Dicas de Segurança</a>
+        <a href="noticias.html">Notícias</a>
+        <a href="faq.html">FAQ</a>
+        <a href="contato.html">Contato</a>
+      </div>
+      <div class="footer__links">
+        <h4>Sobre</h4>
+        <a href="#">Projeto de TCC</a>
+        <a href="#">Missão</a>
+      </div>
+    </div>
+    <div class="footer__bottom">
+      <p>© 2025 GolpeZero — Projeto Educativo. Todos os direitos reservados.</p>
+    </div>
+  </footer>
+
+  <script>
+    // ══════════════════════════════════════════
+    //  GOLPES.HTML — script
+    // ══════════════════════════════════════════
+
+    // ── 1. DADOS ──
+    const golpes = [
+      {
+        id: 1,
+        icon: "<svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><circle cx='9' cy='20' r='1.4'/><circle cx='17' cy='20' r='1.4'/><path d='M2.5 4h2.5l2.6 12.2a1.5 1.5 0 0 0 1.5 1.2h8.4a1.5 1.5 0 0 0 1.5-1.2L21 8H6.2'/></svg>",
+        nome: "Golpe do Marketplace",
+        categoria: "Compras Online",
+        risco: "alto",
+        descricao: "Venda de produtos falsos ou inexistentes em plataformas como OLX, Mercado Livre e Facebook Marketplace.",
+        sinais: [
+          "Preço muito abaixo do mercado",
+          "Vendedor pede pagamento fora da plataforma",
+          "Produto nunca é entregue após pagamento",
+          "Perfil recém-criado ou sem avaliações"
+        ],
+        comoEvitar: "Sempre pague dentro da plataforma e nunca transfira dinheiro diretamente ao vendedor. Desconfie de preços muito abaixo do normal e verifique o histórico do vendedor."
+      },
+      {
+        id: 2,
+        icon: "<svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><polyline points='3,17 9,11 13,14 21,5'/><polyline points='15,5 21,5 21,11'/></svg>",
+        nome: "Golpe de Investimento",
+        categoria: "Financeiro",
+        risco: "alto",
+        descricao: "Pirâmides financeiras e esquemas fraudulentos que prometem lucro garantido e acima do mercado.",
+        sinais: [
+          "Promete ganhos acima de 10% ao mês",
+          "Pressão para investir rapidamente",
+          "Modelo de indicação de amigos para bônus",
+          "Empresa sem registro na CVM"
+        ],
+        comoEvitar: "Verifique sempre se a corretora tem registro na CVM (cvm.gov.br). Nenhum investimento sério garante lucro. Desconfie de qualquer promessa de enriquecimento rápido."
+      },
+      {
+        id: 3,
+        icon: "<svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M4 4l9 9'/><circle cx='4' cy='4' r='1.4' fill='currentColor' stroke='none'/><path d='M13 13c0 2.5-2 4.5-2 6.5a2.5 2.5 0 0 0 5 0'/></svg>",
+        nome: "Phishing",
+        categoria: "Email / SMS",
+        risco: "alto",
+        descricao: "Links falsos enviados por e-mail, SMS ou WhatsApp para roubar dados pessoais e bancários.",
+        sinais: [
+          "Link com URL estranha ou domínio suspeito",
+          "Urgência extrema para clicar ('sua conta será bloqueada')",
+          "E-mail com erros de português ou formatação estranha",
+          "Remetente desconhecido imitando empresa real"
+        ],
+        comoEvitar: "Nunca clique em links recebidos por mensagem. Acesse o site digitando o endereço diretamente no navegador. Bancos nunca pedem dados por SMS ou WhatsApp."
+      },
+      {
+        id: 4,
+        icon: "<svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><rect x='2.5' y='8' width='15' height='9' rx='1.5'/><circle cx='10' cy='12.5' r='2.2'/><line x1='19.5' y1='6' x2='22' y2='4'/><line x1='19.5' y1='10' x2='22.3' y2='9.5'/><line x1='19.5' y1='14' x2='22' y2='15.5'/></svg>",
+        nome: "Golpe do PIX",
+        categoria: "Pagamentos",
+        risco: "alto",
+        descricao: "Fraudes usando transferências PIX: comprovantes falsos, pedidos de devolução e engenharia social.",
+        sinais: [
+          "Comprovante de pagamento enviado antes de você receber",
+          "Pedido de devolução de valor que 'caiu errado'",
+          "Chave PIX que não pertence a quem diz ser",
+          "Pressão para transferir antes de confirmar"
+        ],
+        comoEvitar: "Confirme sempre o nome do destinatário antes de transferir. Nunca devolva dinheiro antes de verificar se de fato entrou na sua conta. Comprovantes podem ser falsificados."
+      },
+      {
+        id: 5,
+        icon: "<svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><rect x='6.5' y='2.5' width='11' height='19' rx='2.2'/><line x1='10' y1='19' x2='14' y2='19'/></svg>",
+        nome: "WhatsApp Clonado",
+        categoria: "Redes Sociais",
+        risco: "medio",
+        descricao: "O golpista assume sua conta do WhatsApp e pede dinheiro aos seus contatos se passando por você.",
+        sinais: [
+          "Amigo ou familiar pedindo dinheiro urgente pelo WhatsApp",
+          "Alguém pedindo seu código de verificação SMS",
+          "Número desconhecido dizendo ser alguém conhecido",
+          "Histórico de conversa zerado ou conta nova"
+        ],
+        comoEvitar: "Ative a verificação em duas etapas no WhatsApp (Configurações → Conta → Verificação em duas etapas). Nunca compartilhe o código SMS recebido com ninguém."
+      },
+      {
+        id: 6,
+        icon: "<svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M7 3h7l4 4v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z'/><path d='M14 3v4h4'/><line x1='9' y1='12' x2='15' y2='12'/><line x1='9' y1='15.5' x2='15' y2='15.5'/></svg>",
+        nome: "Boleto Falso",
+        categoria: "Pagamentos",
+        risco: "medio",
+        descricao: "Boletos com dados bancários trocados, enviados por e-mail ou correspondência para desviar pagamentos.",
+        sinais: [
+          "Boleto recebido sem solicitação",
+          "Nome do beneficiário diferente do esperado",
+          "Boleto enviado por link no e-mail ou SMS",
+          "Banco diferente do habitual para a mesma empresa"
+        ],
+        comoEvitar: "Sempre gere o boleto diretamente no site oficial da empresa. Ao pagar, confira o nome do beneficiário e o banco. Boletos legítimos têm o nome correto da empresa credora."
+      },
+      {
+        id: 7,
+        icon: "<svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><rect x='3' y='8' width='18' height='11.5' rx='1.8'/><path d='M8.5 8V6.2A1.7 1.7 0 0 1 10.2 4.5h3.6A1.7 1.7 0 0 1 15.5 6.2V8'/><line x1='3' y1='13' x2='21' y2='13'/></svg>",
+        nome: "Golpe do Emprego Falso",
+        categoria: "Trabalho",
+        risco: "medio",
+        descricao: "Ofertas de emprego fraudulentas que pedem depósito para 'materiais', 'uniformes' ou 'cadastro' antes de contratar.",
+        sinais: [
+          "Vaga com salário muito acima do mercado",
+          "Empresa pede pagamento antes de contratar",
+          "Entrevista só por WhatsApp ou e-mail",
+          "CNPJ inexistente ou empresa sem histórico"
+        ],
+        comoEvitar: "Empresas sérias nunca pedem dinheiro para contratar. Pesquise a empresa no Google e confira o CNPJ na Receita Federal. Desconfie de vagas sem entrevista presencial ou por vídeo."
+      },
+      {
+        id: 8,
+        icon: "<svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M3 9.5L12 4l9 5.5'/><line x1='4' y1='9.5' x2='20' y2='9.5'/><line x1='6' y1='10.5' x2='6' y2='18'/><line x1='10' y1='10.5' x2='10' y2='18'/><line x1='14' y1='10.5' x2='14' y2='18'/><line x1='18' y1='10.5' x2='18' y2='18'/><line x1='4' y1='19' x2='20' y2='19'/></svg>",
+        nome: "Golpe do Banco Falso",
+        categoria: "Financeiro",
+        risco: "alto",
+        descricao: "Golpistas se passam por funcionários do banco para obter senhas, cartões ou acesso à conta.",
+        sinais: [
+          "Ligação de 'funcionário do banco' pedindo dados",
+          "Solicitação de envio do cartão pelos Correios",
+          "Pedido de instalação de 'app de segurança'",
+          "Alerta de suposta fraude que precisa de ação imediata"
+        ],
+        comoEvitar: "Bancos nunca ligam pedindo senha, cartão ou instalação de aplicativo. Desligue e ligue para o número oficial impresso no verso do seu cartão."
+      },
+      {
+        id: 9,
+        icon: "<svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M12 20.5l-1.4-1.3C5.4 14.6 2.5 12 2.5 8.6 2.5 5.8 4.7 3.5 7.4 3.5c1.5 0 2.9.7 3.6 1.9.7-1.2 2.1-1.9 3.6-1.9 2.7 0 4.9 2.3 4.9 5.1 0 3.4-2.9 6-7.1 10.6L12 20.5Z'/></svg>",
+        nome: "Golpe Romântico",
+        categoria: "Redes Sociais",
+        risco: "alto",
+        descricao: "Perfis falsos em apps de relacionamento que criam vínculo emocional para pedir dinheiro.",
+        sinais: [
+          "Pessoa muito atraente que nunca pode fazer videochamada",
+          "Relacionamento que evolui muito rápido",
+          "Histórias de emergência pedindo dinheiro",
+          "Perfil com poucas fotos ou fotos de modelo"
+        ],
+        comoEvitar: "Nunca envie dinheiro para alguém que você nunca encontrou pessoalmente. Faça uma busca reversa de imagem (Google Images) para verificar se as fotos são reais."
+      }
+    ];
+
+    // ── 2. CATEGORIAS (extraídas dos dados) ──
+    const todasCategorias = ["Todos", ...new Set(golpes.map(g => g.categoria))];
+    let categoriaAtiva = "Todos";
+    let termoPesquisa  = "";
+
+    // ── 3. ELEMENTOS DO DOM ──
+    const campoPesquisa      = document.getElementById("campoPesquisa");
+    const listaGolpes        = document.getElementById("listaGolpes");
+    const filtrosContainer   = document.getElementById("filtros");
+    const contadorResultados = document.getElementById("contadorResultados");
+    const modalOverlay       = document.getElementById("modalOverlay");
+    const modalBody          = document.getElementById("modalBody");
+    const modalFechar        = document.getElementById("modalFechar");
+
+    // Ícones por categoria
+    const iconeCategoria = {
+      "Todos":         "<svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><circle cx='10.5' cy='10.5' r='6.5'/><line x1='15.3' y1='15.3' x2='20' y2='20'/></svg>",
+      "Compras Online":"<svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><circle cx='9' cy='20' r='1.4'/><circle cx='17' cy='20' r='1.4'/><path d='M2.5 4h2.5l2.6 12.2a1.5 1.5 0 0 0 1.5 1.2h8.4a1.5 1.5 0 0 0 1.5-1.2L21 8H6.2'/></svg>",
+      "Financeiro":    "<svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='15' r='6.5'/><path d='M9 6.5L7 3h10l-2 3.5'/><path d='M10.5 12.2c0-.9.7-1.5 1.5-1.5s1.5.6 1.5 1.5c0 1.5-3 1.5-3 3.1 0 .9.7 1.5 1.5 1.5s1.5-.6 1.5-1.5'/></svg>",
+      "Email / SMS":   "<svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><rect x='3' y='5.5' width='18' height='13' rx='1.8'/><path d='M3.5 6.5l8.5 7 8.5-7'/></svg>",
+      "Pagamentos":    "<svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><rect x='2.5' y='5.5' width='19' height='13' rx='2'/><line x1='2.5' y1='9.5' x2='21.5' y2='9.5'/><line x1='6' y1='15' x2='10' y2='15'/></svg>",
+      "Redes Sociais": "<svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><rect x='6.5' y='2.5' width='11' height='19' rx='2.2'/><line x1='10' y1='19' x2='14' y2='19'/></svg>",
+      "Trabalho":      "<svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><rect x='3' y='8' width='18' height='11.5' rx='1.8'/><path d='M8.5 8V6.2A1.7 1.7 0 0 1 10.2 4.5h3.6A1.7 1.7 0 0 1 15.5 6.2V8'/><line x1='3' y1='13' x2='21' y2='13'/></svg>"
+    };
+
+    // ── 4. RENDERIZAR FILTROS ──
+    function renderFiltros() {
+      filtrosContainer.innerHTML = todasCategorias.map(cat => `
+        <button
+          class="filtro-btn ${cat === categoriaAtiva ? "ativo" : ""}"
+          onclick="filtrarCategoria('${cat}')"
+        >
+          ${iconeCategoria[cat] || "<svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M3 6.5A1.5 1.5 0 0 1 4.5 5h4.6l1.8 2.2H19.5A1.5 1.5 0 0 1 21 8.7v9.8A1.5 1.5 0 0 1 19.5 20h-15A1.5 1.5 0 0 1 3 18.5V6.5Z'/></svg>"} ${cat}
+        </button>
+      `).join("");
+    }
+
+    // ── 5. FILTRAR ──
+    function filtrarCategoria(cat) {
+      categoriaAtiva = cat;
+      renderFiltros();
+      renderCards();
+    }
+
+    function filtrarGolpes() {
+      return golpes.filter(g => {
+        const matchCategoria = categoriaAtiva === "Todos" || g.categoria === categoriaAtiva;
+        const termo = termoPesquisa.toLowerCase().trim();
+        const matchPesquisa  = !termo ||
+          g.nome.toLowerCase().includes(termo) ||
+          g.descricao.toLowerCase().includes(termo) ||
+          g.categoria.toLowerCase().includes(termo) ||
+          g.sinais.some(s => s.toLowerCase().includes(termo));
+        return matchCategoria && matchPesquisa;
+      });
+    }
+
+    // ── 6. RENDERIZAR CARDS ──
+    function renderCards() {
+      const resultado = filtrarGolpes();
+      contadorResultados.textContent = `${resultado.length} resultado${resultado.length !== 1 ? "s" : ""}`;
+
+      if (resultado.length === 0) {
+        listaGolpes.innerHTML = `
+          <div class="sem-resultados">
+            <div class="sem-resultados__icon"><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><circle cx='10.5' cy='10.5' r='6.5'/><line x1='15.3' y1='15.3' x2='20' y2='20'/></svg></div>
+            <p>Nenhum golpe encontrado para <strong>"${termoPesquisa}"</strong>.</p>
+            <p style="margin-top:8px;font-size:0.85rem;">Tente outro termo ou remova o filtro de categoria.</p>
+          </div>`;
+        return;
+      }
+
+      listaGolpes.innerHTML = resultado.map((g, i) => `
+        <article
+          class="card-golpe fade-in"
+          style="animation-delay: ${i * 60}ms"
+          data-id="${g.id}"
+        >
+          <div class="card-golpe__top">
+            <span class="card-golpe__categoria">${g.categoria}</span>
+            <span class="card-golpe__risco card-golpe__risco--${g.risco}">${g.risco === "medio" ? "médio" : g.risco}</span>
+          </div>
+
+          <div class="card-golpe__icon">${g.icon}</div>
+          <h3 class="card-golpe__nome">${g.nome}</h3>
+          <p class="card-golpe__desc">${g.descricao}</p>
+
+          <div class="card-golpe__sinais">
+            ${g.sinais.slice(0, 2).map(s => `<div class="card-golpe__sinal">${s}</div>`).join("")}
+          </div>
+
+          <button class="card-golpe__btn" onclick="abrirModal(${g.id})">
+            Saiba Mais →
+          </button>
+        </article>
+      `).join("");
+
+      // Ativa animações
+      requestAnimationFrame(() => {
+        listaGolpes.querySelectorAll(".fade-in").forEach(el => el.classList.add("visible"));
+      });
+    }
+
+    // ── 7. MODAL ──
+    function abrirModal(id) {
+      const g = golpes.find(g => g.id === id);
+      if (!g) return;
+
+      modalBody.innerHTML = `
+        <div class="modal__icon">${g.icon}</div>
+        <h2 class="modal__nome" id="modalNome">${g.nome}</h2>
+        <div class="modal__tags">
+          <span class="card-golpe__categoria">${g.categoria}</span>
+          <span class="card-golpe__risco card-golpe__risco--${g.risco}">${g.risco === "medio" ? "médio" : g.risco}</span>
+        </div>
+
+        <div class="modal__section">
+          <p class="modal__label">O que é</p>
+          <p class="modal__text">${g.descricao}</p>
+        </div>
+
+        <div class="modal__section">
+          <p class="modal__label"><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M12 3L2 20h20L12 3z'/><line x1='12' y1='9' x2='12' y2='13.5'/><line x1='12' y1='16.6' x2='12' y2='17'/></svg> Sinais de alerta</p>
+          <ul class="modal__lista">
+            ${g.sinais.map(s => `<li><span>•</span><span>${s}</span></li>`).join("")}
+          </ul>
+        </div>
+
+        <div class="modal__section">
+          <p class="modal__label"><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='9'/><path d='M7.5 12.5l3 3 6-6.5'/></svg> Como se proteger</p>
+          <div class="modal__dica">${g.comoEvitar}</div>
+        </div>
+      `;
+
+      modalOverlay.classList.add("aberto");
+      document.body.style.overflow = "hidden";
+    }
+
+    function fecharModal() {
+      modalOverlay.classList.remove("aberto");
+      document.body.style.overflow = "";
+    }
+
+    modalFechar.addEventListener("click", fecharModal);
+    modalOverlay.addEventListener("click", e => {
+      if (e.target === modalOverlay) fecharModal();
+    });
+    document.addEventListener("keydown", e => {
+      if (e.key === "Escape") fecharModal();
+    });
+
+    // ── 8. PESQUISA ──
+    campoPesquisa.addEventListener("input", () => {
+      termoPesquisa = campoPesquisa.value;
+      renderCards();
+    });
+
+    // ── 9. NAVBAR ──
+    const navbar    = document.getElementById("navbar");
+    const hamburger = document.getElementById("hamburger");
+    const navMenu   = document.getElementById("navMenu");
+
+    window.addEventListener("scroll", () => {
+      navbar.classList.toggle("scrolled", window.scrollY > 20);
+    });
+
+    hamburger.addEventListener("click", () => {
+      const open = navMenu.classList.toggle("open");
+      hamburger.classList.toggle("open", open);
+      hamburger.setAttribute("aria-expanded", open);
+    });
+
+    // ── 10. INIT ──
+    renderFiltros();
+    renderCards();
+  </script>
+
+</body>
+</html>

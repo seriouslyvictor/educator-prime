@@ -43,7 +43,7 @@ conditions.
 | 015 | A · Auth | Standalone login screen (separate from dashboard shell) | P1 | S–M | — (branch `codex/015-login-auth-gate-revamp` is reference only) | TODO |
 | 016 | B · Turmas | Grade-awareness: detect already-graded work, graded/ungraded counts, partial-grade choice | P1 | M–L | — | DONE |
 | 017 | C · Review | Hide rubric on review for "Orientação simples" (brief mode) | P2 | S | — (coordinate with 018) | DONE |
-| 018 | C · Review | Per-criterion scores as editable progress bars (points, not %) | P2 | L | — (do before/with 017) | TODO |
+| 018 | C · Review | Per-criterion scores as editable progress bars (points, not %) | P2 | L | — (do before/with 017) | DONE — branch `worktree-agent-ae6cec215aae6d124`; GradingSubmissionCriterionScore table, derived final_score review endpoint, snapshot exposure, mock distributes sub-scores, editable progress bars in GraderReview.tsx; 2 integration tests unblocked by plan 027 corpus; suite 248p/5s; awaiting merge |
 | 019 | C · Review | Review already-drafted students while the queue is still processing | P1 | M | — | DONE |
 | 020 | C · Review | Retry a failed submission preview (image/PDF/text) | P2 | S | — | DONE |
 | 021 | D · Engine | Normalize inferred rubric criteria to pt-BR | P2 | S–M | — | DONE |
@@ -101,6 +101,7 @@ fix alongside plan 025**, which adds the regression test that guards it.
 | 024 | Make pass-2 outlier review best-effort so a failed exception pass never blocks drafting | P1 | S | — | DONE — branch `worktree-agent-adb56182611db2fa1` (commit 7cc2d79); reviewer re-ran suite: 235 passed, 4 skipped; scope clean; awaiting user merge |
 | 025 | Add e2e coverage for image + PDF preview retry (incl. the PDF load-timeout regression) | P2 | S | — (bundles the PdfPreview `loaded`-flag fix as Step 0) | DONE — branch `worktree-agent-a5f19f44aa584bf9f` (commits 689d971, 8cb7950); 1 revision round (PDF test now drives load synthetically — headless Chromium won't fire iframe onLoad for PDFs); reviewer re-ran: e2e 8p, lint 0 err; scope clean; awaiting user merge. FOLLOW-UP: verify on real Chrome that a valid PDF stays visible (if real Chrome also never fires iframe onLoad for PDFs, the 8s guard still flips good PDFs to error — fix is no-worse-than-before but PDF load detection may need redesign) |
 | 026 | Stop the Turmas activities list from blocking on one Classroom call per activity | P2 | M | — | DONE — branch `worktree-agent-afd897ae2a7228b44` (commit 293fd40); reviewer re-ran all gates: pytest 235p/4s, lint 0 err, build ok, e2e 6p; scope clean; awaiting user merge |
+| 027 | Real-file test corpus + per-format extraction coverage (finish plan 018) | P1 | L | 018 | DONE — branch `worktree-agent-ae6cec215aae6d124`; committed test_files/ corpus (docx, xlsx, pdf, zip, html/js, handwriting placeholder); corpus.py helper; 7 per-format extraction tests; course-real/activity-real wired into MockGoogleProvider; 2 plan-018 integration tests unblocked (criterion_scores sum + idempotency); gated live-Gemini test skips cleanly; suite 248p/5s; awaiting merge |
 
 ### Recommended order & rationale
 - **024 first** — highest leverage. A transient/persistent failure in the *advisory*

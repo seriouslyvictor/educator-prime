@@ -1,0 +1,977 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FAQ – GolpeZero</title>
+  <style>
+    svg.ico { width: 1em; height: 1em; flex-shrink: 0; vertical-align: -0.125em; }
+
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --surface-2: #1f2937;
+      --border: #30363d;
+      --accent: #2563eb;
+      --accent-light: #3b82f6;
+      --accent-glow: rgba(37,99,235,0.15);
+      --green: #16a34a;
+      --green-glow: rgba(22,163,74,0.12);
+      --yellow: #d97706;
+      --red: #dc2626;
+      --text: #e6edf3;
+      --text-muted: #8b949e;
+      --text-dim: #6e7681;
+      --radius: 12px;
+      --radius-sm: 8px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+
+    /* ── NAV ── */
+    nav {
+      background: rgba(13,17,23,0.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .nav-logo {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--text);
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .nav-logo .logo-icon {
+      width: 32px; height: 32px;
+      background: var(--accent);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1rem;
+    }
+    .nav-links { display: flex; gap: 4px; list-style: none; }
+    .nav-links a {
+      color: var(--text-muted);
+      text-decoration: none;
+      padding: 6px 12px;
+      border-radius: var(--radius-sm);
+      font-size: 0.875rem;
+      transition: color 0.2s, background 0.2s;
+    }
+    .nav-links a:hover { color: var(--text); background: var(--surface); }
+    .nav-links a.active { color: var(--accent-light); background: var(--accent-glow); }
+
+    /* ── HERO ── */
+    .hero {
+      background: linear-gradient(135deg, #0d1117 0%, #1a1f2e 50%, #0d1117 100%);
+      border-bottom: 1px solid var(--border);
+      padding: 72px 24px 56px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: -60px; left: 50%;
+      transform: translateX(-50%);
+      width: 500px; height: 300px;
+      background: radial-gradient(ellipse, rgba(37,99,235,0.12) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--accent-glow);
+      border: 1px solid rgba(37,99,235,0.35);
+      color: var(--accent-light);
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 5px 14px;
+      border-radius: 99px;
+      margin-bottom: 20px;
+    }
+    .hero h1 {
+      font-size: clamp(2rem, 5vw, 3rem);
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 16px;
+      line-height: 1.1;
+    }
+    .hero h1 span { color: var(--accent-light); }
+    .hero p {
+      color: var(--text-muted);
+      font-size: 1.05rem;
+      max-width: 520px;
+      margin: 0 auto 32px;
+    }
+
+    /* ── SEARCH ── */
+    .search-wrap {
+      max-width: 520px;
+      margin: 0 auto;
+      position: relative;
+    }
+    .search-wrap input {
+      width: 100%;
+      padding: 14px 20px 14px 48px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-size: 0.95rem;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .search-wrap input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+    .search-wrap input::placeholder { color: var(--text-dim); }
+    .search-icon {
+      position: absolute;
+      left: 16px; top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-dim);
+      pointer-events: none;
+    }
+    #search-count {
+      color: var(--text-dim);
+      font-size: 0.8rem;
+      text-align: center;
+      margin-top: 12px;
+      min-height: 20px;
+    }
+
+    /* ── LAYOUT ── */
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 64px 24px 80px;
+    }
+
+    /* ── CATEGORY FILTERS ── */
+    .filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 48px;
+    }
+    .filter-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 16px;
+      border-radius: 99px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text-muted);
+      font-size: 0.82rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .filter-btn:hover { border-color: var(--accent); color: var(--text); }
+    .filter-btn.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+    .filter-btn .count {
+      background: rgba(255,255,255,0.15);
+      padding: 1px 7px;
+      border-radius: 99px;
+      font-size: 0.72rem;
+    }
+    .filter-btn.active .count { background: rgba(255,255,255,0.25); }
+
+    /* ── FAQ SECTIONS ── */
+    .faq-section { margin-bottom: 52px; }
+    .faq-section[data-hidden="true"] { display: none; }
+
+    .section-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .section-title .cat-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    /* ── ACCORDION ── */
+    .accordion { display: flex; flex-direction: column; gap: 8px; }
+
+    .faq-item {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .faq-item[data-hidden="true"] { display: none; }
+    .faq-item:hover { border-color: #3d4654; }
+    .faq-item.open {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px var(--accent-glow);
+    }
+
+    .faq-q {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 18px 20px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .faq-q-text {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--text);
+      flex: 1;
+    }
+    .faq-icon {
+      width: 24px; height: 24px;
+      border-radius: 50%;
+      background: var(--surface-2);
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      transition: background 0.2s, transform 0.3s;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+    }
+    .faq-item.open .faq-icon {
+      background: var(--accent);
+      color: #fff;
+      transform: rotate(45deg);
+    }
+
+    .faq-body {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.35s ease, padding 0.2s;
+    }
+    .faq-body.open { max-height: 600px; }
+
+    .faq-body-inner {
+      padding: 0 20px 20px;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      line-height: 1.75;
+      border-top: 1px solid var(--border);
+      padding-top: 16px;
+    }
+    .faq-body-inner p + p { margin-top: 10px; }
+    .faq-body-inner ul {
+      margin: 10px 0 10px 18px;
+    }
+    .faq-body-inner ul li { margin-bottom: 6px; }
+    .faq-body-inner a { color: var(--accent-light); }
+    .faq-body-inner strong { color: var(--text); }
+
+    /* alert boxes inside answers */
+    .tip {
+      display: flex;
+      gap: 10px;
+      padding: 12px 14px;
+      border-radius: var(--radius-sm);
+      margin-top: 12px;
+      font-size: 0.85rem;
+    }
+    .tip.green { background: var(--green-glow); border: 1px solid rgba(22,163,74,0.25); color: #4ade80; }
+    .tip.yellow { background: rgba(217,119,6,0.1); border: 1px solid rgba(217,119,6,0.25); color: #fbbf24; }
+    .tip.red { background: rgba(220,38,38,0.08); border: 1px solid rgba(220,38,38,0.2); color: #f87171; }
+
+    /* ── EMPTY STATE ── */
+    .empty-state {
+      display: none;
+      text-align: center;
+      padding: 80px 24px;
+    }
+    .empty-state.visible { display: block; }
+    .empty-icon { font-size: 3rem; margin-bottom: 16px; opacity: .5; }
+    .empty-state h3 { font-size: 1.1rem; margin-bottom: 8px; }
+    .empty-state p { color: var(--text-muted); font-size: 0.9rem; }
+
+    /* ── CTA BANNER ── */
+    .cta-banner {
+      margin-top: 64px;
+      background: linear-gradient(135deg, var(--surface) 0%, #1a2035 100%);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 40px 36px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      flex-wrap: wrap;
+    }
+    .cta-banner h3 { font-size: 1.15rem; font-weight: 700; margin-bottom: 6px; }
+    .cta-banner p { color: var(--text-muted); font-size: 0.9rem; }
+    .cta-group { display: flex; gap: 12px; flex-wrap: wrap; }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 11px 22px;
+      border-radius: var(--radius-sm);
+      font-size: 0.875rem;
+      font-weight: 600;
+      text-decoration: none;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s;
+    }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { background: var(--accent-light); transform: translateY(-1px); }
+    .btn-outline {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+    }
+    .btn-outline:hover { border-color: var(--accent); color: var(--text); }
+
+    /* ── FOOTER ── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 28px 24px;
+      text-align: center;
+      color: var(--text-dim);
+      font-size: 0.8rem;
+    }
+    footer a { color: var(--text-muted); text-decoration: none; }
+    footer a:hover { color: var(--text); }
+
+    @media (max-width: 640px) {
+      .cta-banner { flex-direction: column; padding: 28px 20px; }
+      .nav-links { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <a class="nav-logo" href="index.html">
+    <span class="logo-icon"><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M12 2.5L4.5 5.5V11.2C4.5 16.1 7.5 19.9 12 21.5C16.5 19.9 19.5 16.1 19.5 11.2V5.5L12 2.5Z'/><path d='M9 12L11.2 14.2L15.5 9.5'/></svg></span>
+    GolpeZero
+  </a>
+  <ul class="nav-links">
+    <li><a href="index.html">Início</a></li>
+    <li><a href="golpes.html">Tipos de Golpes</a></li>
+    <li><a href="simulador.html">Simulador</a></li>
+    <li><a href="dicas.html">Dicas</a></li>
+    <li><a href="noticias.html">Notícias</a></li>
+    <li><a href="faq.html" class="active">FAQ</a></li>
+    <li><a href="contato.html">Contato</a></li>
+  </ul>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-badge"><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M4 5.5C4 4.7 4.7 4 5.5 4h13c.8 0 1.5.7 1.5 1.5v9c0 .8-.7 1.5-1.5 1.5H9l-4 3.5V5.5Z'/></svg> Dúvidas Frequentes</div>
+  <h1>Perguntas <span>Respondidas</span></h1>
+  <p>Encontre respostas rápidas sobre como se proteger, o que fazer se for vítima e como o GolpeZero funciona.</p>
+  <div class="search-wrap">
+    <span class="search-icon"><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><circle cx='10.5' cy='10.5' r='6.5'/><line x1='15.3' y1='15.3' x2='20' y2='20'/></svg></span>
+    <input type="text" id="faq-search" placeholder="Pesquisar perguntas..." autocomplete="off" />
+  </div>
+  <div id="search-count"></div>
+</section>
+
+<!-- MAIN -->
+<div class="container">
+
+  <!-- FILTERS -->
+  <div class="filters" id="filters">
+    <button class="filter-btn active" data-cat="all">Todas <span class="count">23</span></button>
+    <button class="filter-btn" data-cat="golpes"><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='8.5'/><circle cx='12' cy='12' r='5'/><circle cx='12' cy='12' r='1.4' fill='currentColor' stroke='none'/></svg> Golpes <span class="count">6</span></button>
+    <button class="filter-btn" data-cat="vitima"><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M12 3a4 4 0 0 1 4 4v3H8V7a4 4 0 0 1 4-4Z'/><line x1='6' y1='14' x2='18' y2='14'/><path d='M7 14l-1 7h12l-1-7'/><line x1='12' y1='3' x2='12' y2='1.2'/><line x1='6.5' y1='5' x2='5.2' y2='3.7'/><line x1='17.5' y1='5' x2='18.8' y2='3.7'/></svg> Fui vítima <span class="count">5</span></button>
+    <button class="filter-btn" data-cat="pix"><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><rect x='2.5' y='8' width='15' height='9' rx='1.5'/><circle cx='10' cy='12.5' r='2.2'/><line x1='19.5' y1='6' x2='22' y2='4'/><line x1='19.5' y1='10' x2='22.3' y2='9.5'/><line x1='19.5' y1='14' x2='22' y2='15.5'/></svg> PIX & Pagamentos <span class="count">4</span></button>
+    <button class="filter-btn" data-cat="senha"><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><rect x='5' y='11' width='14' height='9' rx='2'/><path d='M8 11V7.5C8 5 9.8 3 12 3C14.2 3 16 5 16 7.5V11'/></svg> Senhas & Contas <span class="count">4</span></button>
+    <button class="filter-btn" data-cat="plataforma"><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><rect x='6.5' y='2.5' width='11' height='19' rx='2.2'/><line x1='10' y1='19' x2='14' y2='19'/></svg> GolpeZero <span class="count">4</span></button>
+  </div>
+
+  <div id="empty-state" class="empty-state">
+    <div class="empty-icon"><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><circle cx='10.5' cy='10.5' r='6.5'/><line x1='15.3' y1='15.3' x2='20' y2='20'/></svg></div>
+    <h3>Nenhuma pergunta encontrada</h3>
+    <p>Tente usar palavras-chave diferentes ou limpe a pesquisa.</p>
+  </div>
+
+  <!-- SECTION: GOLPES -->
+  <div class="faq-section" data-cat="golpes">
+    <div class="section-title">
+      <span class="cat-dot" style="background:#3b82f6"></span>
+      Entendendo os Golpes
+    </div>
+    <div class="accordion">
+
+      <div class="faq-item" data-keywords="golpe identificar reconhecer como saber">
+        <div class="faq-q" onclick="toggle(this)">
+          <span class="faq-q-text">Como identificar se estou diante de um golpe?</span>
+          <span class="faq-icon">+</span>
+        </div>
+        <div class="faq-body">
+          <div class="faq-body-inner">
+            <p>A maioria dos golpes compartilha sinais em comum. Fique atento quando a situação envolver:</p>
+            <ul>
+              <li><strong>Urgência artificial</strong> — pressão para agir "agora ou nunca"</li>
+              <li><strong>Oferta boa demais</strong> — prêmios, lucros ou descontos absurdos sem razão clara</li>
+              <li><strong>Pedido de sigilo</strong> — pedindo para não contar a ninguém</li>
+              <li><strong>Solicitação de dados pessoais</strong> — CPF, senha ou código enviado por SMS</li>
+              <li><strong>Contato inesperado</strong> — alguém que não te conhece te oferecendo ajuda ou oportunidade</li>
+            </ul>
+            <div class="tip green"><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='9'/><path d='M7.5 12.5l3 3 6-6.5'/></svg> Regra de ouro: se sentiu pressão ou estranheza, pause. Golpistas contam com decisões impulsivas.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="faq-item" data-keywords="golpe mais comum brasil frequente">
+        <div class="faq-q" onclick="toggle(this)">
+          <span class="faq-q-text">Quais são os golpes mais comuns no Brasil hoje?</span>
+          <span class="faq-icon">+</span>
+        </div>
+        <div class="faq-body">
+          <div class="faq-body-inner">
+            <p>Os golpes mais aplicados atualmente no Brasil são:</p>
+            <ul>
+              <li>Golpe do PIX (falso funcionário de banco, engenharia social)</li>
+              <li>Phishing por SMS ou WhatsApp se passando por correios, bancos ou governo</li>
+              <li>Golpe do falso emprego (exige taxa de cadastro ou treinamento pago)</li>
+              <li>Fraudes em marketplace (produto pago e nunca enviado)</li>
+              <li>Golpe romântico (namoro virtual para extorquir dinheiro)</li>
+            </ul>
+            <p>Veja a lista completa na página <a href="golpes.html">Tipos de Golpes</a>.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="faq-item" data-keywords="phishing link falso site clonado como funciona">
+        <div class="faq-q" onclick="toggle(this)">
+          <span class="faq-q-text">O que é phishing e como ele funciona na prática?</span>
+          <span class="faq-icon">+</span>
+        </div>
+        <div class="faq-body">
+          <div class="faq-body-inner">
+            <p>Phishing é uma técnica onde golpistas criam páginas falsas que imitam sites legítimos (bancos, correios, lojas). Você recebe um link por SMS, e-mail ou WhatsApp e, ao clicar, chega a um site idêntico ao original — mas controlado pelo criminoso.</p>
+            <p>Ao digitar login e senha, as credenciais vão direto para o fraudador.</p>
+            <div class="tip yellow"><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M12 3L2 20h20L12 3z'/><line x1='12' y1='9' x2='12' y2='13.5'/><line x1='12' y1='16.6' x2='12' y2='17'/></svg> Sempre verifique o endereço completo do site. Um banco real nunca envia link pedindo que você "confirme sua conta".</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="faq-item" data-keywords="golpe telefone ligação banco falso funcionário">
+        <div class="faq-q" onclick="toggle(this)">
+          <span class="faq-q-text">Recebi uma ligação do meu banco pedindo dados. É golpe?</span>
+          <span class="faq-icon">+</span>
+        </div>
+        <div class="faq-body">
+          <div class="faq-body-inner">
+            <p><strong>Quase certamente sim.</strong> Bancos legítimos <em>nunca</em> ligam pedindo:</p>
+            <ul>
+              <li>Senha ou token</li>
+              <li>Código enviado por SMS</li>
+              <li>Que você transfira dinheiro para uma "conta segura"</li>
+              <li>Que instale qualquer aplicativo</li>
+            </ul>
+            <p>Se tiver dúvida, desligue e ligue de volta para o número oficial impresso no seu cartão.</p>
+            <div class="tip red"><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M12 3a4 4 0 0 1 4 4v3H8V7a4 4 0 0 1 4-4Z'/><line x1='6' y1='14' x2='18' y2='14'/><path d='M7 14l-1 7h12l-1-7'/><line x1='12' y1='3' x2='12' y2='1.2'/><line x1='6.5' y1='5' x2='5.2' y2='3.7'/><line x1='17.5' y1='5' x2='18.8' y2='3.7'/></svg> Golpistas conseguem falsificar o número que aparece na sua tela. O número exibido na chamada não é garantia de autenticidade.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="faq-item" data-keywords="criança adolescente idoso vulnerável família">
+        <div class="faq-q" onclick="toggle(this)">
+          <span class="faq-q-text">Quem são os alvos preferidos dos golpistas?</span>
+          <span class="faq-icon">+</span>
+        </div>
+        <div class="faq-body">
+          <div class="faq-body-inner">
+            <p>Qualquer pessoa pode ser alvo, mas golpistas tendem a focar em grupos específicos:</p>
+            <ul>
+              <li><strong>Idosos</strong> — pelo perfil de maior confiança e, muitas vezes, menor familiaridade digital</li>
+              <li><strong>Desempregados</strong> — vulneráveis a falsas oportunidades de emprego</li>
+              <li><strong>Pessoas endividadas</strong> — suscetíveis a golpes de refinanciamento ou renegociação</li>
+              <li><strong>Compradores online</strong> — especialmente em marketplaces sem proteção robusta</li>
+            </ul>
+            <p>Compartilhe o GolpeZero com quem você conhece nessas situações.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="faq-item" data-keywords="golpe inteligência artificial deepfake voz falsa foto">
+        <div class="faq-q" onclick="toggle(this)">
+          <span class="faq-q-text">Golpistas usam inteligência artificial para enganar?</span>
+          <span class="faq-icon">+</span>
+        </div>
+        <div class="faq-body">
+          <div class="faq-body-inner">
+            <p>Sim, e cada vez mais. As técnicas mais usadas incluem:</p>
+            <ul>
+              <li><strong>Deepfake de voz</strong> — clonagem de voz com poucos segundos de áudio para enganar familiares</li>
+              <li><strong>Vídeo falso</strong> — vídeos gerados de pessoas que você conhece pedindo dinheiro</li>
+              <li><strong>Fotos de perfil fake</strong> — perfis românticos ou profissionais com rostos gerados por IA</li>
+            </ul>
+            <div class="tip yellow"><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M12 3L2 20h20L12 3z'/><line x1='12' y1='9' x2='12' y2='13.5'/><line x1='12' y1='16.6' x2='12' y2='17'/></svg> Combinação de código: se suspeitar de golpe em ligação, peça que a pessoa diga uma palavra-código combinada previamente com sua família.</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- SECTION: FUI VÍTIMA -->
+  <div class="faq-section" data-cat="vitima">
+    <div class="section-title">
+      <span class="cat-dot" style="background:#dc2626"></span>
+      Se Você Foi Vítima
+    </div>
+    <div class="accordion">
+
+      <div class="faq-item" data-keywords="fui vitima o que fazer primeiro passo caí golpe">
+        <div class="faq-q" onclick="toggle(this)">
+          <span class="faq-q-text">Cai em um golpe. O que devo fazer agora?</span>
+          <span class="faq-icon">+</span>
+        </div>
+        <div class="faq-body">
+          <div class="faq-body-inner">
+            <p>Aja rápido — cada minuto conta. Siga esta ordem:</p>
+            <ul>
+              <li><strong>1. Bloqueie o acesso</strong> — troque senhas comprometidas imediatamente</li>
+              <li><strong>2. Contate seu banco</strong> — ligue para o número do cartão e informe a fraude</li>
+              <li><strong>3. Registre um B.O.</strong> — pela delegacia virtual do seu estado ou presencialmente</li>
+              <li><strong>4. Guarde evidências</strong> — prints, números, e-mails, URLs — tudo pode ajudar</li>
+              <li><strong>5. Notifique familiares</strong> — se dados de contato foram expostos, eles também podem ser alvos</li>
+            </ul>
+            <div class="tip red"><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M12 3a4 4 0 0 1 4 4v3H8V7a4 4 0 0 1 4-4Z'/><line x1='6' y1='14' x2='18' y2='14'/><path d='M7 14l-1 7h12l-1-7'/><line x1='12' y1='3' x2='12' y2='1.2'/><line x1='6.5' y1='5' x2='5.2' y2='3.7'/><line x1='17.5' y1='5' x2='18.8' y2='3.7'/></svg> Não se culpe. Golpistas são especialistas em manipulação. O mais importante é agir rápido.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="faq-item" data-keywords="boletim ocorrência onde registrar delegacia virtual online">
+        <div class="faq-q" onclick="toggle(this)">
+          <span class="faq-q-text">Como registrar um Boletim de Ocorrência por golpe?</span>
+          <span class="faq-icon">+</span>
+        </div>
+        <div class="faq-body">
+          <div class="faq-body-inner">
+            <p>A maioria dos estados permite registro de B.O. online pela <strong>delegacia virtual</strong>. Procure no site da Secretaria de Segurança Pública do seu estado.</p>
+            <p>No campo de ocorrência, selecione <em>Estelionato</em> ou <em>Crime pela internet</em> / <em>Fraude eletrônica</em>.</p>
+            <p>Para crimes financeiros, você também pode acionar o <strong>Banco Central</strong> pelo Registrato e o <strong>Procon</strong> do seu estado.</p>
+            <div class="tip green"><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='9'/><path d='M7.5 12.5l3 3 6-6.5'/></svg> O B.O. é essencial para ressarcimento via seguro ou contestação bancária.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="faq-item" data-keywords="recuperar dinheiro reembolso estorno banco ressarcimento">
+        <div class="faq-q" onclick="toggle(this)">
+          <span class="faq-q-text">Existe chance de recuperar o dinheiro perdido?</span>
+          <span class="faq-icon">+</span>
+        </div>
+        <div class="faq-body">
+          <div class="faq-body-inner">
+            <p>Depende do tipo de golpe e da rapidez da ação:</p>
+            <ul>
+              <li><strong>Cartão de crédito</strong> — contestação junto ao banco em até 60 dias tem alta chance de estorno</li>
+              <li><strong>PIX</strong> — o Banco Central criou o <strong>Mecanismo Especial de Devolução (MED)</strong>; reporte ao banco em até 80 dias</li>
+              <li><strong>TED/DOC</strong> — possível bloqueio cautelar se reportado rápido ao banco</li>
+              <li><strong>Boleto falso</strong> — menor chance; o pagamento vai para conta do golpista</li>
+            </ul>
+            <div class="tip yellow"><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M12 3L2 20h20L12 3z'/><line x1='12' y1='9' x2='12' y2='13.5'/><line x1='12' y1='16.6' x2='12' y2='17'/></svg> Nunca pague taxa ou adiantamento para "recuperar" o dinheiro perdido — esse é um segundo golpe muito comum.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="faq-item" data-keywords="dados pessoais vazados CPF expostos o que fazer">
+        <div class="faq-q" onclick="toggle(this)">
+          <span class="faq-q-text">Meus dados pessoais foram expostos. E agora?</span>
+          <span class="faq-icon">+</span>
+        </div>
+        <div class="faq-body">
+          <div class="faq-body-inner">
+            <p>Com CPF e dados expostos, golpistas podem tentar abrir crédito no seu nome. Tome estas medidas:</p>
+            <ul>
+              <li>Acesse o <strong>Registrato</strong> (Banco Central) para ver contas em seu nome</li>
+              <li>Consulte seu CPF no <strong>Serasa</strong> e ative o <em>Serasa Antifraude</em></li>
+              <li>Ative a <strong>portabilidade de crédito negada</strong> nos bureaus de crédito</li>
+              <li>Monitore seus extratos bancários por pelo menos 6 meses</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="faq-item" data-keywords="vergonha constrangimento psicológico emoção vítima">
+        <div class="faq-q" onclick="toggle(this)">
+          <span class="faq-q-text">Me sinto envergonhado por ter caído no golpe. É normal?</span>
+          <span class="faq-icon">+</span>
+        </div>
+        <div class="faq-body">
+          <div class="faq-body-inner">
+            <p>Completamente normal — e muito comum. Golpistas são profissionais especializados em criar cenários críveis que exploram emoções humanas como medo, esperança e confiança.</p>
+            <p>Ser vítima não é sinal de ingenuidade. Pesquisas mostram que pessoas bem-informadas e de alta escolaridade também caem em fraudes sofisticadas.</p>
+            <div class="tip green"><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='9'/><path d='M7.5 12.5l3 3 6-6.5'/></svg> Falar sobre o que aconteceu ajuda — tanto emocionalmente quanto para alertar outras pessoas ao seu redor.</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- SECTION: PIX -->
+  <div class="faq-section" data-cat="pix">
+    <div class="section-title">
+      <span class="cat-dot" style="background:#f59e0b"></span>
+      PIX & Pagamentos
+    </div>
+    <div class="accordion">
+
+      <div class="faq-item" data-keywords="pix seguro transferência comprovante falso">
+        <div class="faq-q" onclick="toggle(this)">
+          <span class="faq-q-text">O PIX é seguro? Posso confiar em comprovantes enviados?</span>
+          <span class="faq-icon">+</span>
+        </div>
+        <div class="faq-body">
+          <div class="faq-body-inner">
+            <p>O PIX como sistema é seguro. O problema está nas <strong>fraudes de engenharia social</strong> — onde golpistas convencem você a fazer um PIX voluntariamente, ou enviam <strong>comprovantes falsos</strong> editados para simular um pagamento que nunca ocorreu.</p>
+            <div class="tip red"><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M12 3a4 4 0 0 1 4 4v3H8V7a4 4 0 0 1 4-4Z'/><line x1='6' y1='14' x2='18' y2='14'/><path d='M7 14l-1 7h12l-1-7'/><line x1='12' y1='3' x2='12' y2='1.2'/><line x1='6.5' y1='5' x2='5.2' y2='3.7'/><line x1='17.5' y1='5' x2='18.8' y2='3.7'/></svg> Antes de entregar qualquer produto ou serviço, verifique o recebimento diretamente no app do seu banco — não confie em prints enviados pelo comprador.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="faq-item" data-keywords="pix errado chave errada destinatário errado devolver">
+        <div class="faq-q" onclick="toggle(this)">
+          <span class="faq-q-text">Enviei PIX para a chave errada. Posso cancelar?</span>
+          <span class="faq-icon">+</span>
+        </div>
+        <div class="faq-body">
+          <div class="faq-body-inner">
+            <p>O PIX é instantâneo — uma vez enviado, não dá para cancelar. Mas você pode:</p>
+            <ul>
+              <li>Contatar imediatamente seu banco e solicitar que entre em contato com o banco do recebedor</li>
+              <li>Usar a funcionalidade de <strong>devolução via PIX</strong> que alguns bancos oferecem</li>
+              <li>Registrar B.O. se o recebedor não devolver voluntariamente</li>
+            </ul>
+            <div class="tip yellow"><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M12 3L2 20h20L12 3z'/><line x1='12' y1='9' x2='12' y2='13.5'/><line x1='12' y1='16.6' x2='12' y2='17'/></svg> Sempre confira nome, CPF ou CNPJ do destinatário antes de confirmar a transferência.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="faq-item" data-keywords="boleto falso fraude código barras linha digitável">
+        <div class="faq-q" onclick="toggle(this)">
+          <span class="faq-q-text">Como identificar um boleto falso antes de pagar?</span>
+          <span class="faq-icon">+</span>
+        </div>
+        <div class="faq-body">
+          <div class="faq-body-inner">
+            <p>Boletos falsos são editados para redirecionar o pagamento para outra conta. Antes de pagar:</p>
+            <ul>
+              <li>Compare o <strong>CNPJ do beneficiário</strong> com o da empresa emissora</li>
+              <li>Verifique se os primeiros dígitos do código de barras batem com os do banco correto</li>
+              <li>Nunca abra boletos recebidos por e-mail sem verificar o remetente com cuidado</li>
+              <li>Prefira gerar o boleto diretamente no site oficial da empresa</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="faq-item" data-keywords="maquininha valor diferente troca valor débito crédito">
+        <div class="faq-q" onclick="toggle(this)">
+          <span class="faq-q-text">O que é o golpe da maquininha e como me proteger?</span>
+          <span class="faq-icon">+</span>
+        </div>
+        <div class="faq-body">
+          <div class="faq-body-inner">
+            <p>O golpe ocorre quando o atendente digita um valor diferente do acordado na maquininha, ou vira a tela com pressa para que você confirme sem ler o valor.</p>
+            <ul>
+              <li>Sempre leia o valor na tela antes de digitar a senha</li>
+              <li>Se errou, peça estorno imediato e comprovante de cancelamento</li>
+              <li>Em restaurantes, peça que a maquininha seja trazida até você</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- SECTION: SENHAS & CONTAS -->
+  <div class="faq-section" data-cat="senha">
+    <div class="section-title">
+      <span class="cat-dot" style="background:#8b5cf6"></span>
+      Senhas & Contas
+    </div>
+    <div class="accordion">
+
+      <div class="faq-item" data-keywords="senha forte criar como boa recomendação">
+        <div class="faq-q" onclick="toggle(this)">
+          <span class="faq-q-text">O que faz uma senha ser realmente segura?</span>
+          <span class="faq-icon">+</span>
+        </div>
+        <div class="faq-body">
+          <div class="faq-body-inner">
+            <p>Uma senha forte é longa e imprevisível. As boas práticas atuais recomendam:</p>
+            <ul>
+              <li>Mínimo de <strong>14 caracteres</strong></li>
+              <li>Mistura de letras, números e símbolos</li>
+              <li>Nunca usar datas, nomes ou sequências óbvias (123456, qwerty)</li>
+              <li>Uma senha diferente para cada serviço importante</li>
+            </ul>
+            <div class="tip green"><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='9'/><path d='M7.5 12.5l3 3 6-6.5'/></svg> Use um gerenciador de senhas (Bitwarden, 1Password) para criar e guardar senhas únicas com segurança.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="faq-item" data-keywords="dois fatores autenticação 2FA verificação extra segurança">
+        <div class="faq-q" onclick="toggle(this)">
+          <span class="faq-q-text">O que é autenticação em dois fatores e por que usar?</span>
+          <span class="faq-icon">+</span>
+        </div>
+        <div class="faq-body">
+          <div class="faq-body-inner">
+            <p>Autenticação em dois fatores (2FA) exige uma segunda confirmação além da senha — geralmente um código temporário enviado por SMS, gerado por app (Google Authenticator, Authy) ou por chave física.</p>
+            <p>Mesmo que alguém descubra sua senha, não consegue acessar sua conta sem esse segundo fator.</p>
+            <div class="tip green"><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='9'/><path d='M7.5 12.5l3 3 6-6.5'/></svg> Ative o 2FA em banco, e-mail e redes sociais — são as contas mais valiosas para golpistas.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="faq-item" data-keywords="conta invadida hackeada o que fazer acesso não autorizado">
+        <div class="faq-q" onclick="toggle(this)">
+          <span class="faq-q-text">Minha conta foi invadida. Por onde começo?</span>
+          <span class="faq-icon">+</span>
+        </div>
+        <div class="faq-body">
+          <div class="faq-body-inner">
+            <ul>
+              <li><strong>Troque a senha imediatamente</strong> por uma nova e exclusiva</li>
+              <li>Ative o 2FA se ainda não tiver</li>
+              <li>Verifique dispositivos conectados e revogue acessos desconhecidos</li>
+              <li>Avise seus contatos — o invasor pode usar sua conta para aplicar golpes em outros</li>
+              <li>Verifique se e-mail de recuperação e número de telefone foram alterados</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="faq-item" data-keywords="senha mesma reutilizar perigoso vazar banco de dados">
+        <div class="faq-q" onclick="toggle(this)">
+          <span class="faq-q-text">Por que não posso usar a mesma senha em vários sites?</span>
+          <span class="faq-icon">+</span>
+        </div>
+        <div class="faq-body">
+          <div class="faq-body-inner">
+            <p>Quando um site sofre vazamento de dados (algo muito comum), golpistas testam automaticamente as credenciais expostas em outros serviços — banco, e-mail, redes sociais. Isso se chama <em>credential stuffing</em>.</p>
+            <p>Se você usa a mesma senha em três lugares e um vaza, os outros três ficam comprometidos instantaneamente.</p>
+            <div class="tip red"><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M12 3a4 4 0 0 1 4 4v3H8V7a4 4 0 0 1 4-4Z'/><line x1='6' y1='14' x2='18' y2='14'/><path d='M7 14l-1 7h12l-1-7'/><line x1='12' y1='3' x2='12' y2='1.2'/><line x1='6.5' y1='5' x2='5.2' y2='3.7'/><line x1='17.5' y1='5' x2='18.8' y2='3.7'/></svg> Verifique se seus dados já foram expostos em <a href="https://haveibeenpwned.com" target="_blank">haveibeenpwned.com</a>.</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- SECTION: PLATAFORMA -->
+  <div class="faq-section" data-cat="plataforma">
+    <div class="section-title">
+      <span class="cat-dot" style="background:#2563eb"></span>
+      Sobre o GolpeZero
+    </div>
+    <div class="accordion">
+
+      <div class="faq-item" data-keywords="golpezero o que é quem fez objetivo propósito">
+        <div class="faq-q" onclick="toggle(this)">
+          <span class="faq-q-text">O que é o GolpeZero e qual o seu objetivo?</span>
+          <span class="faq-icon">+</span>
+        </div>
+        <div class="faq-body">
+          <div class="faq-body-inner">
+            <p>O GolpeZero é uma plataforma educativa sobre segurança digital e prevenção a golpes. Nosso objetivo é fornecer informação clara e acessível para que qualquer pessoa — independente de escolaridade ou familiaridade com tecnologia — consiga se proteger.</p>
+            <p>Somos independentes e sem fins lucrativos. Não vendemos produtos nem recebemos por indicações.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="faq-item" data-keywords="simulador como funciona quiz jogo treino prática">
+        <div class="faq-q" onclick="toggle(this)">
+          <span class="faq-q-text">Como funciona o Simulador de Golpes?</span>
+          <span class="faq-icon">+</span>
+        </div>
+        <div class="faq-body">
+          <div class="faq-body-inner">
+            <p>O <a href="simulador.html">Simulador</a> apresenta situações reais de tentativas de golpe — mensagens no estilo WhatsApp, SMS e e-mail — e pede que você julgue se é golpe ou legítimo.</p>
+            <p>Após cada resposta, você recebe uma explicação detalhada com os sinais que indicavam a resposta correta. O treino é o melhor antídoto contra golpes sofisticados.</p>
+            <div class="tip green"><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='9'/><path d='M7.5 12.5l3 3 6-6.5'/></svg> Faça o simulador periodicamente — os golpes evoluem e o treino ajuda a manter o instinto calibrado.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="faq-item" data-keywords="notificar alertas novos golpes receber atualização">
+        <div class="faq-q" onclick="toggle(this)">
+          <span class="faq-q-text">Como fico sabendo quando surgem novos golpes?</span>
+          <span class="faq-icon">+</span>
+        </div>
+        <div class="faq-body">
+          <div class="faq-body-inner">
+            <p>Nossa página de <a href="noticias.html">Notícias e Alertas</a> é atualizada regularmente com novos golpes identificados, alertas de autoridades (Banco Central, Procon, Febraban) e dicas de segurança.</p>
+            <p>Você também pode nos seguir nas redes sociais para receber alertas em tempo real.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="faq-item" data-keywords="sugestão dúvida contato enviar mensagem reportar golpe novo">
+        <div class="faq-q" onclick="toggle(this)">
+          <span class="faq-q-text">Posso sugerir um novo golpe para ser adicionado?</span>
+          <span class="faq-icon">+</span>
+        </div>
+        <div class="faq-body">
+          <div class="faq-body-inner">
+            <p>Sim! Se você encontrou ou foi alvo de um golpe que não está catalogado aqui, use nossa <a href="contato.html">página de contato</a> para nos enviar os detalhes.</p>
+            <p>Sua experiência pode ajudar a proteger outras pessoas. Analisamos todas as sugestões e publicamos os casos relevantes após verificação.</p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- CTA BANNER -->
+  <div class="cta-banner">
+    <div>
+      <h3>Ainda tem dúvidas?</h3>
+      <p>Fale com a gente ou teste seus conhecimentos no simulador.</p>
+    </div>
+    <div class="cta-group">
+      <a class="btn btn-primary" href="simulador.html"><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><rect x='3' y='8' width='18' height='9' rx='4.5'/><line x1='8' y1='10.5' x2='8' y2='14.5'/><line x1='6' y1='12.5' x2='10' y2='12.5'/><circle cx='15' cy='11' r='1' fill='currentColor' stroke='none'/><circle cx='17.5' cy='13.5' r='1' fill='currentColor' stroke='none'/></svg> Fazer o Simulador</a>
+      <a class="btn btn-outline" href="contato.html"><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><rect x='3' y='5.5' width='18' height='13' rx='1.8'/><path d='M3.5 6.5l8.5 7 8.5-7'/></svg> Entrar em contato</a>
+    </div>
+  </div>
+
+</div>
+
+<!-- FOOTER -->
+<footer>
+  <p>© 2025 GolpeZero · Proteção digital para todos ·
+    <a href="golpes.html">Tipos de Golpes</a> ·
+    <a href="dicas.html">Dicas</a> ·
+    <a href="simulador.html">Simulador</a>
+  </p>
+</footer>
+
+<script>
+  // ── ACCORDION ──
+  function toggle(btn) {
+    const item = btn.closest('.faq-item');
+    const body = item.querySelector('.faq-body');
+    const isOpen = item.classList.contains('open');
+
+    // Close all
+    document.querySelectorAll('.faq-item.open').forEach(el => {
+      el.classList.remove('open');
+      el.querySelector('.faq-body').classList.remove('open');
+    });
+
+    if (!isOpen) {
+      item.classList.add('open');
+      body.classList.add('open');
+    }
+  }
+
+  // ── FILTERS ──
+  const filterBtns = document.querySelectorAll('.filter-btn');
+  let activeFilter = 'all';
+
+  filterBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      filterBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      activeFilter = btn.dataset.cat;
+      applyFilters();
+    });
+  });
+
+  // ── SEARCH ──
+  const searchInput = document.getElementById('faq-search');
+  searchInput.addEventListener('input', applyFilters);
+
+  function applyFilters() {
+    const query = searchInput.value.toLowerCase().trim();
+    let total = 0;
+
+    document.querySelectorAll('.faq-section').forEach(section => {
+      const sectionCat = section.dataset.cat;
+      const catMatch = activeFilter === 'all' || activeFilter === sectionCat;
+
+      if (!catMatch) {
+        section.dataset.hidden = 'true';
+        return;
+      }
+
+      let sectionVisible = false;
+
+      section.querySelectorAll('.faq-item').forEach(item => {
+        const qText = item.querySelector('.faq-q-text').textContent.toLowerCase();
+        const bodyText = item.querySelector('.faq-body-inner').textContent.toLowerCase();
+        const keywords = (item.dataset.keywords || '').toLowerCase();
+        const matches = !query || qText.includes(query) || bodyText.includes(query) || keywords.includes(query);
+
+        item.dataset.hidden = matches ? 'false' : 'true';
+        if (matches) { sectionVisible = true; total++; }
+      });
+
+      section.dataset.hidden = sectionVisible ? 'false' : 'true';
+    });
+
+    // Count
+    const countEl = document.getElementById('search-count');
+    if (query) {
+      countEl.textContent = total === 0 ? 'Nenhuma pergunta encontrada' : `${total} pergunta${total !== 1 ? 's' : ''} encontrada${total !== 1 ? 's' : ''}`;
+    } else {
+      countEl.textContent = '';
+    }
+
+    // Empty state
+    const emptyState = document.getElementById('empty-state');
+    emptyState.classList.toggle('visible', total === 0 && !!query);
+  }
+
+  // Keyboard: close on ESC
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      searchInput.value = '';
+      applyFilters();
+      searchInput.blur();
+    }
+  });
+</script>
+</body>
+</html>

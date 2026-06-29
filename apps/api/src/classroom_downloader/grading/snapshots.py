@@ -8,11 +8,13 @@ from ..models import (
     GradingFileCache,
     GradingJob,
     GradingSubmission,
+    GradingSubmissionCriterionScore,
     GradingSubmissionFile,
 )
 from ..observability import get_logger
 from ..schemas import (
     GradingCriterionRead,
+    GradingCriterionScoreRead,
     GradingFileCacheRead,
     GradingJobRead,
     GradingSubmissionFileRead,
@@ -28,6 +30,7 @@ def _submission_read(
     submission: GradingSubmission,
     attempt: GradingAiAttempt | None,
     files: list[GradingSubmissionFile] | None = None,
+    criterion_score_rows: list[GradingSubmissionCriterionScore] | None = None,
 ) -> GradingSubmissionRead:
     file_rows = files if files is not None else [
         GradingSubmissionFile(
@@ -85,6 +88,10 @@ def _submission_read(
         ai_cache_write_tokens=attempt.cache_write_tokens if attempt else None,
         ai_cost_cents=attempt.cost_cents if attempt else None,
         ai_latency_ms=attempt.latency_ms if attempt else None,
+        criterion_scores=[
+            GradingCriterionScoreRead(criterion_id=row.criterion_id, earned=row.earned)
+            for row in (criterion_score_rows or [])
+        ],
     )
 
 
@@ -115,6 +122,18 @@ def grading_job_snapshot(session: Session, job: GradingJob) -> GradingJobRead:
     files_by_submission: dict[str, list[GradingSubmissionFile]] = {}
     for row in file_rows:
         files_by_submission.setdefault(row.submission_id, []).append(row)
+    # Batch-load criterion scores for all submissions in this job.
+    submission_ids = [s.id for s in submissions]
+    cs_rows: list[GradingSubmissionCriterionScore] = []
+    if submission_ids:
+        cs_rows = session.exec(
+            select(GradingSubmissionCriterionScore).where(
+                GradingSubmissionCriterionScore.submission_id.in_(submission_ids)
+            )
+        ).all()
+    cs_by_submission: dict[str, list[GradingSubmissionCriterionScore]] = {}
+    for row in cs_rows:
+        cs_by_submission.setdefault(row.submission_id, []).append(row)
     return GradingJobRead(
         id=job.id,
         course_id=job.course_id,
@@ -151,6 +170,7 @@ def grading_job_snapshot(session: Session, job: GradingJob) -> GradingJobRead:
                 row,
                 latest_attempts.get(row.id),
                 files_by_submission.get(row.id),
+                cs_by_submission.get(row.id),
             )
             for row in submissions
         ],
@@ -181,4 +201,14 @@ def grading_submission_snapshot(
         .where(GradingAiAttempt.stage == "grading")
         .order_by(GradingAiAttempt.created_at.desc())
     ).first()
-    return _submission_read(submission, latest_attempt, submission_files(session, submission))
+    cs_rows = session.exec(
+        select(GradingSubmissionCriterionScore).where(
+            GradingSubmissionCriterionScore.submission_id == submission.id
+        )
+    ).all()
+    return _submission_read(
+        submission,
+        latest_attempt,
+        submission_files(session, submission),
+        list(cs_rows),
+    )

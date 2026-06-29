@@ -2704,11 +2704,69 @@
   font-variant-numeric: tabular-nums;
 }
 
-.bd-note {
+/* Plan 018 — per-criterion score bars */
+.bd-score {
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+  font-family: "Geist Mono", ui-monospace, monospace;
+  font-size: 11.5px;
+  color: var(--ai);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.bd-score-input {
+  border: none;
+  background: transparent;
+  color: var(--ai);
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  font-variant-numeric: tabular-nums;
+  width: 36px;
+  text-align: right;
+  padding: 0;
+  outline: none;
+  -moz-appearance: textfield;
+}
+
+.bd-score-input::-webkit-outer-spin-button,
+.bd-score-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.bd-score-input:focus {
+  border-bottom: 1px solid var(--ai);
+}
+
+.bd-score-max {
+  color: var(--muted);
+}
+
+.bd-bar {
+  height: 5px;
+  background: var(--surface-2);
+  border-radius: 999px;
+  overflow: hidden;
+  position: relative;
+  margin-top: 3px;
+}
+
+.bd-bar-fill {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, var(--ai), var(--primary));
+  border-radius: inherit;
+  transition: width 120ms ease;
+}
+
+.bd-explain {
   margin-top: 4px;
   color: var(--muted);
   font-size: 11.5px;
-  line-height: 1.35;
+  line-height: 1.5;
 }
 
 .kbd-hints {

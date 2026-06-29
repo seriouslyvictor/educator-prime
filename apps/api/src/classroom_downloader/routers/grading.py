@@ -44,6 +44,7 @@ from ..models import (
     GradingJob,
     GradingStatus,
     GradingSubmission,
+    GradingSubmissionCriterionScore,
 )
 from ..observability import get_logger, log_error, log_event, log_warning
 from ..privacy_audit import (
@@ -984,7 +985,50 @@ def review_submission(
     submission = session.get(GradingSubmission, submission_id)
     if submission is None or submission.job_id != job.id:
         raise HTTPException(status_code=404, detail="Grading submission not found.")
-    submission.final_score = payload.final_score
+
+    # When per-criterion points are provided the overall score is DERIVED from
+    # them (single source of truth).  Replace stored criterion rows atomically.
+    if payload.criterion_scores is not None:
+        # Reject criterion ids that don't belong to this job rather than storing
+        # orphan rows that would never reconcile against the job's criteria.
+        valid_criterion_ids = {
+            row.id
+            for row in session.exec(
+                select(GradingCriterion).where(GradingCriterion.job_id == job.id)
+            ).all()
+        }
+        unknown = [
+            cs.criterion_id
+            for cs in payload.criterion_scores
+            if cs.criterion_id not in valid_criterion_ids
+        ]
+        if unknown:
+            raise HTTPException(
+                status_code=400, detail="Unknown criterion id in review payload."
+            )
+
+        existing_cs = session.exec(
+            select(GradingSubmissionCriterionScore).where(
+                GradingSubmissionCriterionScore.submission_id == submission.id
+            )
+        ).all()
+        for row in existing_cs:
+            session.delete(row)
+        for cs in payload.criterion_scores:
+            session.add(
+                GradingSubmissionCriterionScore(
+                    id=str(uuid4()),
+                    submission_id=submission.id,
+                    criterion_id=cs.criterion_id,
+                    earned=cs.earned,
+                )
+            )
+        # Derive overall final_score from the parts.
+        derived_score = round(sum(cs.earned for cs in payload.criterion_scores), 2)
+        submission.final_score = derived_score
+    else:
+        submission.final_score = payload.final_score
+
     submission.feedback = payload.feedback
     submission.reviewed = payload.reviewed
     submission.updated_at = datetime.now(UTC)

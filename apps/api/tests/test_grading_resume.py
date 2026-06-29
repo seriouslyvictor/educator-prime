@@ -173,3 +173,98 @@ def test_draft_resume_does_not_double_run_outlier_review(tmp_path) -> None:
 
     assert engine_instance.review_count == 1
     assert len(markers) == 1
+
+
+def test_draft_resume_keeps_one_criterion_score_row_per_criterion(tmp_path) -> None:
+    from uuid import uuid4
+
+    from sqlmodel import Session, select
+
+    from classroom_downloader.database import engine, init_db
+    from classroom_downloader.google_provider import MockGoogleProvider, SubmissionFile
+    from classroom_downloader.grading import draft_grading_job, ensure_default_criteria
+    from classroom_downloader.grading_engine import GradingEngineResult
+    from classroom_downloader.models import (
+        GradingJob,
+        GradingStatus,
+        GradingSubmission,
+        GradingSubmissionCriterionScore,
+    )
+    from classroom_downloader.schemas import GradingCriterionInput
+    from classroom_downloader.settings import get_settings
+
+    class ScoringEngine:
+        name = "scoring"
+        model = None
+
+        def grade(self, request):
+            return GradingEngineResult(
+                score=80,
+                confidence=0.9,
+                feedback="ok",
+                flags=[],
+                criterion_notes=[],
+                criterion_scores=[
+                    {"criterion": "Lógica", "earned": 56.0},
+                    {"criterion": "Estilo", "earned": 24.0},
+                ],
+            )
+
+        def infer_rubric(self, request):  # pragma: no cover
+            return []
+
+    get_settings().grading_cache_path = str(tmp_path / "grading")
+    init_db()
+    provider = MockGoogleProvider()
+    provider.files = [
+        SubmissionFile(
+            "file-cs",
+            "course-cs",
+            "activity-cs",
+            None,
+            "Student One",
+            "drive-cs",
+            "submission.txt",
+            "text/plain",
+            b"answer text",
+        )
+    ]
+    with Session(engine) as session:
+        job = GradingJob(
+            id=str(uuid4()),
+            course_id="course-cs",
+            course_name="Course CS",
+            activity_id="activity-cs",
+            activity_title="Activity CS",
+            rubric_mode="structured",
+            teacher_loop="approve",
+            status=GradingStatus.ready,
+        )
+        session.add(job)
+        ensure_default_criteria(
+            session,
+            job.id,
+            [
+                GradingCriterionInput(name="Lógica", weight=70, description=None),
+                GradingCriterionInput(name="Estilo", weight=30, description=None),
+            ],
+        )
+        session.commit()
+        session.refresh(job)
+
+        # Drafting twice exercises the resume path; criterion-score rows must not
+        # accumulate (the persistence helper clears stale rows before inserting).
+        draft_grading_job(session, job, provider, ScoringEngine())
+        draft_grading_job(session, job, provider, ScoringEngine())
+
+        submission = session.exec(
+            select(GradingSubmission).where(GradingSubmission.job_id == job.id)
+        ).first()
+        rows = session.exec(
+            select(GradingSubmissionCriterionScore).where(
+                GradingSubmissionCriterionScore.submission_id == submission.id
+            )
+        ).all()
+
+    assert len(rows) == 2  # exactly one row per criterion, no duplicates after resume
+    assert round(sum(r.earned for r in rows), 1) == 80.0

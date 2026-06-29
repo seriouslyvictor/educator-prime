@@ -10,6 +10,7 @@ import type {
   GradingHealth,
   GradingJob,
   GradingCriterionInput,
+  GradingCriterionScore,
   GradingScope,
   GradingQueueItem,
   QueueState,
@@ -359,7 +360,7 @@ export const api = {
   reviewGradingSubmission: (
     jobId: string,
     submissionId: string,
-    payload: { final_score: number; feedback: string; reviewed: boolean },
+    payload: { final_score: number; feedback: string; reviewed: boolean; criterion_scores?: GradingCriterionScore[] },
   ) => request<GradingJob>(`/api/grading/jobs/${jobId}/submissions/${submissionId}/review`, {
       method: "POST",
       body: JSON.stringify(payload),

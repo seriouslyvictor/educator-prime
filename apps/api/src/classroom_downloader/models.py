@@ -151,6 +151,23 @@ class GradingSubmission(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
+class GradingSubmissionCriterionScore(SQLModel, table=True):
+    """Per-criterion earned points for one submission.  One row per (submission,
+    criterion) pair; replaced atomically whenever the engine re-grades or the
+    teacher submits edited criterion points via the review endpoint.
+
+    Design decision: the overall ``final_score`` on ``GradingSubmission`` is
+    DERIVED from these parts — it equals sum(earned) — so there is a single
+    source of truth.  The review endpoint recomputes ``final_score`` from the
+    submitted criterion_scores when that list is provided."""
+
+    id: str = Field(primary_key=True)
+    submission_id: str = Field(index=True)
+    criterion_id: str = Field(index=True)
+    earned: float
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
 class GradingSubmissionFile(SQLModel, table=True):
     """One attachment within a grouped submission. A student who submits multiple
     files gets one GradingSubmission and one of these rows per file."""
