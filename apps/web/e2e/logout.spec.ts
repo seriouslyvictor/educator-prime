@@ -12,6 +12,10 @@ test("logout returns to the connect screen and hides the logout control", async 
     .toHaveAttribute("data-screen-label", "connect", { timeout: 10_000 });
   // ...and the logout control must be gone (auth.signed_in is now false).
   await expect(page.getByTitle("Sair da conta Google")).toHaveCount(0);
-  // The connect CTA is present.
-  await expect(page.getByText("Conectar conta Google escolar")).toBeVisible();
+  // The rail must be absent — connect screen is a standalone full-bleed layout.
+  await expect(page.locator("aside.rail")).toHaveCount(0);
+  // The OAuth connect button is present (standalone login screen).
+  await expect(
+    page.getByRole("button", { name: /Continuar com o Google Sala de Aula/ }),
+  ).toBeVisible();
 });

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ConnectView } from "./components/ConnectView";
+import { LoginScreen } from "./components/LoginScreen";
 import { AdminView } from "./components/admin/AdminView";
 import { DoneView } from "./components/DoneView";
 import { DryRunDrawer } from "./components/DryRunDrawer";
@@ -247,20 +247,13 @@ export function App() {
         {gateError ? (
           <Gate error={gateError} onAction={handleGateAction} />
         ) : (
-          <>
-            {versionSkew ? (
-              <InlineError
-                error={new ApiError(0, "version_skew", "Frontend and backend versions differ.")}
-                onAction={() => window.location.reload()}
-              />
-            ) : null}
-            <ConnectView
-              connecting={busy}
-              deliveryMode={deliveryMode}
-              error={error}
-              onConnect={connectClassroom}
-            />
-          </>
+          <LoginScreen
+            connecting={busy}
+            deliveryMode={deliveryMode}
+            error={error}
+            versionSkew={versionSkew}
+            onConnect={connectClassroom}
+          />
         )}
         {apiOffline && !gateError ? <OfflinePill /> : null}
       </div>

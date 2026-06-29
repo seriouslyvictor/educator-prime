@@ -1,0 +1,299 @@
+/* ============================================================
+   LoginScreen — two-column standalone login layout
+   All class names are prefixed "ls-" to avoid global-scope
+   collisions (vite CSS modules are emitted unhashed in this
+   project per apps/web/vite.config.ts).
+   ============================================================ */
+
+/* Root: full-bleed two-column grid */
+.ls-root {
+  min-height: 100vh;
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1.05fr 1fr;
+  background: var(--bg);
+}
+
+/* ── Left aside (dark brand panel) ─────────────────────── */
+.ls-aside {
+  position: relative;
+  overflow: hidden;
+  padding: 52px 56px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  background:
+    radial-gradient(720px 420px at 18% 8%, color-mix(in oklab, var(--ai) 22%, transparent), transparent 62%),
+    radial-gradient(620px 520px at 92% 96%, color-mix(in oklab, var(--ai) 14%, transparent), transparent 60%),
+    var(--ink);
+  color: color-mix(in oklab, #fff 92%, var(--ai));
+}
+
+/* Brand row */
+.ls-brand {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.ls-mark {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  flex: 0 0 auto;
+}
+
+/* Pitch (main copy block) */
+.ls-pitch {
+  max-width: 460px;
+}
+
+.ls-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-family: ui-monospace, "Geist Mono", monospace;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: color-mix(in oklab, #fff 78%, var(--ai));
+}
+
+.ls-glyph {
+  color: #c9b6ff;
+}
+
+.ls-pitch h1 {
+  margin: 18px 0 16px;
+  font-size: 40px;
+  line-height: 1.06;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  color: #fff;
+  text-wrap: balance;
+}
+
+.ls-pitch p {
+  margin: 0;
+  font-size: 15.5px;
+  line-height: 1.6;
+  color: color-mix(in oklab, #fff 76%, var(--ai));
+}
+
+/* Steps list */
+.ls-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+  margin-top: 30px;
+}
+
+.ls-step {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+  color: color-mix(in oklab, #fff 86%, var(--ai));
+}
+
+.ls-n {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: color-mix(in oklab, #fff 14%, transparent);
+  color: #fff;
+  font-family: ui-monospace, "Geist Mono", monospace;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* Aside footnote */
+.ls-foot {
+  font-size: 12.5px;
+  color: color-mix(in oklab, #fff 56%, var(--ai));
+}
+
+/* ── Right main (centered card) ─────────────────────────── */
+.ls-main {
+  display: grid;
+  place-items: center;
+  padding: 40px;
+  overflow: auto;
+}
+
+.ls-card {
+  width: 100%;
+  max-width: 380px;
+}
+
+.ls-card-title {
+  margin: 0 0 6px;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
+.ls-card-sub {
+  margin: 0 0 26px;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+/* ── Scope list ─────────────────────────────────────────── */
+.ls-scope-list {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.ls-scope-item {
+  display: flex;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.ls-check-icon {
+  color: var(--success);
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.ls-scope-lbl {
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.ls-scope-desc {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* ── Delivery mode notice ───────────────────────────────── */
+.ls-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 13px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  color: var(--ink-2);
+  margin-bottom: 16px;
+}
+
+.ls-notice-info {
+  border-color: var(--info-border, color-mix(in oklab, var(--info) 24%, transparent));
+  background: var(--info-soft);
+}
+
+.ls-notice-warning {
+  border-color: color-mix(in oklab, var(--warning) 26%, transparent);
+  background: var(--warning-soft);
+}
+
+.ls-notice-icon {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 6px;
+}
+
+.ls-notice-info .ls-notice-icon {
+  color: var(--info);
+}
+
+.ls-notice-warning .ls-notice-icon {
+  color: var(--warning);
+}
+
+.ls-notice-title {
+  color: var(--ink);
+  font-weight: 800;
+  font-size: 13px;
+}
+
+.ls-notice-desc {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* ── SSO connect button ──────────────────────────────────── */
+.ls-sso-btn {
+  width: 100% !important;
+  height: 46px !important;
+  border-radius: 12px !important;
+  border: 1.5px solid var(--border-strong) !important;
+  background: var(--surface) !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  color: var(--ink) !important;
+  gap: 10px !important;
+  margin-top: 20px;
+  transition: border-color 0.12s, background 0.12s;
+}
+
+.ls-sso-btn:hover:not(:disabled) {
+  border-color: var(--ai) !important;
+  background: var(--paper) !important;
+}
+
+/* The "G" badge inside the SSO button */
+.ls-g {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-family: ui-monospace, "Geist Mono", monospace;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+/* ── Footer note ─────────────────────────────────────────── */
+.ls-note {
+  margin: 18px 0 0;
+  font-size: 11.5px;
+  color: var(--muted-2);
+  text-align: center;
+  line-height: 1.5;
+}
+
+.ls-note-glyph {
+  font-size: 11px;
+  color: var(--ai);
+}
+
+/* ── Responsive: hide aside on narrow screens ───────────── */
+@media (max-width: 720px) {
+  .ls-root {
+    grid-template-columns: 1fr;
+  }
+
+  .ls-aside {
+    display: none;
+  }
+}
