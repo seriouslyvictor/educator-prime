@@ -11,6 +11,13 @@
 
 ## Status
 
+**Status**: DONE
+
+Note: `pnpm e2e` could not run locally — the playwright harness requires a live
+backend server on port 8000 (real Google credentials). Gates `pnpm test:run`,
+`pnpm build`, and `pnpm lint` all passed (51/51 tests, clean build, 0 new lint
+errors).
+
 - **Priority**: P2
 - **Effort**: M
 - **Risk**: MED
