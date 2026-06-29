@@ -12,6 +12,8 @@
 
 ## Status
 
+**Status**: DONE
+
 - **Priority**: P1
 - **Effort**: M
 - **Risk**: MED
