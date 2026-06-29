@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dicas de Segurança — GolpeZero</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    /* ===== DICAS.HTML — estilos específicos ===== */
+
+    .dicas-page {
+      min-height: 100vh;
+      padding-top: 64px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Hero ── */
+    .dicas-hero {
+      background: linear-gradient(135deg, var(--color-bg) 0%, #0d1526 100%);
+      border-bottom: 1px solid rgba(37,99,235,0.12);
+      padding: var(--space-3xl) var(--space-lg) var(--space-2xl);
+      text-align: center;
+    }
+
+    .dicas-hero__badge {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-sm);
+      background: rgba(34,197,94,0.12);
+      border: 1px solid rgba(34,197,94,0.3);
+      color: #4ADE80;
+      font-size: 0.78rem;
+      font-weight: 600;
+      padding: var(--space-xs) var(--space-md);
+      border-radius: 999px;
+      margin-bottom: var(--space-lg);
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .dicas-hero__title {
+      font-size: clamp(1.8rem, 3.5vw, 2.6rem);
+      font-weight: 800;
+      color: var(--color-white);
+      margin-bottom: var(--space-md);
+    }
+
+    .dicas-hero__title span { color: #4ADE80; }
+
+    .dicas-hero__sub {
+      color: var(--color-gray-500);
+      font-size: 1rem;
+      max-width: 520px;
+      margin: 0 auto;
+      line-height: 1.7;
+    }
+
+    /* ── Filtros de tema ── */
+    .dicas-toolbar {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: var(--space-2xl) var(--space-lg) 0;
+      width: 100%;
+    }
+
+    .dicas-filters {
+      display: flex;
+      gap: var(--space-sm);
+      flex-wrap: wrap;
+    }
+
+    .filtro-btn {
+      background: var(--color-bg-card);
+      border: 1.5px solid rgba(255,255,255,0.08);
+      color: var(--color-gray-300);
+      font-size: 0.82rem;
+      font-weight: 600;
+      padding: var(--space-sm) var(--space-md);
+      border-radius: 999px;
+      cursor: pointer;
+      font-family: var(--font-main);
+      transition: background 0.2s, border-color 0.2s, color 0.2s, transform 0.15s;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .filtro-btn:hover {
+      border-color: rgba(34,197,94,0.4);
+      color: var(--color-white);
+      transform: scale(1.03);
+    }
+
+    .filtro-btn.ativo {
+      background: rgba(34,197,94,0.15);
+      border-color: rgba(34,197,94,0.5);
+      color: #4ADE80;
+      box-shadow: 0 4px 14px rgba(34,197,94,0.15);
+    }
+
+    /* ── Conteúdo principal ── */
+    .dicas-main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: var(--space-2xl) var(--space-lg) var(--space-3xl);
+      width: 100%;
+      flex: 1;
+    }
+
+    /* ── Grid de cards de dica ── */
+    .dicas-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: var(--space-lg);
+      margin-bottom: var(--space-3xl);
+    }
+
+    .card-dica {
+      background: var(--color-bg-card);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: var(--radius-lg);
+      padding: var(--space-xl);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-md);
+      transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+    }
+
+    .card-dica:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 12px 32px rgba(0,0,0,0.25);
+      border-color: rgba(34,197,94,0.2);
+    }
+
+    .card-dica__icon {
+      width: 48px;
+      height: 48px;
+      border-radius: var(--radius-md);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5rem;
+      flex-shrink: 0;
+    }
+
+    .card-dica__tema {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--color-gray-500);
+      margin-bottom: 2px;
+    }
+
+    .card-dica__titulo {
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--color-white);
+    }
+
+    .card-dica__desc {
+      font-size: 0.88rem;
+      color: var(--color-gray-500);
+      line-height: 1.65;
+      flex: 1;
+    }
+
+    .card-dica__passos {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: var(--space-sm);
+    }
+
+    .card-dica__passo {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      font-size: 0.82rem;
+      color: var(--color-gray-300);
+      line-height: 1.5;
+    }
+
+    .card-dica__passo-num {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: rgba(34,197,94,0.15);
+      color: #4ADE80;
+      font-size: 0.7rem;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    /* Cores por tema */
+    .tema-senhas     .card-dica__icon { background: rgba(37,99,235,0.15); }
+    .tema-dispositivo .card-dica__icon { background: rgba(245,158,11,0.12); }
+    .tema-redes      .card-dica__icon { background: rgba(168,85,247,0.12); }
+    .tema-compras    .card-dica__icon { background: rgba(34,197,94,0.12); }
+    .tema-financeiro .card-dica__icon { background: rgba(239,68,68,0.12); }
+
+    /* ── Seção: Checklist de segurança ── */
+    .checklist-section {
+      background: var(--color-bg-card);
+      border: 1px solid rgba(37,99,235,0.12);
+      border-radius: var(--radius-xl);
+      padding: var(--space-2xl);
+      margin-bottom: var(--space-3xl);
+    }
+
+    .checklist-section__header {
+      display: flex;
+      align-items: center;
+      gap: var(--space-md);
+      margin-bottom: var(--space-xl);
+    }
+
+    .checklist-section__icon {
+      font-size: 2rem;
+    }
+
+    .checklist-section__titulo {
+      font-size: 1.3rem;
+      font-weight: 800;
+      color: var(--color-white);
+    }
+
+    .checklist-section__sub {
+      font-size: 0.88rem;
+      color: var(--color-gray-500);
+      margin-top: 2px;
+    }
+
+    .checklist-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: var(--space-sm);
+    }
+
+    .checklist-item {
+      display: flex;
+      align-items: flex-start;
+      gap: var(--space-md);
+      background: var(--color-bg-elevated);
+      border-radius: var(--radius-md);
+      padding: var(--space-md) var(--space-lg);
+      cursor: pointer;
+      transition: background 0.2s;
+      user-select: none;
+    }
+
+    .checklist-item:hover { background: #252f42; }
+
+    .checklist-item.marcado .checklist-check {
+      background: rgba(34,197,94,0.2);
+      border-color: #4ADE80;
+      color: #4ADE80;
+    }
+
+    .checklist-item.marcado .checklist-texto {
+      text-decoration: line-through;
+      color: var(--color-gray-500);
+    }
+
+    .checklist-check {
+      width: 22px;
+      height: 22px;
+      border-radius: 6px;
+      border: 1.5px solid var(--color-gray-700);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+      flex-shrink: 0;
+      margin-top: 1px;
+      transition: background 0.2s, border-color 0.2s, color 0.2s;
+    }
+
+    .checklist-texto {
+      font-size: 0.88rem;
+      color: var(--color-gray-300);
+      line-height: 1.5;
+      transition: color 0.2s;
+    }
+
+    .checklist-progresso {
+      margin-top: var(--space-lg);
+      display: flex;
+      align-items: center;
+      gap: var(--space-md);
+    }
+
+    .checklist-progresso__barra {
+      flex: 1;
+      height: 6px;
+      background: var(--color-bg-elevated);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .checklist-progresso__fill {
+      height: 100%;
+      background: linear-gradient(90deg, #16a34a, #4ADE80);
+      border-radius: 999px;
+      transition: width 0.4s ease;
+      width: 0%;
+    }
+
+    .checklist-progresso__label {
+      font-size: 0.82rem;
+      color: var(--color-gray-500);
+      white-space: nowrap;
+    }
+
+    /* ── Seção: Banner do simulador ── */
+    .banner-simulador {
+      background: linear-gradient(135deg, rgba(37,99,235,0.15) 0%, rgba(37,99,235,0.05) 100%);
+      border: 1px solid rgba(37,99,235,0.25);
+      border-radius: var(--radius-xl);
+      padding: var(--space-2xl);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-xl);
+    }
+
+    .banner-simulador__left { flex: 1; }
+
+    .banner-simulador__icon {
+      font-size: 2.5rem;
+      margin-bottom: var(--space-md);
+    }
+
+    .banner-simulador__titulo {
+      font-size: 1.3rem;
+      font-weight: 800;
+      color: var(--color-white);
+      margin-bottom: var(--space-sm);
+    }
+
+    .banner-simulador__sub {
+      color: var(--color-gray-500);
+      font-size: 0.92rem;
+      line-height: 1.6;
+    }
+
+    /* Sem resultados */
+    .sem-resultados {
+      grid-column: 1 / -1;
+      text-align: center;
+      padding: var(--space-3xl);
+      color: var(--color-gray-500);
+    }
+    .sem-resultados__icon { font-size: 3rem; margin-bottom: var(--space-md); }
+
+    /* ── Responsivo ── */
+    @media (max-width: 1024px) {
+      .dicas-grid    { grid-template-columns: repeat(2, 1fr); }
+      .checklist-grid { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 640px) {
+      .dicas-grid           { grid-template-columns: 1fr; }
+      .banner-simulador     { flex-direction: column; text-align: center; }
+      .banner-simulador .btn { width: 100%; justify-content: center; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- NAVBAR -->
+  <header class="navbar" id="navbar">
+    <div class="navbar__container">
+      <a href="index.html" class="navbar__logo">
+        <span class="navbar__logo-icon">🛡️</span>
+        Golpe<span class="navbar__logo-accent">Zero</span>
+      </a>
+      <nav class="navbar__menu" id="navMenu">
+        <a href="index.html"     class="navbar__link">Home</a>
+        <a href="golpes.html"    class="navbar__link">Tipos de Golpes</a>
+        <a href="simulador.html" class="navbar__link">Simulador</a>
+        <a href="dicas.html"     class="navbar__link active">Dicas de Segurança</a>
+        <a href="noticias.html"  class="navbar__link">Notícias</a>
+        <a href="faq.html"       class="navbar__link">FAQ</a>
+        <a href="contato.html"   class="navbar__link navbar__link--cta">Contato</a>
+      </nav>
+      <button class="navbar__hamburger" id="hamburger" aria-label="Abrir menu" aria-expanded="false">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </header>
+
+  <div class="dicas-page">
+
+    <!-- HERO -->
+    <section class="dicas-hero">
+      <span class="dicas-hero__badge">✅ Boas práticas</span>
+      <h1 class="dicas-hero__title">Dicas de <span>Segurança Digital</span></h1>
+      <p class="dicas-hero__sub">
+        Hábitos simples que protegem seus dados, sua conta e seu dinheiro.
+        Filtre pelo tema que mais precisa hoje.
+      </p>
+    </section>
+
+    <!-- FILTROS -->
+    <div class="dicas-toolbar">
+      <div class="dicas-filters" id="filtros"></div>
+    </div>
+
+    <!-- CONTEÚDO -->
+    <main class="dicas-main">
+
+      <!-- Grid de dicas -->
+      <div class="dicas-grid" id="dicasGrid"></div>
+
+      <!-- Checklist interativo -->
+      <div class="checklist-section fade-in">
+        <div class="checklist-section__header">
+          <span class="checklist-section__icon">📋</span>
+          <div>
+            <h2 class="checklist-section__titulo">Checklist de Segurança</h2>
+            <p class="checklist-section__sub">Marque os itens que você já pratica. Clique para registrar seu progresso.</p>
+          </div>
+        </div>
+
+        <div class="checklist-grid" id="checklistGrid"></div>
+
+        <div class="checklist-progresso">
+          <div class="checklist-progresso__barra">
+            <div class="checklist-progresso__fill" id="checklistFill"></div>
+          </div>
+          <span class="checklist-progresso__label" id="checklistLabel">0 de 12 concluídos</span>
+        </div>
+      </div>
+
+      <!-- Banner simulador -->
+      <div class="banner-simulador fade-in">
+        <div class="banner-simulador__left">
+          <div class="banner-simulador__icon">🎯</div>
+          <h3 class="banner-simulador__titulo">Teste seus conhecimentos</h3>
+          <p class="banner-simulador__sub">
+            Agora que você aprendeu as dicas, veja se consegue identificar
+            golpes reais no nosso simulador educativo.
+          </p>
+        </div>
+        <a href="simulador.html" class="btn btn--primary">
+          Abrir Simulador →
+        </a>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- FOOTER -->
+  <footer class="footer">
+    <div class="footer__container">
+      <div class="footer__brand">
+        <span class="navbar__logo" style="margin-bottom:12px;display:inline-flex;">
+          🛡️ Golpe<span class="navbar__logo-accent">Zero</span>
+        </span>
+        <p class="footer__desc">
+          O GolpeZero é uma iniciativa educacional criada para conscientizar
+          usuários da internet sobre golpes digitais e promover boas práticas de segurança online.
+        </p>
+      </div>
+      <div class="footer__links">
+        <h4>Navegação</h4>
+        <a href="golpes.html">Tipos de Golpes</a>
+        <a href="simulador.html">Simulador</a>
+        <a href="dicas.html">Dicas de Segurança</a>
+        <a href="noticias.html">Notícias</a>
+        <a href="faq.html">FAQ</a>
+        <a href="contato.html">Contato</a>
+      </div>
+      <div class="footer__links">
+        <h4>Sobre</h4>
+        <a href="#">Projeto de TCC</a>
+        <a href="#">Missão</a>
+      </div>
+    </div>
+    <div class="footer__bottom">
+      <p>© 2025 GolpeZero — Projeto Educativo. Todos os direitos reservados.</p>
+    </div>
+  </footer>
+
+  <script>
+    // ══════════════════════════════════════════
+    //  DICAS.HTML — script
+    // ══════════════════════════════════════════
+
+    // ── 1. DADOS DAS DICAS ──
+    const dicas = [
+      {
+        id: 1,
+        icon: "🔑",
+        tema: "Senhas",
+        titulo: "Use senhas fortes e únicas",
+        desc: "Senhas fracas são a porta de entrada mais comum para invasores.",
+        passos: [
+          "Use no mínimo 12 caracteres",
+          "Misture letras, números e símbolos",
+          "Nunca repita a mesma senha em sites diferentes",
+          "Use um gerenciador de senhas (ex: Bitwarden)"
+        ]
+      },
+      {
+        id: 2,
+        icon: "🔐",
+        tema: "Senhas",
+        titulo: "Ative a autenticação em duas etapas",
+        desc: "Mesmo que alguém descubra sua senha, não conseguirá acessar sua conta.",
+        passos: [
+          "Ative o 2FA em e-mail, banco e redes sociais",
+          "Prefira apps como Google Authenticator ao SMS",
+          "Guarde os códigos de recuperação em lugar seguro"
+        ]
+      },
+      {
+        id: 3,
+        icon: "📱",
+        tema: "Dispositivo",
+        titulo: "Mantenha seus apps atualizados",
+        desc: "Atualizações corrigem falhas de segurança que golpistas exploram.",
+        passos: [
+          "Ative atualizações automáticas no celular",
+          "Atualize o sistema operacional regularmente",
+          "Remova apps que você não usa mais",
+          "Baixe apps apenas de lojas oficiais (Play Store / App Store)"
+        ]
+      },
+      {
+        id: 4,
+        icon: "🛡️",
+        tema: "Dispositivo",
+        titulo: "Use antivírus e bloqueie o celular",
+        desc: "Proteções básicas que muita gente ignora e que fazem grande diferença.",
+        passos: [
+          "Instale um antivírus confiável no computador",
+          "Configure bloqueio automático de tela em 30 segundos",
+          "Use PIN, biometria ou senha para desbloquear",
+          "Nunca deixe o celular desbloqueado em público"
+        ]
+      },
+      {
+        id: 5,
+        icon: "📲",
+        tema: "Redes Sociais",
+        titulo: "Proteja suas redes sociais",
+        desc: "Informações públicas demais facilitam golpes de engenharia social.",
+        passos: [
+          "Revise quem pode ver seus posts e informações",
+          "Não publique documentos, ingressos ou endereços",
+          "Desconfie de perfis desconhecidos pedindo amizade",
+          "Verifique apps conectados e remova os que não usa"
+        ]
+      },
+      {
+        id: 6,
+        icon: "📧",
+        tema: "Redes Sociais",
+        titulo: "Cuidado com links recebidos",
+        desc: "A maioria dos golpes começa com um link enviado por mensagem.",
+        passos: [
+          "Nunca clique em links de remetentes desconhecidos",
+          "Verifique o domínio completo antes de clicar",
+          "Acesse sites importantes digitando o endereço diretamente",
+          "Use um verificador de links (ex: VirusTotal)"
+        ]
+      },
+      {
+        id: 7,
+        icon: "🛒",
+        tema: "Compras",
+        titulo: "Compre com segurança online",
+        desc: "Lojas falsas e vendedores fraudulentos estão em todo lugar.",
+        passos: [
+          "Confirme o HTTPS e o cadeado no navegador",
+          "Pesquise a loja no Reclame Aqui antes de comprar",
+          "Prefira cartão de crédito virtual para compras online",
+          "Pague sempre dentro das plataformas — nunca por fora"
+        ]
+      },
+      {
+        id: 8,
+        icon: "💳",
+        tema: "Compras",
+        titulo: "Monitore seu extrato bancário",
+        desc: "Identificar cobranças indevidas rapidamente evita prejuízos maiores.",
+        passos: [
+          "Confira o extrato pelo menos uma vez por semana",
+          "Ative notificações de cada transação no app do banco",
+          "Conteste cobranças desconhecidas imediatamente",
+          "Use cartão virtual com limite específico para compras"
+        ]
+      },
+      {
+        id: 9,
+        icon: "💰",
+        tema: "Financeiro",
+        titulo: "Proteja suas transferências PIX",
+        desc: "O PIX é prático, mas exige atenção redobrada antes de transferir.",
+        passos: [
+          "Confirme o nome do destinatário antes de enviar",
+          "Desconfie de pedidos urgentes de transferência",
+          "Nunca transfira para devolver 'pagamento recebido errado'",
+          "Configure limite de transferência noturna no app do banco"
+        ]
+      },
+      {
+        id: 10,
+        icon: "🏦",
+        tema: "Financeiro",
+        titulo: "Verifique investimentos antes de aplicar",
+        desc: "Fraudes financeiras prometem o que nenhum investimento legítimo pode.",
+        passos: [
+          "Pesquise a corretora no site da CVM (cvm.gov.br)",
+          "Desconfie de rendimentos acima de 1% ao mês garantido",
+          "Nunca invista por pressão ou prazo curto",
+          "Confirme a identidade de quem te ofereceu o investimento"
+        ]
+      }
+    ];
+
+    // ── 2. CHECKLIST ──
+    const checklist = [
+      "Uso senhas com mais de 12 caracteres",
+      "Nunca repito senhas em sites diferentes",
+      "Tenho autenticação em duas etapas ativada",
+      "Meus apps e sistema operacional estão atualizados",
+      "Tenho bloqueio de tela configurado no celular",
+      "Verifico o remetente antes de clicar em links",
+      "Nunca pago fora de plataformas de marketplace",
+      "Confiro o extrato bancário toda semana",
+      "Confirmo o nome antes de fazer um PIX",
+      "Minhas redes sociais têm perfil privado",
+      "Nunca compartilho senhas ou códigos SMS",
+      "Pesquiso lojas online antes de comprar"
+    ];
+
+    // ── 3. TEMAS ──
+    const temas = ["Todos", "Senhas", "Dispositivo", "Redes Sociais", "Compras", "Financeiro"];
+    const iconesTema = {
+      "Todos":        "🔍",
+      "Senhas":       "🔑",
+      "Dispositivo":  "📱",
+      "Redes Sociais":"📲",
+      "Compras":      "🛒",
+      "Financeiro":   "💰"
+    };
+    const classesTema = {
+      "Senhas":       "tema-senhas",
+      "Dispositivo":  "tema-dispositivo",
+      "Redes Sociais":"tema-redes",
+      "Compras":      "tema-compras",
+      "Financeiro":   "tema-financeiro"
+    };
+
+    let temaAtivo = "Todos";
+
+    // ── 4. FILTROS ──
+    function renderFiltros() {
+      document.getElementById("filtros").innerHTML = temas.map(t => `
+        <button class="filtro-btn ${t === temaAtivo ? "ativo" : ""}" onclick="filtrarTema('${t}')">
+          ${iconesTema[t]} ${t}
+        </button>
+      `).join("");
+    }
+
+    function filtrarTema(tema) {
+      temaAtivo = tema;
+      renderFiltros();
+      renderDicas();
+    }
+
+    // ── 5. CARDS DE DICA ──
+    function renderDicas() {
+      const resultado = temaAtivo === "Todos"
+        ? dicas
+        : dicas.filter(d => d.tema === temaAtivo);
+
+      const grid = document.getElementById("dicasGrid");
+
+      if (resultado.length === 0) {
+        grid.innerHTML = `
+          <div class="sem-resultados">
+            <div class="sem-resultados__icon">🔍</div>
+            <p>Nenhuma dica encontrada para este tema.</p>
+          </div>`;
+        return;
+      }
+
+      grid.innerHTML = resultado.map((d, i) => `
+        <article class="card-dica ${classesTema[d.tema] || ""} fade-in" style="animation-delay:${i * 60}ms">
+          <div class="card-dica__icon">${d.icon}</div>
+          <div>
+            <p class="card-dica__tema">${d.tema}</p>
+            <h3 class="card-dica__titulo">${d.titulo}</h3>
+          </div>
+          <p class="card-dica__desc">${d.desc}</p>
+          <div class="card-dica__passos">
+            ${d.passos.map((p, n) => `
+              <div class="card-dica__passo">
+                <span class="card-dica__passo-num">${n + 1}</span>
+                <span>${p}</span>
+              </div>
+            `).join("")}
+          </div>
+        </article>
+      `).join("");
+
+      requestAnimationFrame(() => {
+        grid.querySelectorAll(".fade-in").forEach(el => el.classList.add("visible"));
+      });
+    }
+
+    // ── 6. CHECKLIST INTERATIVO ──
+    let marcados = new Array(checklist.length).fill(false);
+
+    function renderChecklist() {
+      const total    = checklist.length;
+      const concluidos = marcados.filter(Boolean).length;
+      const pct      = Math.round((concluidos / total) * 100);
+
+      document.getElementById("checklistGrid").innerHTML = checklist.map((item, i) => `
+        <div class="checklist-item ${marcados[i] ? "marcado" : ""}" onclick="toggleCheck(${i})">
+          <div class="checklist-check">${marcados[i] ? "✓" : ""}</div>
+          <span class="checklist-texto">${item}</span>
+        </div>
+      `).join("");
+
+      document.getElementById("checklistFill").style.width  = `${pct}%`;
+      document.getElementById("checklistLabel").textContent = `${concluidos} de ${total} concluídos`;
+    }
+
+    function toggleCheck(i) {
+      marcados[i] = !marcados[i];
+      renderChecklist();
+    }
+
+    // ── 7. FADE-IN (Intersection Observer) ──
+    function initFadeIn() {
+      const obs = new IntersectionObserver(entries => {
+        entries.forEach(e => {
+          if (e.isIntersecting) { e.target.classList.add("visible"); obs.unobserve(e.target); }
+        });
+      }, { threshold: 0.1 });
+      document.querySelectorAll(".fade-in").forEach(el => obs.observe(el));
+    }
+
+    // ── 8. NAVBAR ──
+    const navbar    = document.getElementById("navbar");
+    const hamburger = document.getElementById("hamburger");
+    const navMenu   = document.getElementById("navMenu");
+
+    window.addEventListener("scroll", () => {
+      navbar.classList.toggle("scrolled", window.scrollY > 20);
+    });
+
+    hamburger.addEventListener("click", () => {
+      const open = navMenu.classList.toggle("open");
+      hamburger.classList.toggle("open", open);
+      hamburger.setAttribute("aria-expanded", open);
+    });
+
+    // ── 9. INIT ──
+    renderFiltros();
+    renderDicas();
+    renderChecklist();
+    initFadeIn();
+  </script>
+
+</body>
+</html>

@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Simulador de Golpes — GolpeZero</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    svg.ico { width: 1em; height: 1em; flex-shrink: 0; vertical-align: -0.125em; }
+
+    /* ===== SIMULADOR — estilos específicos ===== */
+
+    .sim-page {
+      min-height: 100vh;
+      padding-top: 64px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Hero da página */
+    .sim-hero {
+      background: linear-gradient(135deg, var(--color-bg) 0%, #0d1526 100%);
+      border-bottom: 1px solid rgba(37,99,235,0.12);
+      padding: var(--space-3xl) var(--space-lg) var(--space-2xl);
+      text-align: center;
+    }
+
+    .sim-hero__badge {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-sm);
+      background: rgba(37,99,235,0.15);
+      border: 1px solid rgba(37,99,235,0.3);
+      color: var(--color-primary-light);
+      font-size: 0.78rem;
+      font-weight: 600;
+      padding: var(--space-xs) var(--space-md);
+      border-radius: 999px;
+      margin-bottom: var(--space-lg);
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .sim-hero__title {
+      font-size: clamp(1.8rem, 3.5vw, 2.6rem);
+      font-weight: 800;
+      color: var(--color-white);
+      margin-bottom: var(--space-md);
+    }
+
+    .sim-hero__title span {
+      color: var(--color-primary-light);
+    }
+
+    .sim-hero__sub {
+      color: var(--color-gray-500);
+      font-size: 1rem;
+      max-width: 520px;
+      margin: 0 auto;
+      line-height: 1.7;
+    }
+
+    /* Área central */
+    .sim-main {
+      flex: 1;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding: var(--space-3xl) var(--space-lg);
+    }
+
+    .sim-wrap {
+      width: 100%;
+      max-width: 720px;
+    }
+
+    /* Barra de progresso */
+    .sim-progress {
+      margin-bottom: var(--space-2xl);
+    }
+
+    .sim-progress__label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.82rem;
+      color: var(--color-gray-500);
+      margin-bottom: var(--space-sm);
+      font-weight: 500;
+    }
+
+    .sim-progress__bar {
+      height: 6px;
+      background: var(--color-bg-elevated);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .sim-progress__fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--color-primary), var(--color-primary-light));
+      border-radius: 999px;
+      transition: width 0.4s ease;
+    }
+
+    /* Card da pergunta — estilo WhatsApp educativo */
+    .sim-card {
+      background: var(--color-bg-card);
+      border: 1px solid rgba(37,99,235,0.12);
+      border-radius: var(--radius-xl);
+      padding: var(--space-2xl);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+      animation: slideUp 0.35s ease;
+    }
+
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(18px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Bolha estilo mensagem */
+    .sim-bubble {
+      background: var(--color-bg-elevated);
+      border-radius: var(--radius-lg) var(--radius-lg) var(--radius-lg) 4px;
+      padding: var(--space-lg) var(--space-xl);
+      margin-bottom: var(--space-xl);
+      position: relative;
+      border-left: 3px solid var(--color-primary);
+    }
+
+    .sim-bubble__from {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--color-primary-light);
+      margin-bottom: var(--space-sm);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .sim-bubble__text {
+      font-size: 1rem;
+      color: var(--color-gray-100);
+      line-height: 1.7;
+    }
+
+    .sim-pergunta-num {
+      font-size: 0.8rem;
+      color: var(--color-gray-500);
+      margin-bottom: var(--space-md);
+      font-weight: 500;
+    }
+
+    .sim-card__question {
+      font-size: 1rem;
+      color: var(--color-gray-300);
+      margin-bottom: var(--space-xl);
+      font-weight: 500;
+    }
+
+    /* Botões de resposta */
+    .sim-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--space-md);
+    }
+
+    .btn--danger {
+      background: rgba(239,68,68,0.12);
+      color: #F87171;
+      border: 1.5px solid rgba(239,68,68,0.3);
+      font-size: 1rem;
+      padding: 16px;
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      font-weight: 700;
+      transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
+    }
+
+    .btn--danger:hover {
+      background: rgba(239,68,68,0.22);
+      transform: scale(1.03);
+      box-shadow: 0 6px 20px rgba(239,68,68,0.2);
+    }
+
+    .btn--safe {
+      background: rgba(34,197,94,0.12);
+      color: #4ADE80;
+      border: 1.5px solid rgba(34,197,94,0.3);
+      font-size: 1rem;
+      padding: 16px;
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      font-weight: 700;
+      transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
+    }
+
+    .btn--safe:hover {
+      background: rgba(34,197,94,0.22);
+      transform: scale(1.03);
+      box-shadow: 0 6px 20px rgba(34,197,94,0.2);
+    }
+
+    /* Feedback */
+    .sim-feedback {
+      border-radius: var(--radius-xl);
+      padding: var(--space-2xl);
+      animation: slideUp 0.35s ease;
+    }
+
+    .sim-feedback--acerto {
+      background: rgba(34,197,94,0.08);
+      border: 1px solid rgba(34,197,94,0.25);
+    }
+
+    .sim-feedback--erro {
+      background: rgba(239,68,68,0.08);
+      border: 1px solid rgba(239,68,68,0.25);
+    }
+
+    .sim-feedback__titulo {
+      font-size: 1.3rem;
+      font-weight: 800;
+      margin-bottom: var(--space-md);
+    }
+
+    .sim-feedback--acerto .sim-feedback__titulo { color: #4ADE80; }
+    .sim-feedback--erro   .sim-feedback__titulo { color: #F87171; }
+
+    .sim-feedback__exp {
+      color: var(--color-gray-300);
+      line-height: 1.7;
+      margin-bottom: var(--space-xl);
+      font-size: 0.95rem;
+    }
+
+    /* Resultado final */
+    .sim-resultado {
+      text-align: center;
+      padding: var(--space-3xl) var(--space-lg);
+      animation: slideUp 0.4s ease;
+    }
+
+    .sim-resultado__emoji {
+      font-size: 4rem;
+      margin-bottom: var(--space-lg);
+    }
+
+    .sim-resultado__titulo {
+      font-size: 1.8rem;
+      font-weight: 800;
+      color: var(--color-white);
+      margin-bottom: var(--space-md);
+    }
+
+    .sim-resultado__pontos {
+      display: inline-flex;
+      align-items: baseline;
+      gap: 4px;
+      background: rgba(37,99,235,0.15);
+      border: 1px solid rgba(37,99,235,0.3);
+      border-radius: var(--radius-xl);
+      padding: var(--space-md) var(--space-2xl);
+      margin-bottom: var(--space-xl);
+    }
+
+    .sim-resultado__num {
+      font-size: 3rem;
+      font-weight: 800;
+      color: var(--color-primary-light);
+    }
+
+    .sim-resultado__den {
+      font-size: 1.4rem;
+      color: var(--color-gray-500);
+      font-weight: 600;
+    }
+
+    .sim-resultado__msg {
+      color: var(--color-gray-300);
+      font-size: 1rem;
+      line-height: 1.7;
+      max-width: 420px;
+      margin: 0 auto var(--space-2xl);
+    }
+
+    .sim-resultado__acoes {
+      display: flex;
+      gap: var(--space-md);
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    /* Tela inicial */
+    .sim-inicio {
+      text-align: center;
+      padding: var(--space-2xl);
+      animation: slideUp 0.35s ease;
+    }
+
+    .sim-inicio__icon {
+      font-size: 3.5rem;
+      margin-bottom: var(--space-lg);
+    }
+
+    .sim-inicio__titulo {
+      font-size: 1.5rem;
+      font-weight: 800;
+      color: var(--color-white);
+      margin-bottom: var(--space-md);
+    }
+
+    .sim-inicio__desc {
+      color: var(--color-gray-500);
+      margin-bottom: var(--space-2xl);
+      line-height: 1.7;
+    }
+
+    .sim-inicio__regras {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-sm);
+      margin-bottom: var(--space-2xl);
+      text-align: left;
+    }
+
+    .sim-inicio__regras li {
+      display: flex;
+      align-items: flex-start;
+      gap: var(--space-md);
+      background: var(--color-bg-elevated);
+      padding: var(--space-md) var(--space-lg);
+      border-radius: var(--radius-md);
+      font-size: 0.9rem;
+      color: var(--color-gray-300);
+    }
+
+    .sim-inicio__regras li span:first-child {
+      font-size: 1.2rem;
+      flex-shrink: 0;
+    }
+
+    /* Responsivo */
+    @media (max-width: 480px) {
+      .sim-actions { grid-template-columns: 1fr; }
+      .sim-card    { padding: var(--space-lg); }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- NAVBAR -->
+  <header class="navbar" id="navbar">
+    <div class="navbar__container">
+      <a href="index.html" class="navbar__logo">
+        <span class="navbar__logo-icon"><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M12 2.5L4.5 5.5V11.2C4.5 16.1 7.5 19.9 12 21.5C16.5 19.9 19.5 16.1 19.5 11.2V5.5L12 2.5Z'/><path d='M9 12L11.2 14.2L15.5 9.5'/></svg></span>
+        Golpe<span class="navbar__logo-accent">Zero</span>
+      </a>
+      <nav class="navbar__menu" id="navMenu">
+        <a href="index.html"       class="navbar__link">Home</a>
+        <a href="golpes.html"      class="navbar__link">Tipos de Golpes</a>
+        <a href="simulador.html"   class="navbar__link active">Simulador</a>
+        <a href="dicas.html"       class="navbar__link">Dicas de Segurança</a>
+        <a href="noticias.html"    class="navbar__link">Notícias</a>
+        <a href="faq.html"         class="navbar__link">FAQ</a>
+        <a href="contato.html"     class="navbar__link navbar__link--cta">Contato</a>
+      </nav>
+      <button class="navbar__hamburger" id="hamburger" aria-label="Abrir menu" aria-expanded="false">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </header>
+
+  <div class="sim-page">
+
+    <!-- HERO -->
+    <section class="sim-hero">
+      <span class="sim-hero__badge"><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='8.5'/><circle cx='12' cy='12' r='5'/><circle cx='12' cy='12' r='1.4' fill='currentColor' stroke='none'/></svg> Teste seus conhecimentos</span>
+      <h1 class="sim-hero__title">Simulador de <span>Golpes Digitais</span></h1>
+      <p class="sim-hero__sub">
+        Leia as situações abaixo e decida: é um golpe ou é seguro?
+        Receba explicações educativas em cada resposta.
+      </p>
+    </section>
+
+    <!-- CONTEÚDO DO SIMULADOR -->
+    <main class="sim-main">
+      <div class="sim-wrap">
+
+        <!-- Barra de progresso (visível durante o quiz) -->
+        <div class="sim-progress" id="simProgress" style="display:none;">
+          <div class="sim-progress__label">
+            <span id="progressLabel">Pergunta 1 de 5</span>
+            <span id="progressPontos">0 acertos</span>
+          </div>
+          <div class="sim-progress__bar">
+            <div class="sim-progress__fill" id="progressFill" style="width:0%"></div>
+          </div>
+        </div>
+
+        <!-- Container dinâmico -->
+        <div id="simulador"></div>
+
+      </div>
+    </main>
+
+  </div>
+
+  <!-- FOOTER -->
+  <footer class="footer">
+    <div class="footer__container">
+      <div class="footer__brand">
+        <span class="navbar__logo" style="margin-bottom:12px;display:inline-flex;">
+          <svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M12 2.5L4.5 5.5V11.2C4.5 16.1 7.5 19.9 12 21.5C16.5 19.9 19.5 16.1 19.5 11.2V5.5L12 2.5Z'/><path d='M9 12L11.2 14.2L15.5 9.5'/></svg> Golpe<span class="navbar__logo-accent">Zero</span>
+        </span>
+        <p class="footer__desc">
+          O GolpeZero é uma iniciativa educacional criada para conscientizar
+          usuários da internet sobre golpes digitais e promover boas práticas de segurança online.
+        </p>
+      </div>
+      <div class="footer__links">
+        <h4>Navegação</h4>
+        <a href="golpes.html">Tipos de Golpes</a>
+        <a href="simulador.html">Simulador</a>
+        <a href="dicas.html">Dicas de Segurança</a>
+        <a href="noticias.html">Notícias</a>
+        <a href="faq.html">FAQ</a>
+        <a href="contato.html">Contato</a>
+      </div>
+      <div class="footer__links">
+        <h4>Sobre</h4>
+        <a href="#">Projeto de TCC</a>
+        <a href="#">Missão</a>
+      </div>
+    </div>
+    <div class="footer__bottom">
+      <p>© 2025 GolpeZero — Projeto Educativo. Todos os direitos reservados.</p>
+    </div>
+  </footer>
+
+  <script src="script.js"></script>
+  <script>
+    // ── Simulador: lógica específica desta página ──
+
+    const perguntas = [
+      {
+        de: "Desconhecido",
+        texto: "Oi! Sou seu amigo Carlos. Estou em apuros e preciso de R$300 via PIX agora. Depois te explico, tá? <svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M12 21c-3-2-5-5-5-9 0-4 2-7 5-9 3 2 5 5 5 9 0 4-2 7-5 9Z'/><line x1='12' y1='3' x2='12' y2='21'/></svg>",
+        eGolpe: true,
+        explicacao: "Golpe do WhatsApp clonado. O golpista se passa por alguém de confiança para pedir dinheiro com urgência. Sempre ligue para a pessoa antes de transferir qualquer valor."
+      },
+      {
+        de: "Oportunidade Invest.",
+        texto: "<svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M12 2c2.5 2 4 5.5 4 9.5 0 2-.5 3.8-1.3 5.2l-2.7 2.3-2.7-2.3C8.5 15.3 8 13.5 8 11.5 8 7.5 9.5 4 12 2Z'/><circle cx='12' cy='10' r='1.6'/><path d='M9 16.5l-2.5 1.5.7-3'/><path d='M15 16.5l2.5 1.5-.7-3'/><line x1='10.3' y1='19.5' x2='9.3' y2='21.5'/><line x1='13.7' y1='19.5' x2='14.7' y2='21.5'/></svg> RENDIMENTO GARANTIDO de 25% ao mês! Invista agora e indique amigos para ganhar bônus. Vagas limitadas!",
+        eGolpe: true,
+        explicacao: "Pirâmide financeira. Rendimentos acima de 1% ao mês já são suspeitos. Nenhum investimento garante lucro e o modelo de indicação é característica de golpes."
+      },
+      {
+        de: "Loja Online",
+        texto: "Para finalizar sua compra, precisamos do código CVV do seu cartão. Sua conexão é segura (<svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><rect x='5' y='11' width='14' height='9' rx='2'/><path d='M8 11V7.5C8 5 9.8 3 12 3C14.2 3 16 5 16 7.5V11'/></svg> https).",
+        eGolpe: false,
+        explicacao: "Isso é normal em compras online legítimas. O CVV é uma camada de segurança padrão. O importante é verificar se o site tem HTTPS e é uma loja conhecida."
+      },
+      {
+        de: "Banco Brasil SMS",
+        texto: "<svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M12 3L2 20h20L12 3z'/><line x1='12' y1='9' x2='12' y2='13.5'/><line x1='12' y1='16.6' x2='12' y2='17'/></svg> Sua conta será BLOQUEADA em 24h. Clique agora para regularizar: banco-brasil-seguro.net/acesso",
+        eGolpe: true,
+        explicacao: "Phishing clássico. Bancos nunca enviam links por SMS pedindo dados. O domínio 'banco-brasil-seguro.net' é falso. Em caso de dúvida, ligue para o número impresso no seu cartão."
+      },
+      {
+        de: "Vendedor Marketplace",
+        texto: "Oi! Vi que você se interessou pelo produto. Me manda o PIX direto pra mim, fica mais barato sem taxa da plataforma <svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='9'/><circle cx='8.7' cy='10' r='1' fill='currentColor' stroke='none'/><circle cx='15.3' cy='10' r='1' fill='currentColor' stroke='none'/><path d='M7.5 14c1 1.8 3 3 4.5 3s3.5-1.2 4.5-3'/></svg>",
+        eGolpe: true,
+        explicacao: "Golpe do Marketplace. Pagar fora da plataforma elimina qualquer proteção ao comprador. Você paga, o produto nunca chega e não há como contestar."
+      },
+      {
+        de: "Receita Federal",
+        texto: "Você possui débitos pendentes com a Receita Federal. Regularize agora pelo link para evitar CPF suspenso.",
+        eGolpe: true,
+        explicacao: "A Receita Federal não envia notificações por SMS/WhatsApp com links. Sempre acesse diretamente o site gov.br para verificar pendências."
+      },
+      {
+        de: "iFood",
+        texto: "Seu pedido #48291 saiu para entrega! Rastreie em tempo real pelo app ou no link: ifood.com.br/pedido/48291",
+        eGolpe: false,
+        explicacao: "Notificação legítima. O domínio é o oficial do iFood (ifood.com.br) e a mensagem é sobre um pedido. Sempre confira o domínio antes de clicar."
+      }
+    ];
+
+    let idx     = 0;
+    let pontos  = 0;
+    let iniciou = false;
+
+    const container    = document.getElementById("simulador");
+    const simProgress  = document.getElementById("simProgress");
+    const progressLabel = document.getElementById("progressLabel");
+    const progressPontos = document.getElementById("progressPontos");
+    const progressFill  = document.getElementById("progressFill");
+
+    function atualizarProgresso() {
+      progressLabel.textContent   = `Pergunta ${idx + 1} de ${perguntas.length}`;
+      progressPontos.textContent  = `${pontos} acerto${pontos !== 1 ? "s" : ""}`;
+      progressFill.style.width    = `${(idx / perguntas.length) * 100}%`;
+    }
+
+    function renderInicio() {
+      container.innerHTML = `
+        <div class="sim-card sim-inicio">
+          <div class="sim-inicio__icon"><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='8.5'/><circle cx='12' cy='12' r='5'/><circle cx='12' cy='12' r='1.4' fill='currentColor' stroke='none'/></svg></div>
+          <h2 class="sim-inicio__titulo">Você está pronto?</h2>
+          <p class="sim-inicio__desc">
+            Serão ${perguntas.length} situações reais do dia a dia.<br>
+            Decida se cada mensagem é um golpe ou segura.
+          </p>
+          <ul class="sim-inicio__regras">
+            <li><span><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M12 3L2 20h20L12 3z'/><line x1='12' y1='9' x2='12' y2='13.5'/><line x1='12' y1='16.6' x2='12' y2='17'/></svg></span><span>Marque <strong>É Golpe</strong> quando identificar uma tentativa de fraude.</span></li>
+            <li><span><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='9'/><path d='M7.5 12.5l3 3 6-6.5'/></svg></span><span>Marque <strong>É Seguro</strong> quando a situação for legítima.</span></li>
+            <li><span><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M4 4.5h4.5v15H4z'/><path d='M9.5 4.5H14v15H9.5z'/><path d='M15 5.3l4.3-1 3 14.7-4.3 1z'/></svg></span><span>Você receberá uma explicação educativa após cada resposta.</span></li>
+          </ul>
+          <button class="btn btn--primary" style="width:100%;justify-content:center;" onclick="iniciarSimulador()">
+            Começar Simulador →
+          </button>
+        </div>`;
+    }
+
+    function renderPergunta() {
+      if (idx >= perguntas.length) { renderResultado(); return; }
+      const p = perguntas[idx];
+      atualizarProgresso();
+      container.innerHTML = `
+        <div class="sim-card">
+          <p class="sim-pergunta-num">Situação ${idx + 1} de ${perguntas.length}</p>
+          <div class="sim-bubble">
+            <div class="sim-bubble__from"><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><rect x='6.5' y='2.5' width='11' height='19' rx='2.2'/><line x1='10' y1='19' x2='14' y2='19'/></svg> ${p.de}</div>
+            <p class="sim-bubble__text">${p.texto}</p>
+          </div>
+          <p class="sim-card__question">O que você faz?</p>
+          <div class="sim-actions">
+            <button class="btn--danger" onclick="responder(true)"><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M12 3L2 20h20L12 3z'/><line x1='12' y1='9' x2='12' y2='13.5'/><line x1='12' y1='16.6' x2='12' y2='17'/></svg> É Golpe</button>
+            <button class="btn--safe"   onclick="responder(false)"><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='9'/><path d='M7.5 12.5l3 3 6-6.5'/></svg> É Seguro</button>
+          </div>
+        </div>`;
+    }
+
+    function responder(respostaUsuario) {
+      const p       = perguntas[idx];
+      const acertou = respostaUsuario === p.eGolpe;
+      if (acertou) pontos++;
+
+      const proxLabel = idx + 1 < perguntas.length ? "Próxima situação →" : "Ver meu resultado";
+
+      container.innerHTML = `
+        <div class="sim-card sim-feedback sim-feedback--${acertou ? "acerto" : "erro"}">
+          <p class="sim-feedback__titulo">${acertou ? "<svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='9'/><path d='M7.5 12.5l3 3 6-6.5'/></svg> Correto!" : "<svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='9'/><line x1='8.5' y1='8.5' x2='15.5' y2='15.5'/><line x1='15.5' y1='8.5' x2='8.5' y2='15.5'/></svg> Errado!"}</p>
+          <p class="sim-feedback__exp">${p.explicacao}</p>
+          <button class="btn btn--primary" style="width:100%;justify-content:center;" onclick="avancar()">
+            ${proxLabel}
+          </button>
+        </div>`;
+    }
+
+    function avancar() {
+      idx++;
+      if (idx >= perguntas.length) {
+        simProgress.style.display = "none";
+        renderResultado();
+      } else {
+        renderPergunta();
+      }
+    }
+
+    function renderResultado() {
+      const total  = perguntas.length;
+      const pct    = Math.round((pontos / total) * 100);
+      let emoji, msg;
+
+      if (pct === 100) {
+        emoji = "<svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M7 4h10v5a5 5 0 0 1-10 0V4Z'/><path d='M7 5H4v2a3 3 0 0 0 3 3'/><path d='M17 5h3v2a3 3 0 0 1-3 3'/><line x1='12' y1='14' x2='12' y2='17.5'/><path d='M9.5 17.5h5l.6 3h-6.2l.6-3Z'/></svg>"; msg = "Incrível! Você identificou todos os golpes. Você está muito bem protegido.";
+      } else if (pct >= 71) {
+        emoji = "<svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M7 11v9H4v-9h3Z'/><path d='M7 11l3.5-7c.6-.1 1.7.1 1.7 1.6 0 1-.7 2.4-1 3.4h6c1 0 1.7.9 1.4 1.8l-1.8 6.4c-.2.8-.9 1.3-1.7 1.3H10a3 3 0 0 1-3-3v-5.5Z'/></svg>"; msg = "Bom resultado! Mas revise os casos que errou — cada detalhe importa.";
+      } else if (pct >= 43) {
+        emoji = "<svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M12 3L2 20h20L12 3z'/><line x1='12' y1='9' x2='12' y2='13.5'/><line x1='12' y1='16.6' x2='12' y2='17'/></svg>"; msg = "Atenção! Você pode ser vulnerável a alguns golpes. Explore a seção de Tipos de Golpes.";
+      } else {
+        emoji = "<svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M12 3a4 4 0 0 1 4 4v3H8V7a4 4 0 0 1 4-4Z'/><line x1='6' y1='14' x2='18' y2='14'/><path d='M7 14l-1 7h12l-1-7'/><line x1='12' y1='3' x2='12' y2='1.2'/><line x1='6.5' y1='5' x2='5.2' y2='3.7'/><line x1='17.5' y1='5' x2='18.8' y2='3.7'/></svg>"; msg = "Cuidado! Muitos golpistas poderiam te enganar. Recomendamos estudar os tipos de golpes antes de tentar novamente.";
+      }
+
+      progressFill.style.width = "100%";
+      progressLabel.textContent = `Concluído!`;
+      progressPontos.textContent = `${pontos} de ${total} acertos`;
+
+      container.innerHTML = `
+        <div class="sim-card sim-resultado">
+          <div class="sim-resultado__emoji">${emoji}</div>
+          <h2 class="sim-resultado__titulo">Resultado Final</h2>
+          <div class="sim-resultado__pontos">
+            <span class="sim-resultado__num">${pontos}</span>
+            <span class="sim-resultado__den">/ ${total}</span>
+          </div>
+          <p class="sim-resultado__msg">${msg}</p>
+          <div class="sim-resultado__acoes">
+            <button class="btn btn--primary" onclick="reiniciar()"><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M4 12a8 8 0 0 1 13.7-5.7L20 8'/><path d='M20 4v4h-4'/><path d='M20 12a8 8 0 0 1-13.7 5.7L4 16'/><path d='M4 20v-4h4'/></svg> Tentar Novamente</button>
+            <a href="golpes.html" class="btn btn--ghost">Ver Tipos de Golpes</a>
+          </div>
+        </div>`;
+    }
+
+    function iniciarSimulador() {
+      iniciou = true;
+      simProgress.style.display = "block";
+      renderPergunta();
+    }
+
+    function reiniciar() {
+      idx    = 0;
+      pontos = 0;
+      simProgress.style.display = "block";
+      renderPergunta();
+    }
+
+    // Inicializa com tela de início
+    renderInicio();
+
+    // Navbar scroll + hambúrguer (reutilizado do script.js)
+    const navbar    = document.getElementById("navbar");
+    const hamburger = document.getElementById("hamburger");
+    const navMenu   = document.getElementById("navMenu");
+
+    window.addEventListener("scroll", () => {
+      navbar.classList.toggle("scrolled", window.scrollY > 20);
+    });
+
+    hamburger.addEventListener("click", () => {
+      const open = navMenu.classList.toggle("open");
+      hamburger.classList.toggle("open", open);
+      hamburger.setAttribute("aria-expanded", open);
+    });
+  </script>
+</body>
+</html>

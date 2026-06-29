@@ -1,0 +1,927 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Notícias — GolpeZero</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    svg.ico { width: 1em; height: 1em; flex-shrink: 0; vertical-align: -0.125em; }
+
+    /* ===== NOTICIAS.HTML — estilos específicos ===== */
+
+    .noticias-page {
+      min-height: 100vh;
+      padding-top: 64px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Hero ── */
+    .noticias-hero {
+      background: linear-gradient(135deg, var(--color-bg) 0%, #0d1526 100%);
+      border-bottom: 1px solid rgba(37,99,235,0.12);
+      padding: var(--space-3xl) var(--space-lg) var(--space-2xl);
+      text-align: center;
+    }
+
+    .noticias-hero__badge {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-sm);
+      background: rgba(245,158,11,0.12);
+      border: 1px solid rgba(245,158,11,0.3);
+      color: #FBBF24;
+      font-size: 0.78rem;
+      font-weight: 600;
+      padding: var(--space-xs) var(--space-md);
+      border-radius: 999px;
+      margin-bottom: var(--space-lg);
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .noticias-hero__title {
+      font-size: clamp(1.8rem, 3.5vw, 2.6rem);
+      font-weight: 800;
+      color: var(--color-white);
+      margin-bottom: var(--space-md);
+    }
+
+    .noticias-hero__title span { color: #FBBF24; }
+
+    .noticias-hero__sub {
+      color: var(--color-gray-500);
+      font-size: 1rem;
+      max-width: 520px;
+      margin: 0 auto;
+      line-height: 1.7;
+    }
+
+    /* ── Toolbar ── */
+    .noticias-toolbar {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: var(--space-2xl) var(--space-lg) 0;
+      width: 100%;
+      display: flex;
+      gap: var(--space-md);
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .noticias-search {
+      position: relative;
+      flex: 1;
+      min-width: 220px;
+    }
+
+    .noticias-search__icon {
+      position: absolute;
+      left: 16px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 1rem;
+      pointer-events: none;
+    }
+
+    .noticias-search__input {
+      width: 100%;
+      background: var(--color-bg-card);
+      border: 1.5px solid rgba(37,99,235,0.2);
+      border-radius: var(--radius-lg);
+      padding: 13px 16px 13px 44px;
+      font-size: 0.95rem;
+      font-family: var(--font-main);
+      color: var(--color-white);
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .noticias-search__input::placeholder { color: var(--color-gray-500); }
+    .noticias-search__input:focus {
+      border-color: var(--color-primary);
+      box-shadow: 0 0 0 3px rgba(37,99,235,0.15);
+    }
+
+    .filtro-btn {
+      background: var(--color-bg-card);
+      border: 1.5px solid rgba(255,255,255,0.08);
+      color: var(--color-gray-300);
+      font-size: 0.82rem;
+      font-weight: 600;
+      padding: var(--space-sm) var(--space-md);
+      border-radius: 999px;
+      cursor: pointer;
+      font-family: var(--font-main);
+      transition: background 0.2s, border-color 0.2s, color 0.2s, transform 0.15s;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+    }
+
+    .filtro-btn:hover {
+      border-color: rgba(245,158,11,0.4);
+      color: var(--color-white);
+      transform: scale(1.03);
+    }
+
+    .filtro-btn.ativo {
+      background: rgba(245,158,11,0.12);
+      border-color: rgba(245,158,11,0.5);
+      color: #FBBF24;
+      box-shadow: 0 4px 14px rgba(245,158,11,0.12);
+    }
+
+    /* ── Layout principal ── */
+    .noticias-main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: var(--space-2xl) var(--space-lg) var(--space-3xl);
+      width: 100%;
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 320px;
+      gap: var(--space-2xl);
+      align-items: start;
+    }
+
+    /* ── Destaque (card grande) ── */
+    .noticia-destaque {
+      background: var(--color-bg-card);
+      border: 1px solid rgba(245,158,11,0.2);
+      border-radius: var(--radius-xl);
+      overflow: hidden;
+      margin-bottom: var(--space-xl);
+      transition: transform 0.2s, box-shadow 0.2s;
+      cursor: pointer;
+    }
+
+    .noticia-destaque:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 16px 40px rgba(0,0,0,0.3);
+    }
+
+    .noticia-destaque__img {
+      width: 100%;
+      height: 200px;
+      background: linear-gradient(135deg, #1a2540 0%, #0f172a 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 4rem;
+      border-bottom: 1px solid rgba(245,158,11,0.12);
+    }
+
+    .noticia-destaque__body { padding: var(--space-xl); }
+
+    .noticia-destaque__tags {
+      display: flex;
+      gap: var(--space-sm);
+      margin-bottom: var(--space-md);
+      flex-wrap: wrap;
+    }
+
+    .noticia-tag {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding: 3px 10px;
+      border-radius: 999px;
+    }
+
+    .noticia-tag--alerta  { background: rgba(239,68,68,0.12);  color: #F87171; }
+    .noticia-tag--golpe   { background: rgba(245,158,11,0.12); color: #FBBF24; }
+    .noticia-tag--dica    { background: rgba(34,197,94,0.12);  color: #4ADE80; }
+    .noticia-tag--fraude  { background: rgba(168,85,247,0.12); color: #C084FC; }
+
+    .noticia-destaque__titulo {
+      font-size: 1.3rem;
+      font-weight: 800;
+      color: var(--color-white);
+      line-height: 1.3;
+      margin-bottom: var(--space-md);
+    }
+
+    .noticia-destaque__resumo {
+      font-size: 0.92rem;
+      color: var(--color-gray-500);
+      line-height: 1.7;
+      margin-bottom: var(--space-lg);
+    }
+
+    .noticia-destaque__meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.8rem;
+      color: var(--color-gray-500);
+    }
+
+    .noticia-destaque__data { display: flex; align-items: center; gap: 6px; }
+
+    /* ── Lista de notícias ── */
+    .noticias-lista { display: flex; flex-direction: column; gap: var(--space-md); }
+
+    .card-noticia {
+      background: var(--color-bg-card);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: var(--radius-lg);
+      padding: var(--space-lg);
+      display: flex;
+      gap: var(--space-lg);
+      align-items: flex-start;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+    }
+
+    .card-noticia:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+      border-color: rgba(37,99,235,0.2);
+    }
+
+    .card-noticia__emoji {
+      width: 52px;
+      height: 52px;
+      border-radius: var(--radius-md);
+      background: var(--color-bg-elevated);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5rem;
+      flex-shrink: 0;
+    }
+
+    .card-noticia__body { flex: 1; }
+
+    .card-noticia__tags {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 6px;
+      flex-wrap: wrap;
+    }
+
+    .card-noticia__titulo {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: var(--color-white);
+      line-height: 1.4;
+      margin-bottom: 6px;
+    }
+
+    .card-noticia__resumo {
+      font-size: 0.82rem;
+      color: var(--color-gray-500);
+      line-height: 1.55;
+      margin-bottom: var(--space-sm);
+    }
+
+    .card-noticia__meta {
+      font-size: 0.75rem;
+      color: var(--color-gray-700);
+    }
+
+    /* ── Sidebar ── */
+    .noticias-sidebar { display: flex; flex-direction: column; gap: var(--space-lg); }
+
+    .sidebar-box {
+      background: var(--color-bg-card);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: var(--radius-lg);
+      padding: var(--space-lg);
+    }
+
+    .sidebar-box__titulo {
+      font-size: 0.8rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--color-gray-500);
+      margin-bottom: var(--space-lg);
+    }
+
+    /* Alertas rápidos */
+    .alerta-item {
+      display: flex;
+      gap: var(--space-md);
+      align-items: flex-start;
+      padding: var(--space-md) 0;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+
+    .alerta-item:last-child { border-bottom: none; padding-bottom: 0; }
+
+    .alerta-item__dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      margin-top: 5px;
+    }
+
+    .alerta-item__dot--vermelho { background: #F87171; box-shadow: 0 0 6px rgba(248,113,113,0.5); }
+    .alerta-item__dot--amarelo  { background: #FBBF24; box-shadow: 0 0 6px rgba(251,191,36,0.5); }
+    .alerta-item__dot--verde    { background: #4ADE80; box-shadow: 0 0 6px rgba(74,222,128,0.4); }
+
+    .alerta-item__texto {
+      font-size: 0.82rem;
+      color: var(--color-gray-300);
+      line-height: 1.5;
+    }
+
+    .alerta-item__data {
+      font-size: 0.72rem;
+      color: var(--color-gray-700);
+      margin-top: 2px;
+    }
+
+    /* Estatísticas */
+    .stat-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: var(--space-sm) 0;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+
+    .stat-item:last-child { border-bottom: none; }
+
+    .stat-item__label {
+      font-size: 0.82rem;
+      color: var(--color-gray-500);
+    }
+
+    .stat-item__valor {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: var(--color-white);
+    }
+
+    /* Sem resultados */
+    .sem-resultados {
+      text-align: center;
+      padding: var(--space-3xl);
+      color: var(--color-gray-500);
+    }
+
+    .sem-resultados__icon { font-size: 3rem; margin-bottom: var(--space-md); }
+
+    /* ── Modal ── */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.75);
+      backdrop-filter: blur(6px);
+      z-index: 200;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: var(--space-lg);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease;
+    }
+
+    .modal-overlay.aberto {
+      opacity: 1;
+      pointer-events: all;
+    }
+
+    .modal {
+      background: var(--color-bg-card);
+      border: 1px solid rgba(37,99,235,0.2);
+      border-radius: var(--radius-xl);
+      padding: var(--space-2xl);
+      max-width: 620px;
+      width: 100%;
+      max-height: 90vh;
+      overflow-y: auto;
+      transform: translateY(20px);
+      transition: transform 0.25s ease;
+      position: relative;
+    }
+
+    .modal-overlay.aberto .modal { transform: translateY(0); }
+
+    .modal__fechar {
+      position: absolute;
+      top: var(--space-md);
+      right: var(--space-md);
+      background: var(--color-bg-elevated);
+      border: none;
+      color: var(--color-gray-300);
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s;
+    }
+
+    .modal__fechar:hover { background: var(--color-gray-700); color: var(--color-white); }
+
+    .modal__emoji    { font-size: 3rem; margin-bottom: var(--space-md); }
+    .modal__titulo   { font-size: 1.3rem; font-weight: 800; color: var(--color-white); margin-bottom: var(--space-md); line-height: 1.3; }
+    .modal__tags     { display: flex; gap: var(--space-sm); margin-bottom: var(--space-lg); flex-wrap: wrap; }
+    .modal__conteudo { font-size: 0.92rem; color: var(--color-gray-300); line-height: 1.8; margin-bottom: var(--space-lg); }
+    .modal__conteudo p { margin-bottom: var(--space-md); }
+    .modal__meta     { font-size: 0.8rem; color: var(--color-gray-700); border-top: 1px solid rgba(255,255,255,0.06); padding-top: var(--space-md); }
+
+    /* ── Responsivo ── */
+    @media (max-width: 900px) {
+      .noticias-main { grid-template-columns: 1fr; }
+      .noticias-sidebar { display: grid; grid-template-columns: repeat(2, 1fr); }
+    }
+
+    @media (max-width: 580px) {
+      .noticias-sidebar { grid-template-columns: 1fr; }
+      .card-noticia { flex-direction: column; }
+      .noticias-toolbar { flex-direction: column; align-items: stretch; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- NAVBAR -->
+  <header class="navbar" id="navbar">
+    <div class="navbar__container">
+      <a href="index.html" class="navbar__logo">
+        <span class="navbar__logo-icon"><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M12 2.5L4.5 5.5V11.2C4.5 16.1 7.5 19.9 12 21.5C16.5 19.9 19.5 16.1 19.5 11.2V5.5L12 2.5Z'/><path d='M9 12L11.2 14.2L15.5 9.5'/></svg></span>
+        Golpe<span class="navbar__logo-accent">Zero</span>
+      </a>
+      <nav class="navbar__menu" id="navMenu">
+        <a href="index.html"     class="navbar__link">Home</a>
+        <a href="golpes.html"    class="navbar__link">Tipos de Golpes</a>
+        <a href="simulador.html" class="navbar__link">Simulador</a>
+        <a href="dicas.html"     class="navbar__link">Dicas de Segurança</a>
+        <a href="noticias.html"  class="navbar__link active">Notícias</a>
+        <a href="faq.html"       class="navbar__link">FAQ</a>
+        <a href="contato.html"   class="navbar__link navbar__link--cta">Contato</a>
+      </nav>
+      <button class="navbar__hamburger" id="hamburger" aria-label="Abrir menu" aria-expanded="false">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </header>
+
+  <div class="noticias-page">
+
+    <!-- HERO -->
+    <section class="noticias-hero">
+      <span class="noticias-hero__badge"><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><rect x='3' y='5' width='14' height='15' rx='1.5'/><line x1='6' y1='8.5' x2='14' y2='8.5'/><line x1='6' y1='11.5' x2='14' y2='11.5'/><line x1='6' y1='14.5' x2='11' y2='14.5'/><path d='M17 8.5h3v9a2 2 0 0 1-2 2H6'/></svg> Alertas e atualizações</span>
+      <h1 class="noticias-hero__title">Notícias e <span>Alertas de Golpes</span></h1>
+      <p class="noticias-hero__sub">
+        Fique por dentro dos golpes mais recentes, alertas de segurança
+        e orientações para se proteger.
+      </p>
+    </section>
+
+    <!-- TOOLBAR -->
+    <div class="noticias-toolbar">
+      <div class="noticias-search">
+        <span class="noticias-search__icon"><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><circle cx='10.5' cy='10.5' r='6.5'/><line x1='15.3' y1='15.3' x2='20' y2='20'/></svg></span>
+        <input
+          type="text"
+          id="campoPesquisa"
+          class="noticias-search__input"
+          placeholder="Buscar notícia..."
+          autocomplete="off"
+        />
+      </div>
+      <div id="filtros" style="display:flex;gap:8px;flex-wrap:wrap;"></div>
+    </div>
+
+    <!-- CONTEÚDO -->
+    <main class="noticias-main">
+
+      <!-- Coluna principal -->
+      <div>
+        <div id="destaqueContainer"></div>
+        <div class="noticias-lista" id="noticiasList"></div>
+        <div id="semResultados" style="display:none;" class="sem-resultados">
+          <div class="sem-resultados__icon"><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><rect x='3' y='6.5' width='18' height='13' rx='1.5'/><path d='M3 7.5l9 6 9-6' stroke-dasharray='2 2.4'/></svg></div>
+          <p>Nenhuma notícia encontrada.</p>
+        </div>
+      </div>
+
+      <!-- Sidebar -->
+      <aside class="noticias-sidebar">
+
+        <!-- Alertas rápidos -->
+        <div class="sidebar-box fade-in">
+          <p class="sidebar-box__titulo"><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M12 3a4 4 0 0 1 4 4v3H8V7a4 4 0 0 1 4-4Z'/><line x1='6' y1='14' x2='18' y2='14'/><path d='M7 14l-1 7h12l-1-7'/><line x1='12' y1='3' x2='12' y2='1.2'/><line x1='6.5' y1='5' x2='5.2' y2='3.7'/><line x1='17.5' y1='5' x2='18.8' y2='3.7'/></svg> Alertas Rápidos</p>
+          <div class="alerta-item">
+            <div class="alerta-item__dot alerta-item__dot--vermelho"></div>
+            <div>
+              <p class="alerta-item__texto">Novo golpe se passa pela Receita Federal via WhatsApp</p>
+              <p class="alerta-item__data">Hoje</p>
+            </div>
+          </div>
+          <div class="alerta-item">
+            <div class="alerta-item__dot alerta-item__dot--amarelo"></div>
+            <div>
+              <p class="alerta-item__texto">Phishing imitando grandes bancos aumentou 40% em 2025</p>
+              <p class="alerta-item__data">Esta semana</p>
+            </div>
+          </div>
+          <div class="alerta-item">
+            <div class="alerta-item__dot alerta-item__dot--amarelo"></div>
+            <div>
+              <p class="alerta-item__texto">Golpe do emprego falso atinge mais jovens de 18 a 30 anos</p>
+              <p class="alerta-item__data">Esta semana</p>
+            </div>
+          </div>
+          <div class="alerta-item">
+            <div class="alerta-item__dot alerta-item__dot--verde"></div>
+            <div>
+              <p class="alerta-item__texto">Banco Central atualiza limite de transferência PIX noturno</p>
+              <p class="alerta-item__data">Este mês</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Estatísticas -->
+        <div class="sidebar-box fade-in">
+          <p class="sidebar-box__titulo"><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><line x1='4' y1='20' x2='20' y2='20'/><rect x='6' y='13' width='3' height='7'/><rect x='11' y='9' width='3' height='11'/><rect x='16' y='5' width='3' height='15'/></svg> Golpes em Números</p>
+          <div class="stat-item">
+            <span class="stat-item__label">Vítimas em 2024</span>
+            <span class="stat-item__valor">+8,4 mi</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-item__label">Prejuízo total</span>
+            <span class="stat-item__valor">R$ 10 bi</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-item__label">Golpe mais comum</span>
+            <span class="stat-item__valor">Phishing</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-item__label">Canal preferido</span>
+            <span class="stat-item__valor">WhatsApp</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-item__label">Faixa mais afetada</span>
+            <span class="stat-item__valor">40–60 anos</span>
+          </div>
+        </div>
+
+        <!-- Banner simulador -->
+        <div class="sidebar-box fade-in" style="background: rgba(37,99,235,0.08); border-color: rgba(37,99,235,0.2); text-align:center;">
+          <div style="font-size:2rem;margin-bottom:12px;"><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='8.5'/><circle cx='12' cy='12' r='5'/><circle cx='12' cy='12' r='1.4' fill='currentColor' stroke='none'/></svg></div>
+          <p style="font-size:0.95rem;font-weight:700;color:var(--color-white);margin-bottom:8px;">Teste seu preparo</p>
+          <p style="font-size:0.82rem;color:var(--color-gray-500);margin-bottom:16px;line-height:1.6;">Você reconheceria esses golpes na prática?</p>
+          <a href="simulador.html" class="btn btn--primary" style="width:100%;justify-content:center;font-size:0.88rem;">
+            Abrir Simulador →
+          </a>
+        </div>
+
+      </aside>
+    </main>
+
+  </div>
+
+  <!-- MODAL -->
+  <div class="modal-overlay" id="modalOverlay" role="dialog" aria-modal="true">
+    <div class="modal">
+      <button class="modal__fechar" id="modalFechar" aria-label="Fechar">✕</button>
+      <div id="modalBody"></div>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <footer class="footer">
+    <div class="footer__container">
+      <div class="footer__brand">
+        <span class="navbar__logo" style="margin-bottom:12px;display:inline-flex;">
+          <svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M12 2.5L4.5 5.5V11.2C4.5 16.1 7.5 19.9 12 21.5C16.5 19.9 19.5 16.1 19.5 11.2V5.5L12 2.5Z'/><path d='M9 12L11.2 14.2L15.5 9.5'/></svg> Golpe<span class="navbar__logo-accent">Zero</span>
+        </span>
+        <p class="footer__desc">
+          O GolpeZero é uma iniciativa educacional criada para conscientizar
+          usuários da internet sobre golpes digitais e promover boas práticas de segurança online.
+        </p>
+      </div>
+      <div class="footer__links">
+        <h4>Navegação</h4>
+        <a href="golpes.html">Tipos de Golpes</a>
+        <a href="simulador.html">Simulador</a>
+        <a href="dicas.html">Dicas de Segurança</a>
+        <a href="noticias.html">Notícias</a>
+        <a href="faq.html">FAQ</a>
+        <a href="contato.html">Contato</a>
+      </div>
+      <div class="footer__links">
+        <h4>Sobre</h4>
+        <a href="#">Projeto de TCC</a>
+        <a href="#">Missão</a>
+      </div>
+    </div>
+    <div class="footer__bottom">
+      <p>© 2025 GolpeZero — Projeto Educativo. Todos os direitos reservados.</p>
+    </div>
+  </footer>
+
+  <script>
+    // ══════════════════════════════════════════
+    //  NOTICIAS.HTML — script
+    // ══════════════════════════════════════════
+
+    // ── 1. DADOS ──
+    const noticias = [
+      {
+        id: 1,
+        emoji: "<svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M12 3a4 4 0 0 1 4 4v3H8V7a4 4 0 0 1 4-4Z'/><line x1='6' y1='14' x2='18' y2='14'/><path d='M7 14l-1 7h12l-1-7'/><line x1='12' y1='3' x2='12' y2='1.2'/><line x1='6.5' y1='5' x2='5.2' y2='3.7'/><line x1='17.5' y1='5' x2='18.8' y2='3.7'/></svg>",
+        destaque: true,
+        tag: "alerta",
+        tagLabel: "Alerta",
+        categoria: "Alerta",
+        titulo: "Golpistas usam IA para clonar vozes e enganar familiares",
+        resumo: "Uma nova onda de golpes utiliza inteligência artificial para imitar a voz de parentes e pedir transferências urgentes. A tecnologia permite copiar a voz com apenas alguns segundos de áudio.",
+        conteudo: [
+          "Uma nova modalidade de fraude está preocupando especialistas em segurança digital no Brasil. Golpistas estão utilizando ferramentas de inteligência artificial para clonar vozes de pessoas reais e entrar em contato com seus familiares pedindo dinheiro com urgência.",
+          "A tecnologia de clonagem de voz, antes restrita a laboratórios, tornou-se acessível e pode reproduzir a voz de alguém com poucos segundos de áudio — facilmente obtidos de stories do Instagram, vídeos no TikTok ou chamadas gravadas.",
+          "O golpe funciona assim: a vítima recebe uma ligação de um número desconhecido. A voz do outro lado parece ser de um filho, sobrinho ou cônjuge em uma situação de emergência — acidente de carro, prisão ou hospitalização. Em pânico, a vítima faz a transferência sem questionar.",
+          "Para se proteger, especialistas recomendam criar uma palavra-código secreta com familiares para confirmar identidade em situações de emergência. Desconfie sempre de ligações pedindo dinheiro com urgência, mesmo que a voz pareça familiar."
+        ],
+        data: "12 jun 2025",
+        leitura: "4 min"
+      },
+      {
+        id: 2,
+        emoji: "<svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><rect x='2.5' y='5.5' width='19' height='13' rx='2'/><line x1='2.5' y1='9.5' x2='21.5' y2='9.5'/><line x1='6' y1='15' x2='10' y2='15'/></svg>",
+        destaque: false,
+        tag: "golpe",
+        tagLabel: "Golpe",
+        categoria: "Golpe",
+        titulo: "Fraude com Pix cresce 60% no primeiro semestre de 2025",
+        resumo: "Relatório do Banco Central aponta aumento expressivo nas tentativas de fraude via Pix, com foco em golpes de engenharia social e comprovantes falsos.",
+        conteudo: [
+          "O Banco Central divulgou relatório apontando crescimento de 60% nas tentativas de fraude via Pix no primeiro semestre de 2025 em comparação ao mesmo período do ano anterior.",
+          "Os golpes mais comuns envolvem comprovantes de pagamento falsos, onde o golpista simula ter feito uma transferência e pede a entrega de um produto ou serviço antes do dinheiro cair na conta.",
+          "Outra modalidade frequente é a do 'Pix errado', em que o golpista transfere um valor para a vítima e depois pede a devolução, mas o valor original some por estorno fraudulento.",
+          "O Banco Central reforça que comprovantes de Pix podem ser facilmente falsificados e que a única confirmação válida é verificar diretamente no extrato do banco."
+        ],
+        data: "10 jun 2025",
+        leitura: "3 min"
+      },
+      {
+        id: 3,
+        emoji: "<svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><rect x='6.5' y='2.5' width='11' height='19' rx='2.2'/><line x1='10' y1='19' x2='14' y2='19'/></svg>",
+        destaque: false,
+        tag: "alerta",
+        tagLabel: "Alerta",
+        categoria: "Alerta",
+        titulo: "Novo golpe do WhatsApp mira usuários de marketplace",
+        resumo: "Criminosos criam perfis falsos em plataformas de venda e migram a conversa para o WhatsApp para aplicar golpes fora do ambiente protegido.",
+        conteudo: [
+          "Uma nova variante do golpe do marketplace está circulando no Brasil. Golpistas criam anúncios atrativos em plataformas como OLX e Facebook Marketplace e rapidamente sugerem continuar a negociação pelo WhatsApp.",
+          "Fora da plataforma, o comprador perde toda a proteção oferecida pelo marketplace e fica vulnerável a fraudes de pagamento, produtos que nunca chegam e links de phishing enviados durante a conversa.",
+          "A recomendação de segurança é clara: nunca migre a negociação para fora da plataforma. Vendedores legítimos não têm motivo para isso. Se insistir em WhatsApp, desconfie."
+        ],
+        data: "08 jun 2025",
+        leitura: "3 min"
+      },
+      {
+        id: 4,
+        emoji: "<svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M3 9.5L12 4l9 5.5'/><line x1='4' y1='9.5' x2='20' y2='9.5'/><line x1='6' y1='10.5' x2='6' y2='18'/><line x1='10' y1='10.5' x2='10' y2='18'/><line x1='14' y1='10.5' x2='14' y2='18'/><line x1='18' y1='10.5' x2='18' y2='18'/><line x1='4' y1='19' x2='20' y2='19'/></svg>",
+        destaque: false,
+        tag: "alerta",
+        tagLabel: "Alerta",
+        categoria: "Alerta",
+        titulo: "Falsos funcionários de banco ligam pedindo cartão pelos Correios",
+        resumo: "Modalidade de golpe antigo voltou com força: golpistas ligam se passando por banco e convencem vítimas a entregar cartões a 'motoboys' enviados pela instituição.",
+        conteudo: [
+          "O golpe do falso motoboy bancário voltou a crescer no Brasil, especialmente entre pessoas com mais de 50 anos. O criminoso liga se passando por um funcionário do banco, informa que o cartão foi clonado e pede que a vítima o destrua ou entregue a um 'motoboy do banco'.",
+          "Em nenhuma hipótese um banco real envia motoboy para recolher cartão. Ao receber esse tipo de ligação, desligue e entre em contato com o número oficial do banco impresso no verso do seu cartão.",
+          "Caso a ligação pareça suspeita mas convincente, ligue para um familiar antes de tomar qualquer ação. O senso de urgência criado pelo golpista é proposital para impedir que você pense com calma."
+        ],
+        data: "05 jun 2025",
+        leitura: "3 min"
+      },
+      {
+        id: 5,
+        emoji: "<svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><rect x='3' y='8' width='18' height='11.5' rx='1.8'/><path d='M8.5 8V6.2A1.7 1.7 0 0 1 10.2 4.5h3.6A1.7 1.7 0 0 1 15.5 6.2V8'/><line x1='3' y1='13' x2='21' y2='13'/></svg>",
+        destaque: false,
+        tag: "golpe",
+        tagLabel: "Golpe",
+        categoria: "Golpe",
+        titulo: "Golpe do emprego falso no LinkedIn atinge profissionais de TI",
+        resumo: "Recrutadores falsos no LinkedIn oferecem vagas atrativas, pedem documentos pessoais e cobram taxas de 'cadastro' ou 'uniformes' antes da contratação.",
+        conteudo: [
+          "Profissionais de tecnologia da informação estão sendo alvos de uma onda de golpes de emprego falso no LinkedIn. Perfis falsos de recrutadores entram em contato com ofertas tentadoras, geralmente com salários acima da média e trabalho remoto.",
+          "Após algumas trocas de mensagens e uma falsa entrevista por WhatsApp, o golpista solicita documentos pessoais e cobra uma taxa de 'cadastro no sistema', 'uniforme' ou 'curso obrigatório'.",
+          "Empresas sérias nunca cobram nada do candidato antes da contratação. Verifique o CNPJ da empresa na Receita Federal e pesquise o nome no Google antes de enviar qualquer documento ou dinheiro."
+        ],
+        data: "02 jun 2025",
+        leitura: "4 min"
+      },
+      {
+        id: 6,
+        emoji: "<svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M12 2.5L4.5 5.5V11.2C4.5 16.1 7.5 19.9 12 21.5C16.5 19.9 19.5 16.1 19.5 11.2V5.5L12 2.5Z'/><path d='M9 12L11.2 14.2L15.5 9.5'/></svg>",
+        destaque: false,
+        tag: "dica",
+        tagLabel: "Dica",
+        categoria: "Dica",
+        titulo: "Banco Central lança guia de proteção contra fraudes digitais",
+        resumo: "Cartilha gratuita do Bacen orienta consumidores sobre como identificar fraudes bancárias, configurar limites de segurança e agir em caso de golpe.",
+        conteudo: [
+          "O Banco Central do Brasil lançou uma cartilha gratuita de proteção contra fraudes digitais voltada ao consumidor comum. O material aborda os golpes mais comuns no ambiente bancário digital e ensina medidas preventivas simples.",
+          "Entre as recomendações estão: configurar limites de transferência PIX para período noturno, ativar notificações em tempo real no app do banco e nunca compartilhar senhas ou tokens de segurança.",
+          "A cartilha está disponível gratuitamente no site do Banco Central (bcb.gov.br) e pode ser baixada em PDF. O material também está disponível em versão acessível para pessoas com deficiência visual."
+        ],
+        data: "28 mai 2025",
+        leitura: "2 min"
+      },
+      {
+        id: 7,
+        emoji: "<svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M12 20.5l-1.4-1.3C5.4 14.6 2.5 12 2.5 8.6 2.5 5.8 4.7 3.5 7.4 3.5c1.5 0 2.9.7 3.6 1.9.7-1.2 2.1-1.9 3.6-1.9 2.7 0 4.9 2.3 4.9 5.1 0 3.4-2.9 6-7.1 10.6L12 20.5Z'/></svg>",
+        destaque: false,
+        tag: "fraude",
+        tagLabel: "Fraude",
+        categoria: "Fraude",
+        titulo: "Golpe romântico causa prejuízo médio de R$ 12 mil por vítima",
+        resumo: "Levantamento aponta aumento de 35% nos casos de romance scam no Brasil, com vítimas sendo manipuladas emocionalmente por meses antes de perder dinheiro.",
+        conteudo: [
+          "O chamado 'romance scam' — golpe romântico — registrou aumento de 35% no Brasil em 2025, segundo dados compilados por institutos de segurança digital. O prejuízo médio por vítima chegou a R$ 12 mil.",
+          "O golpe começa em apps de relacionamento ou redes sociais. O golpista cria um perfil atraente, geralmente de alguém bem-sucedido vivendo no exterior. Ao longo de semanas ou meses, cria um vínculo emocional forte com a vítima.",
+          "Quando a confiança está estabelecida, surgem pedidos de dinheiro: emergência médica, passagem para vir ao Brasil, investimento em oportunidade imperdível. As vítimas raramente percebem o golpe enquanto estão envolvidas emocionalmente.",
+          "Para verificar suspeitas, faça uma busca reversa das fotos do perfil usando o Google Imagens. Fotos roubadas de modelos ou militares são comuns nesses perfis."
+        ],
+        data: "24 mai 2025",
+        leitura: "5 min"
+      }
+    ];
+
+    // ── 2. CATEGORIAS ──
+    const categorias = ["Todos", "Alerta", "Golpe", "Fraude", "Dica"];
+    const iconesCat  = { "Todos":"<svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><circle cx='10.5' cy='10.5' r='6.5'/><line x1='15.3' y1='15.3' x2='20' y2='20'/></svg>", "Alerta":"<svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M12 3a4 4 0 0 1 4 4v3H8V7a4 4 0 0 1 4-4Z'/><line x1='6' y1='14' x2='18' y2='14'/><path d='M7 14l-1 7h12l-1-7'/><line x1='12' y1='3' x2='12' y2='1.2'/><line x1='6.5' y1='5' x2='5.2' y2='3.7'/><line x1='17.5' y1='5' x2='18.8' y2='3.7'/></svg>", "Golpe":"<svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M12 3L2 20h20L12 3z'/><line x1='12' y1='9' x2='12' y2='13.5'/><line x1='12' y1='16.6' x2='12' y2='17'/></svg>", "Fraude":"<svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='7' fill='currentColor' stroke='none'/></svg>", "Dica":"<svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='9'/><path d='M7.5 12.5l3 3 6-6.5'/></svg>" };
+    let catAtiva     = "Todos";
+    let termoBusca   = "";
+
+    // ── 3. FILTRAR ──
+    function filtrar() {
+      return noticias.filter(n => {
+        const matchCat  = catAtiva === "Todos" || n.categoria === catAtiva;
+        const termo     = termoBusca.toLowerCase().trim();
+        const matchBusca = !termo ||
+          n.titulo.toLowerCase().includes(termo) ||
+          n.resumo.toLowerCase().includes(termo);
+        return matchCat && matchBusca;
+      });
+    }
+
+    // ── 4. RENDER FILTROS ──
+    function renderFiltros() {
+      document.getElementById("filtros").innerHTML = categorias.map(c => `
+        <button class="filtro-btn ${c === catAtiva ? "ativo" : ""}" onclick="filtrarCat('${c}')">
+          ${iconesCat[c]} ${c}
+        </button>
+      `).join("");
+    }
+
+    function filtrarCat(c) {
+      catAtiva = c;
+      renderFiltros();
+      renderNoticias();
+    }
+
+    // ── 5. RENDER NOTÍCIAS ──
+    function renderNoticias() {
+      const resultado   = filtrar();
+      const destaque    = resultado.find(n => n.destaque);
+      const resto       = resultado.filter(n => !n.destaque);
+      const destaqueDiv = document.getElementById("destaqueContainer");
+      const listaDiv    = document.getElementById("noticiasList");
+      const semDiv      = document.getElementById("semResultados");
+
+      if (resultado.length === 0) {
+        destaqueDiv.innerHTML = "";
+        listaDiv.innerHTML    = "";
+        semDiv.style.display  = "block";
+        return;
+      }
+
+      semDiv.style.display = "none";
+
+      // Card destaque
+      if (destaque && catAtiva === "Todos" && !termoBusca) {
+        destaqueDiv.innerHTML = `
+          <div class="noticia-destaque fade-in" onclick="abrirModal(${destaque.id})">
+            <div class="noticia-destaque__img">${destaque.emoji}</div>
+            <div class="noticia-destaque__body">
+              <div class="noticia-destaque__tags">
+                <span class="noticia-tag noticia-tag--${destaque.tag}">${destaque.tagLabel}</span>
+                <span class="noticia-tag" style="background:rgba(37,99,235,0.1);color:var(--color-primary-light);">Em destaque</span>
+              </div>
+              <h2 class="noticia-destaque__titulo">${destaque.titulo}</h2>
+              <p class="noticia-destaque__resumo">${destaque.resumo}</p>
+              <div class="noticia-destaque__meta">
+                <span class="noticia-destaque__data"><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><rect x='3' y='5' width='18' height='16' rx='2'/><line x1='3' y1='9.5' x2='21' y2='9.5'/><line x1='8' y1='3' x2='8' y2='7'/><line x1='16' y1='3' x2='16' y2='7'/></svg> ${destaque.data}</span>
+                <span><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='13' r='8'/><line x1='12' y1='13' x2='12' y2='8.5'/><line x1='12' y1='13' x2='15' y2='14.5'/><line x1='9' y1='2.5' x2='15' y2='2.5'/><line x1='12' y1='2.5' x2='12' y2='5'/></svg> ${destaque.leitura} de leitura</span>
+              </div>
+            </div>
+          </div>`;
+      } else {
+        destaqueDiv.innerHTML = "";
+      }
+
+      // Lista
+      const listaItens = (destaque && catAtiva === "Todos" && !termoBusca) ? resto : resultado;
+
+      listaDiv.innerHTML = listaItens.map((n, i) => `
+        <div class="card-noticia fade-in" style="animation-delay:${i * 60}ms" onclick="abrirModal(${n.id})">
+          <div class="card-noticia__emoji">${n.emoji}</div>
+          <div class="card-noticia__body">
+            <div class="card-noticia__tags">
+              <span class="noticia-tag noticia-tag--${n.tag}">${n.tagLabel}</span>
+            </div>
+            <h3 class="card-noticia__titulo">${n.titulo}</h3>
+            <p class="card-noticia__resumo">${n.resumo}</p>
+            <span class="card-noticia__meta"><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><rect x='3' y='5' width='18' height='16' rx='2'/><line x1='3' y1='9.5' x2='21' y2='9.5'/><line x1='8' y1='3' x2='8' y2='7'/><line x1='16' y1='3' x2='16' y2='7'/></svg> ${n.data} · <svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='13' r='8'/><line x1='12' y1='13' x2='12' y2='8.5'/><line x1='12' y1='13' x2='15' y2='14.5'/><line x1='9' y1='2.5' x2='15' y2='2.5'/><line x1='12' y1='2.5' x2='12' y2='5'/></svg> ${n.leitura} de leitura</span>
+          </div>
+        </div>
+      `).join("");
+
+      requestAnimationFrame(() => {
+        document.querySelectorAll(".fade-in").forEach(el => el.classList.add("visible"));
+      });
+    }
+
+    // ── 6. MODAL ──
+    function abrirModal(id) {
+      const n = noticias.find(n => n.id === id);
+      if (!n) return;
+
+      document.getElementById("modalBody").innerHTML = `
+        <div class="modal__emoji">${n.emoji}</div>
+        <div class="modal__tags">
+          <span class="noticia-tag noticia-tag--${n.tag}">${n.tagLabel}</span>
+        </div>
+        <h2 class="modal__titulo">${n.titulo}</h2>
+        <div class="modal__conteudo">
+          ${n.conteudo.map(p => `<p>${p}</p>`).join("")}
+        </div>
+        <div class="modal__meta"><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><rect x='3' y='5' width='18' height='16' rx='2'/><line x1='3' y1='9.5' x2='21' y2='9.5'/><line x1='8' y1='3' x2='8' y2='7'/><line x1='16' y1='3' x2='16' y2='7'/></svg> ${n.data} &nbsp;·&nbsp; <svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='13' r='8'/><line x1='12' y1='13' x2='12' y2='8.5'/><line x1='12' y1='13' x2='15' y2='14.5'/><line x1='9' y1='2.5' x2='15' y2='2.5'/><line x1='12' y1='2.5' x2='12' y2='5'/></svg> ${n.leitura} de leitura &nbsp;·&nbsp; GolpeZero Educativo</div>
+      `;
+
+      document.getElementById("modalOverlay").classList.add("aberto");
+      document.body.style.overflow = "hidden";
+    }
+
+    function fecharModal() {
+      document.getElementById("modalOverlay").classList.remove("aberto");
+      document.body.style.overflow = "";
+    }
+
+    document.getElementById("modalFechar").addEventListener("click", fecharModal);
+    document.getElementById("modalOverlay").addEventListener("click", e => {
+      if (e.target === document.getElementById("modalOverlay")) fecharModal();
+    });
+    document.addEventListener("keydown", e => { if (e.key === "Escape") fecharModal(); });
+
+    // ── 7. PESQUISA ──
+    document.getElementById("campoPesquisa").addEventListener("input", e => {
+      termoBusca = e.target.value;
+      renderNoticias();
+    });
+
+    // ── 8. FADE-IN ──
+    function initFadeIn() {
+      const obs = new IntersectionObserver(entries => {
+        entries.forEach(e => {
+          if (e.isIntersecting) { e.target.classList.add("visible"); obs.unobserve(e.target); }
+        });
+      }, { threshold: 0.1 });
+      document.querySelectorAll(".fade-in").forEach(el => obs.observe(el));
+    }
+
+    // ── 9. NAVBAR ──
+    const navbar    = document.getElementById("navbar");
+    const hamburger = document.getElementById("hamburger");
+    const navMenu   = document.getElementById("navMenu");
+
+    window.addEventListener("scroll", () => {
+      navbar.classList.toggle("scrolled", window.scrollY > 20);
+    });
+
+    hamburger.addEventListener("click", () => {
+      const open = navMenu.classList.toggle("open");
+      hamburger.classList.toggle("open", open);
+      hamburger.setAttribute("aria-expanded", open);
+    });
+
+    // ── 10. INIT ──
+    renderFiltros();
+    renderNoticias();
+    initFadeIn();
+  </script>
+
+</body>
+</html>

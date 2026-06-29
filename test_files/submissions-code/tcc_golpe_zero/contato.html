@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Contato – GolpeZero</title>
+  <style>
+    svg.ico { width: 1em; height: 1em; flex-shrink: 0; vertical-align: -0.125em; }
+
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --surface-2: #1f2937;
+      --border: #30363d;
+      --accent: #2563eb;
+      --accent-light: #3b82f6;
+      --accent-glow: rgba(37,99,235,0.15);
+      --green: #16a34a;
+      --green-light: #22c55e;
+      --green-glow: rgba(22,163,74,0.12);
+      --yellow: #d97706;
+      --red: #dc2626;
+      --text: #e6edf3;
+      --text-muted: #8b949e;
+      --text-dim: #6e7681;
+      --radius: 12px;
+      --radius-sm: 8px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+
+    /* ── NAV ── */
+    nav {
+      background: rgba(13,17,23,0.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .nav-logo {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--text);
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .nav-logo .logo-icon {
+      width: 32px; height: 32px;
+      background: var(--accent);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1rem;
+    }
+    .nav-links { display: flex; gap: 4px; list-style: none; }
+    .nav-links a {
+      color: var(--text-muted);
+      text-decoration: none;
+      padding: 6px 12px;
+      border-radius: var(--radius-sm);
+      font-size: 0.875rem;
+      transition: color 0.2s, background 0.2s;
+    }
+    .nav-links a:hover { color: var(--text); background: var(--surface); }
+    .nav-links a.active { color: var(--accent-light); background: var(--accent-glow); }
+
+    /* ── HERO ── */
+    .hero {
+      background: linear-gradient(135deg, #0d1117 0%, #1a1f2e 50%, #0d1117 100%);
+      border-bottom: 1px solid var(--border);
+      padding: 72px 24px 56px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: -60px; left: 50%;
+      transform: translateX(-50%);
+      width: 500px; height: 300px;
+      background: radial-gradient(ellipse, rgba(37,99,235,0.12) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--accent-glow);
+      border: 1px solid rgba(37,99,235,0.35);
+      color: var(--accent-light);
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 5px 14px;
+      border-radius: 99px;
+      margin-bottom: 20px;
+    }
+    .hero h1 {
+      font-size: clamp(2rem, 5vw, 3rem);
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 16px;
+      line-height: 1.1;
+    }
+    .hero h1 span { color: var(--accent-light); }
+    .hero p {
+      color: var(--text-muted);
+      font-size: 1.05rem;
+      max-width: 520px;
+      margin: 0 auto;
+    }
+
+    /* ── LAYOUT ── */
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 64px 24px 80px;
+      display: grid;
+      grid-template-columns: 1fr 380px;
+      gap: 48px;
+      align-items: start;
+    }
+
+    /* ── FORM CARD ── */
+    .form-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 36px;
+    }
+    .form-card h2 {
+      font-size: 1.2rem;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+    .form-card .subtitle {
+      color: var(--text-muted);
+      font-size: 0.875rem;
+      margin-bottom: 28px;
+    }
+
+    /* ── ASSUNTO TABS ── */
+    .assunto-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 28px;
+    }
+    .assunto-btn {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 14px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--surface-2);
+      color: var(--text-muted);
+      font-size: 0.82rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: left;
+    }
+    .assunto-btn:hover { border-color: var(--accent); color: var(--text); }
+    .assunto-btn.selected {
+      border-color: var(--accent);
+      background: var(--accent-glow);
+      color: var(--text);
+    }
+    .assunto-btn .icon {
+      font-size: 1.1rem;
+      flex-shrink: 0;
+    }
+
+    /* ── FIELDS ── */
+    .field-group { display: flex; flex-direction: column; gap: 20px; }
+
+    .field { display: flex; flex-direction: column; gap: 6px; }
+    .field label {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .field label .required { color: var(--accent-light); margin-left: 2px; }
+
+    .field input,
+    .field select,
+    .field textarea {
+      width: 100%;
+      padding: 12px 14px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      font-size: 0.9rem;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      resize: none;
+    }
+    .field input:focus,
+    .field select:focus,
+    .field textarea:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+    .field input::placeholder,
+    .field textarea::placeholder { color: var(--text-dim); }
+    .field select { cursor: pointer; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%238b949e' d='M1 1l5 5 5-5'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; padding-right: 36px; }
+    .field select option { background: #1f2937; }
+
+    .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+    /* char counter */
+    .field-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 4px;
+    }
+    .field-hint { font-size: 0.75rem; color: var(--text-dim); }
+    .char-count { font-size: 0.75rem; color: var(--text-dim); }
+    .char-count.warn { color: var(--yellow); }
+
+    /* file upload */
+    .file-drop {
+      border: 1.5px dashed var(--border);
+      border-radius: var(--radius-sm);
+      padding: 24px 16px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      position: relative;
+    }
+    .file-drop:hover, .file-drop.drag { border-color: var(--accent); background: var(--accent-glow); }
+    .file-drop input[type="file"] {
+      position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+    }
+    .file-icon { font-size: 1.6rem; margin-bottom: 8px; }
+    .file-drop p { font-size: 0.82rem; color: var(--text-muted); }
+    .file-drop p strong { color: var(--text); }
+    .file-list { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
+    .file-chip {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+    }
+    .file-chip button {
+      background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 1rem; line-height: 1;
+      transition: color 0.2s;
+    }
+    .file-chip button:hover { color: var(--red); }
+
+    /* privacy check */
+    .privacy-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 14px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+    }
+    .privacy-row input[type="checkbox"] {
+      width: 16px; height: 16px;
+      margin-top: 2px;
+      flex-shrink: 0;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+    .privacy-row label {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      cursor: pointer;
+      text-transform: none;
+      letter-spacing: 0;
+      font-weight: 400;
+    }
+    .privacy-row label a { color: var(--accent-light); }
+
+    /* submit button */
+    .btn-submit {
+      width: 100%;
+      padding: 14px;
+      background: var(--accent);
+      border: none;
+      border-radius: var(--radius-sm);
+      color: #fff;
+      font-size: 0.95rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .btn-submit:hover:not(:disabled) {
+      background: var(--accent-light);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 16px rgba(37,99,235,0.35);
+    }
+    .btn-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-submit.loading { pointer-events: none; }
+
+    /* spinner */
+    .spinner {
+      width: 16px; height: 16px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── SUCCESS STATE ── */
+    .success-state {
+      display: none;
+      text-align: center;
+      padding: 48px 24px;
+    }
+    .success-state.visible { display: block; }
+    .success-icon {
+      width: 72px; height: 72px;
+      background: var(--green-glow);
+      border: 2px solid rgba(22,163,74,0.35);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2rem;
+      margin: 0 auto 20px;
+    }
+    .success-state h3 { font-size: 1.3rem; font-weight: 700; margin-bottom: 10px; }
+    .success-state p { color: var(--text-muted); font-size: 0.9rem; max-width: 320px; margin: 0 auto 24px; }
+    .btn-reset {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 22px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-reset:hover { border-color: var(--accent); color: var(--text); }
+
+    /* ── SIDEBAR ── */
+    .sidebar { display: flex; flex-direction: column; gap: 16px; }
+
+    .info-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+    }
+    .info-card h3 {
+      font-size: 0.9rem;
+      font-weight: 700;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* channels */
+    .channel-list { display: flex; flex-direction: column; gap: 12px; }
+    .channel {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px;
+      background: var(--surface-2);
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      text-decoration: none;
+      transition: border-color 0.2s;
+    }
+    .channel:hover { border-color: var(--accent); }
+    .channel-ico {
+      width: 36px; height: 36px;
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.1rem;
+      flex-shrink: 0;
+    }
+    .channel-info { flex: 1; min-width: 0; }
+    .channel-name { font-size: 0.82rem; font-weight: 600; color: var(--text); }
+    .channel-detail { font-size: 0.75rem; color: var(--text-dim); }
+    .channel-arrow { color: var(--text-dim); font-size: 0.75rem; }
+
+    /* response time */
+    .response-list { display: flex; flex-direction: column; gap: 8px; }
+    .response-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.82rem;
+    }
+    .response-row:last-child { border-bottom: none; }
+    .response-row .label { color: var(--text-muted); }
+    .response-badge {
+      padding: 2px 10px;
+      border-radius: 99px;
+      font-size: 0.72rem;
+      font-weight: 600;
+    }
+    .badge-fast { background: var(--green-glow); color: var(--green-light); border: 1px solid rgba(22,163,74,0.25); }
+    .badge-med  { background: rgba(217,119,6,0.1); color: #fbbf24; border: 1px solid rgba(217,119,6,0.25); }
+
+    /* urgency tip */
+    .urgency-card {
+      background: rgba(220,38,38,0.07);
+      border: 1px solid rgba(220,38,38,0.2);
+      border-radius: var(--radius);
+      padding: 20px;
+    }
+    .urgency-card h3 {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: #f87171;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .urgency-card p { font-size: 0.8rem; color: var(--text-muted); line-height: 1.6; }
+    .urgency-card a { color: #f87171; }
+
+    /* ── FOOTER ── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 28px 24px;
+      text-align: center;
+      color: var(--text-dim);
+      font-size: 0.8rem;
+    }
+    footer a { color: var(--text-muted); text-decoration: none; }
+    footer a:hover { color: var(--text); }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 768px) {
+      .container {
+        grid-template-columns: 1fr;
+        padding: 40px 16px 64px;
+        gap: 32px;
+      }
+      .assunto-grid { grid-template-columns: 1fr 1fr; }
+      .field-row { grid-template-columns: 1fr; }
+      .nav-links { display: none; }
+      .form-card { padding: 24px 20px; }
+    }
+    @media (max-width: 420px) {
+      .assunto-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <a class="nav-logo" href="index.html">
+    <span class="logo-icon"><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M12 2.5L4.5 5.5V11.2C4.5 16.1 7.5 19.9 12 21.5C16.5 19.9 19.5 16.1 19.5 11.2V5.5L12 2.5Z'/><path d='M9 12L11.2 14.2L15.5 9.5'/></svg></span>
+    GolpeZero
+  </a>
+  <ul class="nav-links">
+    <li><a href="index.html">Início</a></li>
+    <li><a href="golpes.html">Tipos de Golpes</a></li>
+    <li><a href="simulador.html">Simulador</a></li>
+    <li><a href="dicas.html">Dicas</a></li>
+    <li><a href="noticias.html">Notícias</a></li>
+    <li><a href="faq.html">FAQ</a></li>
+    <li><a href="contato.html" class="active">Contato</a></li>
+  </ul>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-badge"><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><rect x='3' y='5.5' width='18' height='13' rx='1.8'/><path d='M3.5 6.5l8.5 7 8.5-7'/></svg> Fale Conosco</div>
+  <h1>Entre em <span>Contato</span></h1>
+  <p>Dúvidas, sugestões de golpes, reportar conteúdo ou parceria — estamos aqui para ajudar.</p>
+</section>
+
+<!-- MAIN -->
+<div class="container">
+
+  <!-- FORM -->
+  <div class="form-card">
+
+    <!-- Form content -->
+    <div id="form-content">
+      <h2>Envie sua mensagem</h2>
+      <p class="subtitle">Escolha o assunto e preencha as informações abaixo.</p>
+
+      <!-- ASSUNTO -->
+      <div class="assunto-grid" id="assunto-grid">
+        <button class="assunto-btn" data-val="duvida" onclick="selectAssunto(this)">
+          <span class="icon"><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M4 5.5C4 4.7 4.7 4 5.5 4h13c.8 0 1.5.7 1.5 1.5v9c0 .8-.7 1.5-1.5 1.5H9l-4 3.5V5.5Z'/></svg></span>
+          <span>Dúvida geral</span>
+        </button>
+        <button class="assunto-btn" data-val="golpe" onclick="selectAssunto(this)">
+          <span class="icon"><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='8.5'/><circle cx='12' cy='12' r='5'/><circle cx='12' cy='12' r='1.4' fill='currentColor' stroke='none'/></svg></span>
+          <span>Reportar golpe</span>
+        </button>
+        <button class="assunto-btn" data-val="vitima" onclick="selectAssunto(this)">
+          <span class="icon"><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M12 3a4 4 0 0 1 4 4v3H8V7a4 4 0 0 1 4-4Z'/><line x1='6' y1='14' x2='18' y2='14'/><path d='M7 14l-1 7h12l-1-7'/><line x1='12' y1='3' x2='12' y2='1.2'/><line x1='6.5' y1='5' x2='5.2' y2='3.7'/><line x1='17.5' y1='5' x2='18.8' y2='3.7'/></svg></span>
+          <span>Fui vítima</span>
+        </button>
+        <button class="assunto-btn" data-val="sugestao" onclick="selectAssunto(this)">
+          <span class="icon"><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M9 18h6'/><path d='M10 21h4'/><path d='M12 3a6 6 0 0 0-3.5 10.9c.5.4.8 1 .8 1.6V16h5.4v-.5c0-.6.3-1.2.8-1.6A6 6 0 0 0 12 3Z'/></svg></span>
+          <span>Sugestão</span>
+        </button>
+        <button class="assunto-btn" data-val="parceria" onclick="selectAssunto(this)">
+          <span class="icon"><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M3 12l3.5-3 3 1.8 2.5-1.8 2.5 1.8 3-1.8 3.5 3'/><path d='M9.5 10.8l1.8 2.4-1.6 2.6'/><path d='M14.5 10.8l-1.8 2.4 1.6 2.6'/></svg></span>
+          <span>Parceria</span>
+        </button>
+        <button class="assunto-btn" data-val="outro" onclick="selectAssunto(this)">
+          <span class="icon"><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><rect x='5' y='4' width='14' height='17' rx='2'/><rect x='9' y='2.5' width='6' height='3' rx='1'/><line x1='8' y1='10' x2='16' y2='10'/><line x1='8' y1='13.5' x2='16' y2='13.5'/><line x1='8' y1='17' x2='13' y2='17'/></svg></span>
+          <span>Outro</span>
+        </button>
+      </div>
+
+      <!-- FIELDS -->
+      <div class="field-group">
+        <div class="field-row">
+          <div class="field">
+            <label>Nome <span class="required">*</span></label>
+            <input type="text" id="f-nome" placeholder="Seu nome" />
+          </div>
+          <div class="field">
+            <label>E-mail <span class="required">*</span></label>
+            <input type="email" id="f-email" placeholder="seu@email.com" />
+          </div>
+        </div>
+
+        <div class="field" id="field-estado-wrap">
+          <label>Estado</label>
+          <select id="f-estado">
+            <option value="">Selecione seu estado (opcional)</option>
+            <option>AC</option><option>AL</option><option>AP</option><option>AM</option>
+            <option>BA</option><option>CE</option><option>DF</option><option>ES</option>
+            <option>GO</option><option>MA</option><option>MT</option><option>MS</option>
+            <option>MG</option><option>PA</option><option>PB</option><option>PR</option>
+            <option>PE</option><option>PI</option><option>RJ</option><option>RN</option>
+            <option>RS</option><option>RO</option><option>RR</option><option>SC</option>
+            <option>SP</option><option>SE</option><option>TO</option>
+          </select>
+        </div>
+
+        <!-- Golpe-specific fields -->
+        <div id="golpe-fields" style="display:none; flex-direction:column; gap:20px;">
+          <div class="field">
+            <label>Tipo de golpe</label>
+            <select id="f-tipo-golpe">
+              <option value="">Selecione o tipo</option>
+              <option>PIX / Transferência</option>
+              <option>Phishing (link falso)</option>
+              <option>WhatsApp clonado</option>
+              <option>Marketplace / Compra online</option>
+              <option>Falso emprego</option>
+              <option>Golpe romântico</option>
+              <option>Boleto falso</option>
+              <option>Ligação de banco falso</option>
+              <option>Outro / Não sei identificar</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Canal usado pelo golpista</label>
+            <select id="f-canal">
+              <option value="">Selecione o canal</option>
+              <option>WhatsApp</option>
+              <option>SMS</option>
+              <option>Ligação telefônica</option>
+              <option>E-mail</option>
+              <option>Site / Link</option>
+              <option>Redes sociais</option>
+              <option>Marketplace (Mercado Livre, OLX etc.)</option>
+              <option>Presencialmente</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Mensagem <span class="required">*</span></label>
+          <textarea id="f-msg" rows="5" maxlength="2000" placeholder="Descreva sua dúvida, situação ou sugestão com o máximo de detalhes possível..." oninput="updateChar()"></textarea>
+          <div class="field-footer">
+            <span class="field-hint" id="msg-hint">Quanto mais detalhes, melhor conseguimos ajudar.</span>
+            <span class="char-count" id="char-count">0 / 2000</span>
+          </div>
+        </div>
+
+        <!-- File upload -->
+        <div class="field" id="file-field">
+          <label>Evidências <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-dim)">(opcional)</span></label>
+          <div class="file-drop" id="file-drop">
+            <input type="file" id="f-files" multiple accept="image/*,.pdf" onchange="handleFiles(this.files)" />
+            <div class="file-icon"><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M16.5 6.5l-7.8 7.8a3 3 0 0 0 4.2 4.2l7.4-7.4a5 5 0 0 0-7-7l-8 8a6.5 6.5 0 0 0 9.2 9.2'/></svg></div>
+            <p><strong>Arraste arquivos ou clique</strong> para selecionar</p>
+            <p>Prints, PDFs · até 5 MB cada</p>
+          </div>
+          <div class="file-list" id="file-list"></div>
+        </div>
+
+        <!-- Privacy -->
+        <div class="privacy-row">
+          <input type="checkbox" id="f-privacy" />
+          <label for="f-privacy">
+            Concordo que os dados informados serão usados exclusivamente para responder minha mensagem, conforme a
+            <a href="#">Política de Privacidade</a> do GolpeZero.
+          </label>
+        </div>
+
+        <button class="btn-submit" id="btn-submit" onclick="submitForm()" disabled>
+          <span id="btn-text">Enviar mensagem</span>
+          <span id="btn-icon">→</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Success state -->
+    <div class="success-state" id="success-state">
+      <div class="success-icon"><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='9'/><path d='M7.5 12.5l3 3 6-6.5'/></svg></div>
+      <h3>Mensagem enviada!</h3>
+      <p>Recebemos seu contato e responderemos em breve pelo e-mail informado. Obrigado por ajudar a combater golpes.</p>
+      <button class="btn-reset" onclick="resetForm()">← Enviar outra mensagem</button>
+    </div>
+
+  </div>
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+
+    <!-- Canais -->
+    <div class="info-card">
+      <h3><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><rect x='3' y='6.5' width='18' height='13' rx='1.5'/><path d='M3.5 7.5l8.5 6.5 8.5-6.5'/></svg> Outros canais</h3>
+      <div class="channel-list">
+        <a class="channel" href="mailto:contato@golpezero.com.br">
+          <div class="channel-ico" style="background:rgba(37,99,235,0.12)"><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><rect x='3' y='5.5' width='18' height='13' rx='1.8'/><path d='M3.5 6.5l8.5 7 8.5-7'/></svg></div>
+          <div class="channel-info">
+            <div class="channel-name">E-mail direto</div>
+            <div class="channel-detail">contato@golpezero.com.br</div>
+          </div>
+          <span class="channel-arrow">↗</span>
+        </a>
+        <a class="channel" href="#">
+          <div class="channel-ico" style="background:rgba(34,197,94,0.1)"><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M4 5.5C4 4.7 4.7 4 5.5 4h13c.8 0 1.5.7 1.5 1.5v9c0 .8-.7 1.5-1.5 1.5H9l-4 3.5V5.5Z'/></svg></div>
+          <div class="channel-info">
+            <div class="channel-name">WhatsApp</div>
+            <div class="channel-detail">+55 (11) 99999-0000</div>
+          </div>
+          <span class="channel-arrow">↗</span>
+        </a>
+        <a class="channel" href="#">
+          <div class="channel-ico" style="background:rgba(99,102,241,0.12)"><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><rect x='3' y='3' width='18' height='18' rx='5'/><circle cx='12' cy='12' r='4.2'/><circle cx='17' cy='7' r='1' fill='currentColor' stroke='none'/></svg></div>
+          <div class="channel-info">
+            <div class="channel-name">Instagram</div>
+            <div class="channel-detail">@golpezero</div>
+          </div>
+          <span class="channel-arrow">↗</span>
+        </a>
+      </div>
+    </div>
+
+    <!-- Tempo de resposta -->
+    <div class="info-card">
+      <h3><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='13' r='8'/><line x1='12' y1='13' x2='12' y2='8.5'/><line x1='12' y1='13' x2='15' y2='14.5'/><line x1='9' y1='2.5' x2='15' y2='2.5'/><line x1='12' y1='2.5' x2='12' y2='5'/></svg> Tempo de resposta</h3>
+      <div class="response-list">
+        <div class="response-row">
+          <span class="label">Dúvida geral</span>
+          <span class="response-badge badge-med">até 48h</span>
+        </div>
+        <div class="response-row">
+          <span class="label">Reportar golpe</span>
+          <span class="response-badge badge-fast">até 24h</span>
+        </div>
+        <div class="response-row">
+          <span class="label">Fui vítima</span>
+          <span class="response-badge badge-fast">até 12h</span>
+        </div>
+        <div class="response-row">
+          <span class="label">Sugestão / Parceria</span>
+          <span class="response-badge badge-med">até 5 dias</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Emergência -->
+    <div class="urgency-card">
+      <h3><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M12 3a4 4 0 0 1 4 4v3H8V7a4 4 0 0 1 4-4Z'/><line x1='6' y1='14' x2='18' y2='14'/><path d='M7 14l-1 7h12l-1-7'/><line x1='12' y1='3' x2='12' y2='1.2'/><line x1='6.5' y1='5' x2='5.2' y2='3.7'/><line x1='17.5' y1='5' x2='18.8' y2='3.7'/></svg> Situação de emergência?</h3>
+      <p>
+        Se você acabou de sofrer um golpe financeiro, não espere nosso retorno.
+        Ligue <strong style="color:#f87171">agora</strong> para seu banco e registre
+        um B.O. na <a href="https://www.gov.br/pt-br/servicos/registrar-ocorrencia-pela-internet" target="_blank">delegacia virtual</a>.
+        Cada minuto conta para recuperar seu dinheiro.
+      </p>
+    </div>
+
+    <!-- FAQ -->
+    <div class="info-card">
+      <h3><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M9 18h6'/><path d='M10 21h4'/><path d='M12 3a6 6 0 0 0-3.5 10.9c.5.4.8 1 .8 1.6V16h5.4v-.5c0-.6.3-1.2.8-1.6A6 6 0 0 0 12 3Z'/></svg> Antes de enviar</h3>
+      <p style="font-size:0.82rem;color:var(--text-muted);line-height:1.7;">
+        Sua dúvida pode já ter resposta no nosso
+        <a href="faq.html" style="color:var(--accent-light)">FAQ</a>.
+        Consulte também a página
+        <a href="golpes.html" style="color:var(--accent-light)">Tipos de Golpes</a>
+        e as <a href="dicas.html" style="color:var(--accent-light)">Dicas de Segurança</a>.
+      </p>
+    </div>
+
+  </div>
+</div>
+
+<!-- FOOTER -->
+<footer>
+  <p>© 2025 GolpeZero · Proteção digital para todos ·
+    <a href="golpes.html">Tipos de Golpes</a> ·
+    <a href="dicas.html">Dicas</a> ·
+    <a href="faq.html">FAQ</a>
+  </p>
+</footer>
+
+<script>
+  // ── ASSUNTO ──
+  let selectedAssunto = '';
+
+  function selectAssunto(btn) {
+    document.querySelectorAll('.assunto-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    selectedAssunto = btn.dataset.val;
+
+    // Show/hide golpe-specific fields
+    const golpeFields = document.getElementById('golpe-fields');
+    golpeFields.style.display = (selectedAssunto === 'golpe' || selectedAssunto === 'vitima')
+      ? 'flex' : 'none';
+
+    // Update placeholder
+    const hints = {
+      duvida:   'Descreva sua dúvida com detalhes.',
+      golpe:    'Descreva como o golpe funciona: canal, abordagem, valores envolvidos...',
+      vitima:   'Conte o que aconteceu: quando, como, qual valor foi envolvido e o que já fez.',
+      sugestao: 'Qual melhoria ou conteúdo você gostaria de ver no GolpeZero?',
+      parceria: 'Apresente sua organização e como imagina a parceria.',
+      outro:    'Descreva sua mensagem com o máximo de detalhes.',
+    };
+    document.getElementById('f-msg').placeholder = hints[selectedAssunto] || '';
+    validate();
+  }
+
+  // ── CHAR COUNT ──
+  function updateChar() {
+    const msg = document.getElementById('f-msg');
+    const count = document.getElementById('char-count');
+    const len = msg.value.length;
+    count.textContent = `${len} / 2000`;
+    count.classList.toggle('warn', len > 1800);
+    validate();
+  }
+
+  // ── VALIDATION ──
+  function validate() {
+    const nome    = document.getElementById('f-nome').value.trim();
+    const email   = document.getElementById('f-email').value.trim();
+    const msg     = document.getElementById('f-msg').value.trim();
+    const privacy = document.getElementById('f-privacy').checked;
+    const valid   = nome && email && msg.length >= 10 && privacy && selectedAssunto;
+    document.getElementById('btn-submit').disabled = !valid;
+  }
+
+  document.getElementById('f-nome').addEventListener('input', validate);
+  document.getElementById('f-email').addEventListener('input', validate);
+  document.getElementById('f-privacy').addEventListener('change', validate);
+
+  // ── FILE UPLOAD ──
+  let uploadedFiles = [];
+
+  function handleFiles(newFiles) {
+    const added = Array.from(newFiles).filter(f => f.size <= 5 * 1024 * 1024);
+    uploadedFiles = [...uploadedFiles, ...added].slice(0, 5); // max 5 files
+    renderFileList();
+  }
+
+  function renderFileList() {
+    const list = document.getElementById('file-list');
+    list.innerHTML = '';
+    uploadedFiles.forEach((file, i) => {
+      const chip = document.createElement('div');
+      chip.className = 'file-chip';
+      chip.innerHTML = `
+        <span><svg class='ico' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M7 3h7l4 4v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z'/><path d='M14 3v4h4'/><line x1='9' y1='12' x2='15' y2='12'/><line x1='9' y1='15.5' x2='15' y2='15.5'/></svg> ${file.name}</span>
+        <button onclick="removeFile(${i})" title="Remover">×</button>
+      `;
+      list.appendChild(chip);
+    });
+  }
+
+  function removeFile(i) {
+    uploadedFiles.splice(i, 1);
+    renderFileList();
+  }
+
+  // Drag and drop
+  const drop = document.getElementById('file-drop');
+  drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('drag'); });
+  drop.addEventListener('dragleave', () => drop.classList.remove('drag'));
+  drop.addEventListener('drop', e => {
+    e.preventDefault();
+    drop.classList.remove('drag');
+    handleFiles(e.dataTransfer.files);
+  });
+
+  // ── SUBMIT ──
+  function submitForm() {
+    const btn = document.getElementById('btn-submit');
+    btn.disabled = true;
+    document.getElementById('btn-text').textContent = 'Enviando...';
+    document.getElementById('btn-icon').innerHTML = '<span class="spinner"></span>';
+
+    // Simulate send (replace with real fetch in production)
+    setTimeout(() => {
+      document.getElementById('form-content').style.display = 'none';
+      document.getElementById('success-state').classList.add('visible');
+    }, 1800);
+  }
+
+  function resetForm() {
+    document.getElementById('form-content').style.display = 'block';
+    document.getElementById('success-state').classList.remove('visible');
+
+    // Reset fields
+    ['f-nome','f-email','f-msg'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('f-estado').selectedIndex = 0;
+    document.getElementById('f-privacy').checked = false;
+    document.querySelectorAll('.assunto-btn').forEach(b => b.classList.remove('selected'));
+    document.getElementById('golpe-fields').style.display = 'none';
+    selectedAssunto = '';
+    uploadedFiles = [];
+    renderFileList();
+    updateChar();
+
+    const btn = document.getElementById('btn-submit');
+    btn.disabled = true;
+    document.getElementById('btn-text').textContent = 'Enviar mensagem';
+    document.getElementById('btn-icon').textContent = '→';
+  }
+</script>
+</body>
+</html>
