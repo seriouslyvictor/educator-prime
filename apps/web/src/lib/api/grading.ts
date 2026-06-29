@@ -138,8 +138,9 @@ export const grading = {
         body: JSON.stringify({ posted }),
       },
     ).then((response) => {
+      // Match original: clear job + jobs list, but NOT the queue.
       invalidateGradingJob(jobId);
-      invalidateGradingList();
+      clearApiCache("GET /api/grading/jobs");
       return response;
     }),
   retryGradingSubmission: (jobId: string, submissionId: string) =>
@@ -149,8 +150,9 @@ export const grading = {
         method: "POST",
       },
     ).then((response) => {
+      // Match original: clear job + jobs list, but NOT the queue.
       invalidateGradingJob(jobId);
-      invalidateGradingList();
+      clearApiCache("GET /api/grading/jobs");
       return response;
     }),
   deleteGradingCache: (jobId: string) =>
