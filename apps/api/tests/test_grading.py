@@ -2344,13 +2344,15 @@ def test_mock_engine_omits_criterion_scores_when_no_score() -> None:
 
 
 def test_draft_persists_criterion_scores_and_review_derives_final_score(tmp_path) -> None:
+    # Uses course-real/activity-real which has real gradeable corpus files
+    # (docx, html) so the mock engine will assign scores and emit criterion_scores.
     get_settings().grading_cache_path = str(tmp_path / "grading")
     with TestClient(app) as client:
         job = client.post(
             "/api/grading/jobs",
             json={
-                "course_id": "course-1",
-                "activity_id": "activity-1",
+                "course_id": "course-real",
+                "activity_id": "activity-real",
                 "rubric_mode": "structured",
                 "teacher_loop": "approve",
                 "criteria": [
@@ -2360,7 +2362,15 @@ def test_draft_persists_criterion_scores_and_review_derives_final_score(tmp_path
             },
         ).json()
         drafted = client.post(f"/api/grading/jobs/{job['id']}/draft").json()
-        submission = drafted["submissions"][0]
+
+        # Select the first submission that actually received an AI score (docx/html
+        # lane; PDF is vision-gated and will be blocked without visual consent).
+        scored = [s for s in drafted["submissions"] if s.get("ai_score") is not None]
+        assert scored, (
+            "Expected at least one submission with an AI score from course-real; "
+            "check that the corpus docx/html files were committed and are extractable."
+        )
+        submission = scored[0]
 
         # The mock emitted per-criterion points, persisted and exposed in the snapshot,
         # summing to the AI's overall score.

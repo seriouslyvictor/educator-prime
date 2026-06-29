@@ -190,6 +190,7 @@ def test_draft_resume_keeps_one_criterion_score_row_per_criterion(tmp_path) -> N
         GradingSubmission,
         GradingSubmissionCriterionScore,
     )
+    from classroom_downloader.schemas import GradingCriterionInput
     from classroom_downloader.settings import get_settings
 
     class ScoringEngine:
@@ -244,8 +245,8 @@ def test_draft_resume_keeps_one_criterion_score_row_per_criterion(tmp_path) -> N
             session,
             job.id,
             [
-                {"name": "Lógica", "weight": 70, "description": None},
-                {"name": "Estilo", "weight": 30, "description": None},
+                GradingCriterionInput(name="Lógica", weight=70, description=None),
+                GradingCriterionInput(name="Estilo", weight=30, description=None),
             ],
         )
         session.commit()
