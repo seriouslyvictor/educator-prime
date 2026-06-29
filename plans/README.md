@@ -10,7 +10,7 @@ starting, honor STOP conditions, and update the status row when done.
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
-| 028 | Split the monolithic grading backend test module | P1 | M | none | TODO |
+| 028 | Split the monolithic grading backend test module | P1 | M | none | DONE |
 | 029 | Extract grading router services and shared SSE runner | P1 | M | 028 | TODO |
 | 030 | Extract a testable grading EventSource client and reducer | P1 | M | none | TODO |
 | 031 | Split the web API client into transport, cache, and endpoint modules | P2 | M | 030 recommended | TODO |
