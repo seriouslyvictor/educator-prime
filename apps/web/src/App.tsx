@@ -240,6 +240,33 @@ export function App() {
     setView(nextView);
   }
 
+  // Logged-out / connecting state: full-bleed login screen — no Rail, no shell chrome.
+  if (view === "connect") {
+    return (
+      <div data-screen-label="connect">
+        {gateError ? (
+          <Gate error={gateError} onAction={handleGateAction} />
+        ) : (
+          <>
+            {versionSkew ? (
+              <InlineError
+                error={new ApiError(0, "version_skew", "Frontend and backend versions differ.")}
+                onAction={() => window.location.reload()}
+              />
+            ) : null}
+            <ConnectView
+              connecting={busy}
+              deliveryMode={deliveryMode}
+              error={error}
+              onConnect={connectClassroom}
+            />
+          </>
+        )}
+        {apiOffline && !gateError ? <OfflinePill /> : null}
+      </div>
+    );
+  }
+
   return (
     <div className={appStyles.shell} data-screen-label={view}>
       <Rail
@@ -263,14 +290,6 @@ export function App() {
                 onAction={() => window.location.reload()}
               />
             ) : null}
-        {view === "connect" ? (
-          <ConnectView
-            connecting={busy}
-            deliveryMode={deliveryMode}
-            error={error}
-            onConnect={connectClassroom}
-          />
-        ) : null}
 
         {view === "admin" ? <AdminView /> : null}
 

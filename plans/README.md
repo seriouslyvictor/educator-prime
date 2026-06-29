@@ -40,7 +40,7 @@ conditions.
 
 | Plan | Theme | Title | Priority | Effort | Depends on | Status |
 |------|-------|-------|----------|--------|------------|--------|
-| 015 | A · Auth | Standalone login screen (separate from dashboard shell) | P1 | S–M | — (branch `codex/015-login-auth-gate-revamp` is reference only) | TODO |
+| 015 | A · Auth | Standalone login screen (separate from dashboard shell) | P1 | S–M | — (branch `codex/015-login-auth-gate-revamp` is reference only) | DONE — early-return in App.tsx for `view === "connect"` renders ConnectView full-bleed (no Rail, no shell); OAuth behavior byte-for-byte identical; build/lint/test green; e2e cannot run in agent env (needs Python uv + browser) — manual smoke required |
 | 016 | B · Turmas | Grade-awareness: detect already-graded work, graded/ungraded counts, partial-grade choice | P1 | M–L | — | DONE |
 | 017 | C · Review | Hide rubric on review for "Orientação simples" (brief mode) | P2 | S | — (coordinate with 018) | DONE |
 | 018 | C · Review | Per-criterion scores as editable progress bars (points, not %) | P2 | L | — (do before/with 017) | DONE — branch `worktree-agent-ae6cec215aae6d124`; GradingSubmissionCriterionScore table, derived final_score review endpoint, snapshot exposure, mock distributes sub-scores, editable progress bars in GraderReview.tsx; 2 integration tests unblocked by plan 027 corpus; suite 248p/5s; awaiting merge |
