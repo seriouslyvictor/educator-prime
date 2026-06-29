@@ -32,6 +32,11 @@ class GradingEngineResult:
     flags: list[str]
     criterion_notes: list[dict[str, str]] | None = None
     inferred_criteria: list[dict[str, str | int | None]] | None = None
+    # Per-criterion earned points: [{"criterion": name, "earned": float}].
+    # None when the engine did not produce sub-scores (e.g. litellm without
+    # structured-output support). Overall score is DERIVED from these parts
+    # when provided: final_score = sum(earned).
+    criterion_scores: list[dict[str, str | float]] | None = None
 
 
 @dataclass(frozen=True)
@@ -150,12 +155,30 @@ class MockGradingEngine:
             "The teacher should confirm evidence quality before finalizing."
         )
         feedback += f" Confidence: {int(confidence * 100)}%."
+        # Distribute the overall score across criteria proportionally so that
+        # sum(earned) == score.  When there are no criteria the field is None.
+        criterion_scores: list[dict[str, str | float]] | None = None
+        if score is not None and request.criteria:
+            total_weight = sum(int(c.get("weight", 0)) for c in request.criteria)
+            if total_weight > 0:
+                earned_list: list[float] = []
+                for c in request.criteria:
+                    w = int(c.get("weight", 0))
+                    earned_list.append(round(score * w / total_weight, 1))
+                # Adjust last criterion to make sum exactly equal to score.
+                diff = round(score - sum(earned_list), 1)
+                earned_list[-1] = round(earned_list[-1] + diff, 1)
+                criterion_scores = [
+                    {"criterion": str(c.get("name", "")), "earned": e}
+                    for c, e in zip(request.criteria, earned_list)
+                ]
         result = GradingEngineResult(
             score=score,
             confidence=confidence,
             feedback=feedback,
             flags=flags,
             criterion_notes=[],
+            criterion_scores=criterion_scores,
         )
         self.last_response_text = (
             f"score={result.score}; confidence={result.confidence}; "

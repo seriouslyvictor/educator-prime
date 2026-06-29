@@ -16,7 +16,13 @@ from classroom_downloader.database import engine
 from classroom_downloader.content_extraction import extract_submission_content
 from classroom_downloader.google_provider import ClassroomActivity, ClassroomCourse
 from classroom_downloader.main import app, provider_dependency
-from classroom_downloader.grading_engine import GradingEngine, GradingEngineRequest, GradingEngineResult, OutlierFlag
+from classroom_downloader.grading_engine import (
+    GradingEngine,
+    GradingEngineRequest,
+    GradingEngineResult,
+    MockGradingEngine,
+    OutlierFlag,
+)
 from classroom_downloader.llm_errors import LlmCallError
 from classroom_downloader.models import (
     GradingAiAttempt,
@@ -2286,6 +2292,107 @@ def test_grading_csv_includes_teacher_edits(tmp_path) -> None:
     assert response.status_code == 200
     assert "Teacher-edited feedback" in response.text
     assert "88" in response.text
+
+
+def _grade_request(criteria, *, teacher_loop="approve") -> GradingEngineRequest:
+    return GradingEngineRequest(
+        job_id="job-cs",
+        submission_id="sub-cs",
+        activity_title="Mitose",
+        rubric_mode="structured",
+        teacher_loop=teacher_loop,
+        rubric_text=None,
+        criteria=criteria,
+        student_label="Aluno 1",
+        source_label="lab.pdf",
+        mime_type="text/plain",
+        content="x = 1\n",
+    )
+
+
+def test_mock_engine_criterion_scores_sum_to_overall_score() -> None:
+    result = MockGradingEngine().grade(
+        _grade_request(
+            [
+                {"name": "Lógica", "weight": 70, "description": None},
+                {"name": "Estilo", "weight": 30, "description": None},
+            ]
+        )
+    )
+    assert result.criterion_scores is not None
+    assert [c["criterion"] for c in result.criterion_scores] == ["Lógica", "Estilo"]
+    # Overall score is DERIVED from the parts: sum(earned) == score (rounding aside).
+    assert round(sum(c["earned"] for c in result.criterion_scores), 1) == round(
+        result.score, 1
+    )
+
+
+def test_mock_engine_omits_criterion_scores_without_criteria() -> None:
+    assert MockGradingEngine().grade(_grade_request([])).criterion_scores is None
+
+
+def test_mock_engine_omits_criterion_scores_when_no_score() -> None:
+    # cowrite mode produces no overall score, so there is nothing to distribute.
+    result = MockGradingEngine().grade(
+        _grade_request(
+            [{"name": "Original", "weight": 100, "description": None}],
+            teacher_loop="cowrite",
+        )
+    )
+    assert result.score is None
+    assert result.criterion_scores is None
+
+
+def test_draft_persists_criterion_scores_and_review_derives_final_score(tmp_path) -> None:
+    get_settings().grading_cache_path = str(tmp_path / "grading")
+    with TestClient(app) as client:
+        job = client.post(
+            "/api/grading/jobs",
+            json={
+                "course_id": "course-1",
+                "activity_id": "activity-1",
+                "rubric_mode": "structured",
+                "teacher_loop": "approve",
+                "criteria": [
+                    {"name": "Lógica", "weight": 70, "description": None},
+                    {"name": "Estilo", "weight": 30, "description": None},
+                ],
+            },
+        ).json()
+        drafted = client.post(f"/api/grading/jobs/{job['id']}/draft").json()
+        submission = drafted["submissions"][0]
+
+        # The mock emitted per-criterion points, persisted and exposed in the snapshot,
+        # summing to the AI's overall score.
+        scores = submission["criterion_scores"]
+        assert len(scores) == 2
+        assert round(sum(c["earned"] for c in scores), 1) == round(
+            submission["ai_score"], 1
+        )
+        crit_ids = [c["criterion_id"] for c in scores]
+
+        # Teacher edits the per-criterion points. final_score must be DERIVED from
+        # the parts (sum), so the deliberately-wrong final_score below is ignored.
+        client.post(
+            f"/api/grading/jobs/{job['id']}/submissions/{submission['id']}/review",
+            json={
+                "final_score": 1,
+                "feedback": "ok",
+                "reviewed": True,
+                "criterion_scores": [
+                    {"criterion_id": crit_ids[0], "earned": 60},
+                    {"criterion_id": crit_ids[1], "earned": 25},
+                ],
+            },
+        )
+        reread = client.get(f"/api/grading/jobs/{job['id']}").json()
+
+    edited = next(s for s in reread["submissions"] if s["id"] == submission["id"])
+    assert edited["final_score"] == 85
+    assert {(c["criterion_id"], c["earned"]) for c in edited["criterion_scores"]} == {
+        (crit_ids[0], 60.0),
+        (crit_ids[1], 25.0),
+    }
 
 
 def test_classroom_links_endpoint_backfills_links_and_posted_state(tmp_path) -> None:

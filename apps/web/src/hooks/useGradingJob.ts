@@ -6,6 +6,7 @@ import type {
   AppView,
   Course,
   GradingCriterionInput,
+  GradingCriterionScore,
   GradingJob,
   GradingQueueItem,
   GradingScope,
@@ -644,7 +645,12 @@ export function useGradingJob({
     }
   }
 
-  async function acceptGradingDraft(submission: GradingSubmission, score: number, feedback: string) {
+  async function acceptGradingDraft(
+    submission: GradingSubmission,
+    score: number,
+    feedback: string,
+    criterionScores?: GradingCriterionScore[],
+  ) {
     if (!gradingJob) return;
     setAcceptingSubmissionId(submission.id);
     setError(null);
@@ -653,6 +659,7 @@ export function useGradingJob({
         final_score: score,
         feedback,
         reviewed: true,
+        ...(criterionScores && criterionScores.length > 0 ? { criterion_scores: criterionScores } : {}),
       });
       setGradingJob(updated);
       const index = updated.submissions.findIndex((row) => row.id === submission.id);

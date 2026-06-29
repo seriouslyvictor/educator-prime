@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import type { GradingJob, GradingSubmission, PrivacyAudit } from "../../types";
+import type { GradingCriterionScore, GradingJob, GradingSubmission, PrivacyAudit } from "../../types";
 import { AppIcon } from "../icons";
 import { GraderTopbar } from "./GraderTopbar";
 import { studentLabel } from "./domain";
@@ -51,7 +51,7 @@ export function GraderReview({
   onActiveSubmission: (id: string) => void;
   onBack: () => void;
   onWrap: () => void;
-  onAccept: (submission: GradingSubmission, score: number, feedback: string) => void;
+  onAccept: (submission: GradingSubmission, score: number, feedback: string, criterionScores?: GradingCriterionScore[]) => void;
   onRetry: (submission: GradingSubmission) => void;
 }) {
   const [filter, setFilter] = useState<ReviewFilter>("all");
@@ -62,10 +62,18 @@ export function GraderReview({
   );
   const [scoreText, setScoreText] = useState(String(active?.final_score ?? active?.ai_score ?? ""));
   const [feedback, setFeedback] = useState(active?.feedback ?? "");
+  // Per-criterion earned points keyed by criterion_id. Initialised from the
+  // active submission's stored criterion_scores (AI or teacher-edited).
+  const [criterionScores, setCriterionScores] = useState<Record<string, number>>(() =>
+    Object.fromEntries((active?.criterion_scores ?? []).map((cs) => [cs.criterion_id, cs.earned])),
+  );
 
   useEffect(() => {
     setScoreText(String(active?.final_score ?? active?.ai_score ?? ""));
     setFeedback(active?.feedback ?? "");
+    setCriterionScores(
+      Object.fromEntries((active?.criterion_scores ?? []).map((cs) => [cs.criterion_id, cs.earned])),
+    );
   }, [active?.id]);
 
   const counts = useMemo(() => {
@@ -120,7 +128,14 @@ export function GraderReview({
   };
 
   const accept = () => {
-    if (active && hasValidScore && !activePending && !activeAccepting) onAccept(active, score, feedback);
+    if (!active || !hasValidScore || activePending || activeAccepting) return;
+    // Collect per-criterion scores in the order of job.criteria so the backend
+    // receives a well-ordered list (order doesn't affect the sum, but it's
+    // cleaner).
+    const csArray: GradingCriterionScore[] = job.criteria
+      .filter((c) => criterionScores[c.id] !== undefined)
+      .map((c) => ({ criterion_id: c.id, earned: criterionScores[c.id] }));
+    onAccept(active, score, feedback, csArray.length > 0 ? csArray : undefined);
   };
 
   // Keyboard review: J/K to move, Enter to accept — ignored while typing in a field.
@@ -341,15 +356,50 @@ export function GraderReview({
                 </div>
               ) : (
                 <div className="breakdown">
-                  {job.criteria.map((criterion) => (
-                    <div key={criterion.id} className="bd-row">
-                      <div className="bd-head">
-                        <span className="bd-name">{criterion.name}</span>
-                        <span className="bd-weight">{criterion.weight}%</span>
+                  {job.criteria.map((criterion) => {
+                    const earned = criterionScores[criterion.id] ?? null;
+                    const pct = earned != null && criterion.weight > 0
+                      ? Math.min(100, Math.max(0, (earned / criterion.weight) * 100))
+                      : 0;
+                    const hasScore = earned != null;
+                    return (
+                      <div key={criterion.id} className="bd-row">
+                        <div className="bd-head">
+                          <span className="bd-name">{criterion.name}</span>
+                          <span className="bd-score">
+                            {hasScore ? (
+                              <input
+                                className="bd-score-input"
+                                type="number"
+                                min={0}
+                                max={criterion.weight}
+                                step={0.5}
+                                value={earned ?? ""}
+                                aria-label={`Pontos para ${criterion.name}`}
+                                onChange={(e) => {
+                                  const val = parseFloat(e.target.value);
+                                  if (!Number.isFinite(val)) return;
+                                  const clamped = Math.min(criterion.weight, Math.max(0, val));
+                                  const next = { ...criterionScores, [criterion.id]: clamped };
+                                  setCriterionScores(next);
+                                  // Derive overall score from sum of parts.
+                                  const sum = Object.values(next).reduce((a, b) => a + b, 0);
+                                  setScoreText(String(Math.round(sum * 10) / 10));
+                                }}
+                              />
+                            ) : "—"}
+                            <span className="bd-score-max">/{criterion.weight}</span>
+                          </span>
+                        </div>
+                        {hasScore && (
+                          <div className="bd-bar">
+                            <div className="bd-bar-fill" style={{ width: `${pct}%` }} />
+                          </div>
+                        )}
+                        {criterion.latest_ai_note ? <div className="bd-explain">{criterion.latest_ai_note}</div> : null}
                       </div>
-                      {criterion.latest_ai_note ? <div className="bd-note">{criterion.latest_ai_note}</div> : null}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )
             ) : job.rubric_text ? (

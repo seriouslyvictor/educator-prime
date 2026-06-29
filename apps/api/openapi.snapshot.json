@@ -845,6 +845,24 @@
         "title": "GradingCriterionRead",
         "type": "object"
       },
+      "GradingCriterionScoreRead": {
+        "properties": {
+          "criterion_id": {
+            "title": "Criterion Id",
+            "type": "string"
+          },
+          "earned": {
+            "title": "Earned",
+            "type": "number"
+          }
+        },
+        "required": [
+          "criterion_id",
+          "earned"
+        ],
+        "title": "GradingCriterionScoreRead",
+        "type": "object"
+      },
       "GradingFileCacheRead": {
         "properties": {
           "byte_size": {
@@ -1352,6 +1370,20 @@
       },
       "GradingReviewUpdate": {
         "properties": {
+          "criterion_scores": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/GradingCriterionScoreRead"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Criterion Scores"
+          },
           "feedback": {
             "anyOf": [
               {
@@ -1586,6 +1618,14 @@
               }
             ],
             "title": "Confidence"
+          },
+          "criterion_scores": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/GradingCriterionScoreRead"
+            },
+            "title": "Criterion Scores",
+            "type": "array"
           },
           "error": {
             "anyOf": [

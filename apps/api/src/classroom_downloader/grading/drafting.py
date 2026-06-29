@@ -16,6 +16,7 @@ from ..models import (
     GradingScrubCache,
     GradingStatus,
     GradingSubmission,
+    GradingSubmissionCriterionScore,
     GradingSubmissionFile,
 )
 from ..observability import get_logger, log_debug, log_error, log_event, safe_fields, text_preview
@@ -42,6 +43,52 @@ from .submissions import (
 )
 
 logger = get_logger(__name__)
+
+
+def _apply_criterion_scores(
+    session: Session,
+    submission: GradingSubmission,
+    criteria: list[GradingCriterion],
+    criterion_scores: list[dict[str, str | float]],
+) -> None:
+    """Replace per-criterion earned-points rows for this submission.
+
+    Matches engine output (keyed by criterion name) against the job's
+    GradingCriterion rows (keyed by id).  Unmatched names are silently
+    ignored.  Idempotent: deletes existing rows for this submission first."""
+    from uuid import uuid4
+
+    # Always clear stale rows first so a retry produces clean state.
+    existing = session.exec(
+        select(GradingSubmissionCriterionScore).where(
+            GradingSubmissionCriterionScore.submission_id == submission.id
+        )
+    ).all()
+    for row in existing:
+        session.delete(row)
+
+    if not criterion_scores:
+        return
+
+    criteria_by_name = {c.name: c for c in criteria}
+    for entry in criterion_scores:
+        name = entry.get("criterion", "")
+        earned = entry.get("earned")
+        if not isinstance(name, str) or not name.strip():
+            continue
+        if earned is None:
+            continue
+        criterion = criteria_by_name.get(name)
+        if criterion is None:
+            continue
+        session.add(
+            GradingSubmissionCriterionScore(
+                id=str(uuid4()),
+                submission_id=submission.id,
+                criterion_id=criterion.id,
+                earned=float(earned),
+            )
+        )
 
 
 def _combine_submission_content(
@@ -312,6 +359,7 @@ def _draft_submission(
         response_text=getattr(grading_engine, "last_response_text", None),
     )
     _apply_criterion_notes(session, criteria, result.criterion_notes or [])
+    _apply_criterion_scores(session, submission, criteria, result.criterion_scores or [])
     cowrite = job.teacher_loop == "cowrite"
     auto_accept = (
         job.teacher_loop == "auto"

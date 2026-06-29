@@ -418,8 +418,8 @@ export function App() {
               onActiveSubmission={setActiveGradingSubmissionId}
               onBack={() => setView("workspace")}
               onWrap={() => setView("graderWrap")}
-              onAccept={(submission, score, feedback) =>
-                void acceptGradingDraft(submission, score, feedback)
+              onAccept={(submission, score, feedback, criterionScores) =>
+                void acceptGradingDraft(submission, score, feedback, criterionScores)
               }
               onRetry={(submission) => void retryGradingDraft(submission)}
             />

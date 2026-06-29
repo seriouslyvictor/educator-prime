@@ -658,6 +658,7 @@ def parse_litellm_result(
     feedback = payload.get("feedback")
     criterion_notes = payload.get("criterion_notes", [])
     inferred_criteria = payload.get("inferred_criteria", [])
+    criterion_scores_raw = payload.get("criterion_scores", [])
     flags = payload.get("flags", [])
 
     if request_score:
@@ -680,6 +681,28 @@ def parse_litellm_result(
     if not isinstance(flags, list) or not all(isinstance(flag, str) for flag in flags):
         raise ValueError("malformed_llm_response")
 
+    # Parse per-criterion scores; degrade gracefully when absent or malformed.
+    # Gate: only materialise when the model returned a non-empty valid list.
+    criterion_scores: list[dict[str, str | float]] | None = None
+    if isinstance(criterion_scores_raw, list) and criterion_scores_raw:
+        valid: list[dict[str, str | float]] = []
+        for row in criterion_scores_raw:
+            if not isinstance(row, dict):
+                continue
+            name = row.get("criterion")
+            earned = row.get("earned")
+            if not isinstance(name, str) or name.strip() == "":
+                continue
+            try:
+                earned_f = float(earned)  # type: ignore[arg-type]
+            except (TypeError, ValueError):
+                continue
+            if earned_f < 0:
+                earned_f = 0.0
+            valid.append({"criterion": name.strip(), "earned": round(earned_f, 2)})
+        if valid:
+            criterion_scores = valid
+
     return GradingEngineResult(
         score=score,
         confidence=confidence,
@@ -699,6 +722,7 @@ def parse_litellm_result(
             and isinstance(criterion.get("name"), str)
             and isinstance(criterion.get("weight"), int)
         ],
+        criterion_scores=criterion_scores,
     )
 
 
@@ -761,6 +785,11 @@ def _build_messages(request: GradingEngineRequest) -> list[dict[str, str]]:
             else []
         ),
         "criterion_notes": [{"criterion": "string", "note": "string"}],
+        "criterion_scores": (
+            [{"criterion": "string (criterion name)", "earned": "number 0..weight"}]
+            if request.criteria
+            else []
+        ),
         "flags": ["string"],
     }
     user_payload = {
@@ -867,6 +896,18 @@ def _response_format(model: LlmModelEntry) -> dict[str, Any]:
                                 "required": ["criterion", "note"],
                             },
                         },
+                        "criterion_scores": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "additionalProperties": False,
+                                "properties": {
+                                    "criterion": {"type": "string"},
+                                    "earned": {"type": "number", "minimum": 0},
+                                },
+                                "required": ["criterion", "earned"],
+                            },
+                        },
                         "flags": {"type": "array", "items": {"type": "string"}},
                     },
                     "required": [
@@ -875,6 +916,7 @@ def _response_format(model: LlmModelEntry) -> dict[str, Any]:
                         "feedback",
                         "inferred_criteria",
                         "criterion_notes",
+                        "criterion_scores",
                         "flags",
                     ],
                 },

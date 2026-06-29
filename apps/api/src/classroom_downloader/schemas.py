@@ -135,10 +135,19 @@ class GradingCriteriaUpdate(BaseModel):
     criteria: list[GradingCriterionInput]
 
 
+class GradingCriterionScoreRead(BaseModel):
+    criterion_id: str
+    earned: float
+
+
 class GradingReviewUpdate(BaseModel):
     final_score: float
     feedback: str | None = None
     reviewed: bool = True
+    # When provided, these per-criterion points override final_score: the
+    # endpoint recomputes final_score = sum(earned) so the overall score is
+    # always DERIVED from the parts (single source of truth).
+    criterion_scores: list[GradingCriterionScoreRead] | None = None
 
 
 class GradingPostedUpdate(BaseModel):
@@ -194,6 +203,7 @@ class GradingSubmissionRead(BaseModel):
     ai_cache_write_tokens: int | None = None
     ai_cost_cents: float | None = None
     ai_latency_ms: int | None = None
+    criterion_scores: list[GradingCriterionScoreRead] = []
 
 
 class GradingFileCacheRead(BaseModel):
