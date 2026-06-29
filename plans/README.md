@@ -16,14 +16,14 @@ advisory session. The advisor does not modify source code.
 | 003 | Encrypt Google OAuth credentials at rest | P2 | M | — | DONE |
 | 004 | Shared grader/domain.ts; resolve dead session_secret_key | P3 | S | — (Part B interacts with 003) | DONE |
 | 006 | Playwright E2E for core flows, mock mode, in CI (boot, logout, nav, queue) | P1 | M | — (recommended before 005) | DONE |
-| 007 | Local real-session smoke — real OAuth, prod-like, true logout/reload | P2 | M | 006 (reuses Playwright tooling) | TODO |
+| 007 | Local real-session smoke — real OAuth, prod-like, true logout/reload | P2 | M | 006 (reuses Playwright tooling) | ARCHIVED — manual local-only smoke; implementation not worth the effort (maintainer 2026-06-28) |
 | 005 | Decompose the 1380-line App.tsx into hooks | P2 | L | 001, 002 (use 006 as smoke net) | DONE — all 4 hooks extracted; App.tsx 442 lines; manual smoke checklist pending human pass |
 | 008 | Decompose GraderReview.tsx into a co-located `review/` component folder | P1 | M | — (001/002/006 nets already landed) | DONE — commit 6d34c12; 831→388 lines; 5 files in review/; build/test/lint green = baseline |
 | 009 | Decompose GraderSetup.tsx + GraderQueue.tsx into co-located folders | P2 | M | 008 (same recipe; sequencing only) | DONE — commit 86350b1; Setup 608→356, Queue 564→213; build/test/lint green = baseline; e2e deferred to human (no backend/browser in agent) |
 | 010 | Frontend UI conventions guardrail (FRONTEND.md + safe `cn` consolidation) | P2 | S | — | DONE — commit 7cc05de; apps/web/FRONTEND.md added; cn consolidated onto lib/utils; utils.test.ts pins it; build/test/lint green = baseline |
 | 011 | Spike — bridge the home-brewed and shadcn token systems | P3 | M | 010 | DONE — spike/011-token-bridge branch; findings in apps/web/docs/token-bridge-findings.md; recommendation: bridge as prototyped; build green; screenshots deferred to human (no browser in agent); plan 012 written |
 | 012 | Implement the token bridge (fix dark mode + bridge shadcn palette to brand) | P3 | S | 011 | DONE — token bridge already matched spike diff; FRONTEND.md updated; pnpm build and pnpm e2e green; screenshot evidence saved in apps/web/docs/screenshots/after |
-| 013 | Gradual Google permissions — incremental OAuth, capability gates, just-in-time Drive consent | P1 | L | 003 | TODO — first agent attempt discarded (built on a stale base 17 commits behind main); restart fresh from main HEAD |
+| 013 | Gradual Google permissions — incremental OAuth, capability gates, just-in-time Drive consent | P1 | L | 003 | REJECTED — gradual scoping broke login and turned the workflow into a consent-screen nightmare (extra screens every couple of clicks just to see what was available); rolled back. Branch `codex/gradual-google-permissions` abandoned. Do not revisit. (maintainer 2026-06-28) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED
 (one-line rationale).
