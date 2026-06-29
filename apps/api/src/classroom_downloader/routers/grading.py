@@ -38,6 +38,7 @@ from ..google_provider import GoogleProvider
 from ..grading_engine import GradingEngine
 from ..grading.preview import preview_response_mode
 from ..grading.review import apply_review
+from ..grading.workflow import ensure_privacy_audit_allows_draft, maybe_infer_job_criteria
 from ..models import (
     Activity,
     Course,
@@ -78,43 +79,6 @@ router = APIRouter()
 VALID_RUBRIC_MODES = {"infer", "brief", "structured", "saved", "calibrate"}
 
 # --- Helpers -----------------------------------------------------------------
-
-
-def ensure_privacy_audit_allows_draft(
-    job: GradingJob,
-    session: Session,
-    provider: GoogleProvider,
-):
-    audit = latest_privacy_audit(session, job.id)
-    if audit is None or audit.status not in {"completed", "completed_with_blocks"}:
-        audit = run_privacy_audit(session, job, provider)
-    if audit.high_risk_files > 0:
-        raise HTTPException(
-            status_code=409,
-            detail="Privacy audit found high-risk rows. Review the audit before drafting.",
-        )
-    return audit
-
-
-def maybe_infer_job_criteria(
-    job: GradingJob,
-    session: Session,
-    provider: GoogleProvider,
-    grading_engine: GradingEngine,
-    *,
-    on_progress=None,
-) -> None:
-    """Run rubric inference once, before drafting, for infer-mode jobs whose
-    criteria are still the placeholders. No-op otherwise (teacher-set or already
-    inferred), so re-drafts don't re-bill the inference call."""
-    if job.rubric_mode != "infer":
-        return
-    criteria = session.exec(
-        select(GradingCriterion).where(GradingCriterion.job_id == job.id)
-    ).all()
-    if not _criteria_match_defaults(criteria):
-        return
-    infer_job_criteria(session, job, provider, grading_engine, on_progress=on_progress)
 
 
 def _get_owned_job(job_id: str, user_email: str, session: Session) -> GradingJob:
