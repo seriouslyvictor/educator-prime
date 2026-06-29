@@ -36,6 +36,7 @@ from ..grading import (
 )
 from ..google_provider import GoogleProvider
 from ..grading_engine import GradingEngine
+from ..grading.preview import preview_response_mode
 from ..models import (
     Activity,
     Course,
@@ -74,85 +75,6 @@ router = APIRouter()
 # --- Module constants --------------------------------------------------------
 
 VALID_RUBRIC_MODES = {"infer", "brief", "structured", "saved", "calibrate"}
-
-# Student-uploaded files are served back to the teacher. Only render types that
-# cannot execute script on the app origin inline; everything else (HTML, SVG,
-# Office docs, unknown binaries) is forced to download. Paired with nosniff so the
-# browser cannot re-interpret a "safe" type as active content.
-SAFE_INLINE_MIME_TYPES = frozenset(
-    {
-        "image/jpeg",
-        "image/png",
-        "image/gif",
-        "image/webp",
-        "application/pdf",
-    }
-)
-SAFE_TEXT_MIME_TYPES = frozenset(
-    {
-        "text/plain",
-        "application/json",
-        "application/ld+json",
-        "application/xml",
-        "application/xhtml+xml",
-        "application/javascript",
-        "application/typescript",
-        "application/x-yaml",
-        "application/yaml",
-        "text/csv",
-        "text/markdown",
-        "text/x-python",
-        "text/x-java-source",
-        "text/x-c",
-        "text/x-c++",
-        "text/x-csharp",
-        "text/x-go",
-        "text/x-rust",
-        "text/x-php",
-        "text/x-ruby",
-        "text/x-sql",
-    }
-)
-SAFE_TEXT_EXTENSIONS = frozenset(
-    {
-        ".txt",
-        ".md",
-        ".markdown",
-        ".csv",
-        ".tsv",
-        ".json",
-        ".jsonl",
-        ".xml",
-        ".yaml",
-        ".yml",
-        ".py",
-        ".js",
-        ".jsx",
-        ".ts",
-        ".tsx",
-        ".css",
-        ".scss",
-        ".html",
-        ".htm",
-        ".java",
-        ".c",
-        ".h",
-        ".cpp",
-        ".hpp",
-        ".cs",
-        ".go",
-        ".rs",
-        ".php",
-        ".rb",
-        ".sql",
-        ".sh",
-        ".ps1",
-        ".bat",
-        ".ini",
-        ".toml",
-        ".lock",
-    }
-)
 
 # --- Helpers -----------------------------------------------------------------
 
@@ -199,25 +121,6 @@ def _get_owned_job(job_id: str, user_email: str, session: Session) -> GradingJob
     if job is None or job.user_email != user_email:
         raise HTTPException(status_code=404, detail="Grading job not found.")
     return job
-
-
-def _is_utf8_text(content: bytes) -> bool:
-    try:
-        content.decode("utf-8")
-    except UnicodeDecodeError:
-        return False
-    return True
-
-
-def _preview_response_mode(mime_type: str, source_name: str, content: bytes) -> tuple[bool, str]:
-    if mime_type in SAFE_INLINE_MIME_TYPES:
-        return True, mime_type
-    if mime_type.startswith("text/") or mime_type in SAFE_TEXT_MIME_TYPES:
-        return True, "text/plain; charset=utf-8"
-    if mime_type == "application/octet-stream" and Path(source_name).suffix.lower() in SAFE_TEXT_EXTENSIONS:
-        if _is_utf8_text(content):
-            return True, "text/plain; charset=utf-8"
-    return False, mime_type or "application/octet-stream"
 
 
 # --- Routes ------------------------------------------------------------------
@@ -1169,7 +1072,7 @@ def preview_grading_submission(
         )
     normalized_mime = (cache.mime_type or submission.mime_type or "").split(";")[0].strip().lower()
     content = path.read_bytes()
-    inline_ok, response_media_type = _preview_response_mode(
+    inline_ok, response_media_type = preview_response_mode(
         normalized_mime,
         cache.source_name or submission.source_name,
         content,
