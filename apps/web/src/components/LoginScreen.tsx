@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { AppIcon } from "./icons";
 import { InlineError } from "./ui";
 import loginStyles from "./LoginScreen.module.css";
-void loginStyles;
 
 export function LoginScreen({
   connecting,
@@ -20,7 +19,7 @@ export function LoginScreen({
   onConnect: () => void;
 }) {
   return (
-    <div className="ls-root">
+    <div className={loginStyles["ls-root"]}>
       {/* ── Left: brand/pitch aside ───────────────────────── */}
       <aside className="ls-aside">
         <div className="ls-brand">
