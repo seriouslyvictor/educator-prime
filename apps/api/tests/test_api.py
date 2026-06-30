@@ -11,7 +11,7 @@ from sqlmodel import Session, select
 
 from classroom_downloader.database import engine, init_db
 from classroom_downloader.main import app, provider_dependency, settings
-from classroom_downloader.models import Activity, Course, UserSession
+from classroom_downloader.models import Activity, Course, GradingJob, UserSession
 
 _FAKE_CREDS_JSON = json.dumps({
     "token": "access-token",
@@ -197,6 +197,44 @@ def test_logout_deletes_google_token(monkeypatch) -> None:
         assert db.get(UserSession, session_id) is None
         assert db.exec(select(Course).where(Course.id == "logout-course")).first() is None
         assert db.exec(select(Activity).where(Activity.id == "logout-activity")).first() is None
+
+
+def test_logout_purges_state_when_user_has_grading_jobs(monkeypatch) -> None:
+    """Regression: logout in google mode must not 500 when the user has grading
+    jobs. The job-cache purge branch (skipped when there are no jobs) iterates a
+    single-column ``select(GradingJob.id)``, whose rows are scalar id strings.
+    Reaching for ``.id`` on those strings raised AttributeError -> HTTP 500.
+    """
+    session_id = "test-session-logout-jobs"
+    monkeypatch.setattr(settings, "google_provider", "google")
+    init_db()
+    with Session(engine) as db:
+        db.merge(UserSession(
+            id=session_id,
+            user_email="teacher@example.edu",
+            google_credentials_json=_FAKE_CREDS_JSON,
+            expires_at=datetime.now(UTC) + timedelta(hours=1),
+        ))
+        db.merge(GradingJob(
+            id="logout-job",
+            course_id="logout-course",
+            course_name="Logout",
+            activity_id="logout-activity",
+            activity_title="Logout activity",
+            rubric_mode="infer",
+            teacher_loop="off",
+            user_email="teacher@example.edu",
+        ))
+        db.commit()
+
+    with TestClient(app) as client:
+        client.cookies.set(settings.session_cookie_name, session_id)
+        response = client.post("/api/auth/google/logout")
+
+    assert response.status_code == 200
+    assert response.json()["signed_in"] is False
+    with Session(engine) as db:
+        assert db.get(UserSession, session_id) is None
 
 
 def test_courses_reports_expired_google_session_as_unauthorized() -> None:

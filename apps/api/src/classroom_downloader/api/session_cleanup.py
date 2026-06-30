@@ -31,12 +31,12 @@ def purge_cached_classroom_state_for_user(user_email: str, session: Session) -> 
     for row in session.exec(select(Course).where(Course.user_email == user_email)).all():
         session.delete(row)
     now = datetime.now(UTC)
-    job_ids = [
-        row.id
-        for row in session.exec(
+    # exec(select(GradingJob.id)) yields scalar id strings, not GradingJob rows.
+    job_ids = list(
+        session.exec(
             select(GradingJob.id).where(GradingJob.user_email == user_email)
         ).all()
-    ]
+    )
     if job_ids:
         for row in session.exec(
             select(GradingFileCache).where(GradingFileCache.job_id.in_(job_ids))
