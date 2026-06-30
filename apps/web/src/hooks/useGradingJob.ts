@@ -15,6 +15,17 @@ import type {
   RubricMode,
   TeacherLoopMode,
 } from "../types";
+import { openGradingStream } from "../lib/gradingEventSource";
+import {
+  applyProgressExhausted,
+  applyProgressPayload,
+  applyProgressReconnecting,
+  gradingItemFromJob,
+  mergeDraftSubmission,
+  type GradingInlineProgress,
+  type GradingStreamPayload,
+} from "./gradingProgress";
+export type { GradingInlineProgress, GradingStreamPayload } from "./gradingProgress";
 
 // Remembering the active grading job lets a page reload drop the teacher back
 // into the same job instead of an empty workspace — the job itself is already
@@ -38,67 +49,11 @@ export function writeStoredJobId(jobId: string | null): void {
   }
 }
 
-export function mergeDraftSubmission(
-  currentSubmissions: GradingSubmission[],
-  incoming: GradingSubmission,
-): GradingSubmission[] {
-  let found = false;
-  const submissions = currentSubmissions.map((row) => {
-    if (row.id !== incoming.id) return row;
-    found = true;
-    return row.reviewed ? row : incoming;
-  });
-  if (!found) submissions.push(incoming);
-  return submissions;
-}
-
-// Build the lightweight queue item the Setup screen needs from a full job — used
-// when resuming a not-yet-drafted ("ready") job back into the Setup/prepare screen.
-export function gradingItemFromJob(job: GradingJob): GradingQueueItem {
-  return {
-    course_id: job.course_id,
-    course_name: job.course_name,
-    activity_id: job.activity_id,
-    activity_title: job.activity_title,
-    due_label: null,
-    submission_count: job.total_submissions,
-    status: job.status,
-    latest_job_id: job.id,
-    queue_state: job.queue_state,
-    reviewed_submissions: job.reviewed_submissions,
-    total_submissions: job.total_submissions,
-    graded_submissions: 0,
-    ungraded_submissions: job.total_submissions,
-    concluded: false,
-  };
-}
+export { mergeDraftSubmission, gradingItemFromJob };
 
 function appError(caught: unknown, fallback: string): ApiError {
   return apiErrorFromUnknown(caught, fallback);
 }
-
-export type GradingStreamPayload = {
-  phase?: "audit" | "criteria" | "draft" | "outlier_review";
-  processed?: number;
-  total?: number;
-  current?: string;
-  done?: boolean;
-  error?: string;
-  summary?: PrivacyAudit;
-  job?: GradingJob;
-  submission?: GradingSubmission;
-  queued?: GradingSubmission[];
-  drafting_id?: string;
-};
-
-export type GradingInlineProgress = {
-  phase: "audit" | "criteria" | "draft" | "outlier_review";
-  processed: number;
-  total: number;
-  current: string;
-  done: boolean;
-  error: string | null;
-};
 
 type UseGradingJobOptions = {
   setView: (view: AppView) => void;
@@ -164,94 +119,17 @@ export function useGradingJob({
       error: null,
     });
 
-    return new Promise((resolve, reject) => {
-      let source: EventSource | null = null;
-      let settled = false;
-      let reconnectAttempt = 0;
-      const reconnectDelays = [2_000, 5_000, 10_000];
-
-      const finish = (callback: () => void) => {
-        if (settled) return;
-        settled = true;
-        source?.close();
-        callback();
-      };
-
-      const connect = () => {
-        source?.close();
-        source = new EventSource(url);
-
-        source.onmessage = (event) => {
-        let payload: GradingStreamPayload;
-        try {
-          payload = JSON.parse(event.data) as GradingStreamPayload;
-        } catch {
-          finish(() => reject(new Error(fallbackError)));
-          return;
-        }
-
-        if (payload.error) {
-          const errorMessage = payload.error;
-          setGradingProgress((currentState) => ({
-            phase: payload.phase ?? currentState?.phase ?? phase,
-            processed: payload.processed ?? currentState?.processed ?? 0,
-            total: payload.total ?? currentState?.total ?? 0,
-            current: payload.current ?? currentState?.current ?? "",
-            done: true,
-            error: errorMessage,
-          }));
-          finish(() => reject(new Error(errorMessage)));
-          return;
-        }
-
+    return openGradingStream(url, fallbackError, {
+      onPayload: (payload) => {
         onPayload?.(payload);
-        setGradingProgress((currentState) => ({
-          phase: payload.phase ?? currentState?.phase ?? phase,
-          processed: payload.processed ?? currentState?.processed ?? 0,
-          total: payload.total ?? currentState?.total ?? 0,
-          current: payload.current ?? currentState?.current ?? "",
-          done: Boolean(payload.done),
-          error: null,
-        }));
-
-        if (payload.done) {
-          finish(() => resolve(payload));
-        }
-        };
-
-        source.onerror = () => {
-          source?.close();
-          const delay = reconnectDelays[reconnectAttempt];
-          if (delay !== undefined) {
-            reconnectAttempt += 1;
-            setGradingProgress((current) => ({
-              phase,
-              processed: current?.processed ?? 0,
-              total: current?.total ?? 0,
-              current: `Reconectando... tentativa ${reconnectAttempt}/3`,
-              done: false,
-              error: null,
-            }));
-            window.setTimeout(() => {
-              if (!settled) connect();
-            }, delay);
-            return;
-          }
-          const resumeMessage =
-            "O processamento foi interrompido, mas pode continuar de onde parou. Use Retomar na fila.";
-          setGradingProgress((current) => ({
-            phase,
-            processed: current?.processed ?? 0,
-            total: current?.total ?? 0,
-            current: current?.current ?? "",
-            done: true,
-            error: resumeMessage,
-          }));
-          finish(() => reject(new Error(resumeMessage || fallbackError)));
-        };
-      };
-
-      connect();
+        setGradingProgress((current) => applyProgressPayload(current, payload, phase));
+      },
+      onReconnecting: (attempt) => {
+        setGradingProgress((current) => applyProgressReconnecting(current, phase, attempt));
+      },
+      onExhausted: (message) => {
+        setGradingProgress((current) => applyProgressExhausted(current, phase, message));
+      },
     });
   }
 
