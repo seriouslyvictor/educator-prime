@@ -6,6 +6,7 @@ import { queueItemKey, isDestructiveAction, isQueueActionValid, bulkActions } fr
 import { ReferenceQueueSection } from "./queue/ReferenceQueueCard";
 import { ArchivedSection } from "./queue/ArchivedSection";
 import graderStyles from "./Grader.module.css";
+import "./GraderQueue.module.css";
 void graderStyles;
 
 export function GraderQueue({
