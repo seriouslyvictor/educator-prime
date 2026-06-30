@@ -1,30 +1,106 @@
-# Classroom Downloader
+# Educator Prime (assistente de correções)
 
-Classroom Downloader helps teachers move Google Classroom submissions into safer, inspectable workflows for local export and draft-only AI-assisted grading.
+O Educator Prime ajuda professores a trabalhar com entregas do Google Classroom:
+baixar e organizar arquivos, preparar correções com apoio de IA, revisar resultados
+e manter o professor no controle do lançamento final.
 
-It currently achieves:
+O projeto nasceu como **Classroom Downloader**, focado em exportação local de
+entregas. Hoje ele é mais amplo: um assistente de correção para turmas que usam
+Google Classroom, ainda em formato de ferramenta interna/MVP funcional.
 
-- Local export of Classroom and Drive submissions into an organized folder structure.
-- Draft grading workflows where the teacher stays in control.
-- A privacy audit before AI drafting, using pseudonyms and safe metadata instead of raw student identifiers.
-- Blocking or flagging unsupported and high-risk submissions before they can enter the grading path.
+O público principal são professores individuais e cursos pequenos que precisam
+ganhar tempo sem transformar a correção em uma caixa-preta. A IA pode ser usada de
+forma mais cautelosa, como rascunho revisado entrega por entrega, ou de forma mais
+automatizada. Em todos os casos, quem escolhe o grau de automação e assume o
+resultado é o professor.
 
-Privacy is a product requirement. Audit reports do not store extracted submission text, scrubbed text, prompts, raw student names, or student emails. AI grading remains draft-only and does not post grades or comments back to Classroom.
+## O que ele faz hoje
 
-## Documentation
+- Conecta ao Google Classroom e ao Google Drive.
+- Lista turmas, atividades e entregas.
+- Exporta arquivos de uma atividade para uma estrutura local organizada.
+- Cria trabalhos de correção com critérios/rubricas.
+- Faz auditoria de privacidade antes de enviar conteúdo textual para IA.
+- Usa IA para gerar notas por critério e comentários, com revisão humana.
+- Permite retentativas, revisão de casos individuais e marcação de outliers.
+- Prepara uma saída estruturada para revisão, registro e lançamento manual.
+- Ajuda o professor a navegar até as entregas no Classroom durante o lançamento.
 
-Project documentation lives in [`docs/`](docs/index.md). Start with
-[docs/architecture.md](docs/architecture.md) for the system overview and
-[docs/constraints.md](docs/constraints.md) for what the tool can and cannot do (and
-why). The conceptual docs are written in pt-BR.
+Um fluxo típico fica assim:
 
-## Stack
+1. O professor conecta a conta Google.
+2. Escolhe turma, atividade e escopo da correção.
+3. Define ou infere critérios de avaliação.
+4. Roda a auditoria de privacidade.
+5. Gera as correções com o nível de automação escolhido.
+6. Revisa notas, comentários e casos sinalizados.
+7. Usa o resultado revisado para registrar e lançar as notas manualmente.
 
-- Frontend: Vite, React, TypeScript, shadcn-style local UI primitives
-- Backend: FastAPI, SQLModel, SQLite for development
-- Export target: Chromium File System Access API
+## O que ele não faz
 
-## Development
+- Não substitui o julgamento do professor.
+- Não publica notas ou comentários automaticamente no Google Classroom.
+- Não transforma a API do Google em algo que ela não permite. Há limites reais de
+  OAuth, escopos, modo Testing e expiração de token.
+- Não garante privacidade visual total em imagens. Esse ponto é importante:
+  imagens, prints, fotos e arquivos com conteúdo visual podem carregar rostos,
+  nomes, documentos ou outros dados sensíveis que a trilha textual não consegue
+  censurar com segurança hoje.
+- Não é uma plataforma pública pronta para qualquer escola usar sem configuração.
+  O app depende de credenciais Google, usuários autorizados e decisões cuidadosas
+  de implantação.
+
+Há uma direção de produto para pré-processar imagens e censurar dados sensíveis com
+Google Sensitive Data Protection ou serviço parecido. Isso ainda não é uma garantia
+atual do sistema.
+
+## Privacidade
+
+Privacidade é requisito central do produto, principalmente porque o sistema lida
+com dados de estudantes e, muitas vezes, menores de idade.
+
+Antes da correção com IA, o app roda uma auditoria de privacidade. O fluxo usa
+pseudônimos, metadados seguros e etapas de bloqueio ou alerta para reduzir o risco
+de enviar informação sensível ao modelo. O objetivo não é só "usar IA", mas criar
+um caminho em que o professor consiga inspecionar o que será processado.
+
+Alguns cuidados são deliberados:
+
+- relatórios de auditoria não guardam texto extraído bruto;
+- nomes e e-mails de estudantes não são persistidos em relatórios de IA;
+- conteúdos de alto risco podem ser bloqueados antes da etapa de correção;
+- a correção por IA continua subordinada à revisão e decisão do professor;
+- arquivos com imagem exigem cuidado extra, porque ainda não há censura visual
+  confiável antes da extração.
+
+Para os limites completos, leia [docs/constraints.md](docs/constraints.md).
+
+## Como funciona
+
+O produto gira em torno de dois fluxos principais.
+
+**Exportação de arquivos:** o professor escolhe uma turma e uma atividade, o backend
+busca os anexos pelo Classroom/Drive, e o frontend grava os arquivos no computador
+do usuário usando a File System Access API do Chromium.
+
+**Correção assistida:** o professor cria um job de correção, define critérios,
+vincula links do Classroom, roda a auditoria de privacidade e então gera correções
+com IA ou com o motor mock de desenvolvimento. O resultado passa por revisão,
+retentativas e sinalização de outliers antes de virar material de lançamento.
+
+Por dentro, o projeto usa:
+
+- Frontend: Vite, React, TypeScript e componentes locais no estilo shadcn.
+- Backend: FastAPI, SQLModel e SQLite.
+- Google: OAuth, Classroom API e Drive API.
+- IA: motor mock para desenvolvimento ou LiteLLM com modelo configurável.
+- Armazenamento local: banco SQLite, tokens criptografados, caches de exportação e
+  cache temporário de arquivos usados na correção.
+
+## Rodando localmente
+
+O backend roda em modo mock por padrão. Assim dá para abrir o produto e testar os
+fluxos principais sem credenciais reais do Google e sem chamadas pagas de IA.
 
 Backend:
 
@@ -41,48 +117,54 @@ pnpm install
 pnpm run dev
 ```
 
-Open `http://127.0.0.1:5173`.
+Abra `http://127.0.0.1:5173`.
 
-Keep the backend running while using the frontend. Vite proxies `/api/*` requests to
-`http://127.0.0.1:8000`; if the API is not listening, the browser will show a generic
-request failure from the proxy.
+Mantenha o backend ligado enquanto usa o frontend. O Vite encaminha chamadas
+`/api/*` para `http://127.0.0.1:8000`; se a API estiver desligada, o navegador vai
+mostrar uma falha genérica de proxy.
 
-The backend runs in mock Google mode by default, so the product workflow can be tested before Google OAuth credentials are configured.
+Para configuração local, copie `apps/api/.env.example` para `apps/api/.env` e ajuste
+apenas o que for necessário.
 
-## Backend Settings
+## Configurações principais
 
-Copy `apps/api/.env.example` to `apps/api/.env` for local overrides.
-
-| Setting | Values | Purpose |
+| Variável | Valores comuns | Uso |
 | --- | --- | --- |
-| `CD_GOOGLE_PROVIDER` | `mock`, `google` | Use fake local data or real Google OAuth/Classroom/Drive. |
-| `CD_GRADING_ENGINE` | `mock`, `litellm` | Selects deterministic local grading or the configured LiteLLM grading engine when enabled. |
-| `CD_LITELLM_MODEL` | model id | Model id from the merged LLM catalog. |
-| `CD_LLM_MODEL_CATALOG_MODE` | `remote_cached`, `local_only`, `remote_required` | Controls dynamic LiteLLM price-map fetching. |
-| `CD_LOG_LEVEL` | `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` | Controls backend console verbosity. |
-| `CD_LOG_RICH` | `true`, `false` | Enables Rich-formatted console logs. |
-| `CD_LOG_PAYLOAD_PREVIEWS` | `true`, `false` | Shows text previews for extraction, privacy scrub, and grading payloads. |
-| `CD_LOG_PREVIEW_CHARS` | integer | Max characters shown for text previews. |
-| `CD_GRADING_CACHE_TTL_HOURS` | integer | Hours before cached grading source files expire. |
+| `CD_GOOGLE_PROVIDER` | `mock`, `google` | Escolhe dados falsos locais ou Google OAuth/Classroom/Drive reais. |
+| `CD_GRADING_ENGINE` | `mock`, `litellm` | Usa corretor determinístico local ou chamadas reais via LiteLLM. |
+| `CD_LITELLM_MODEL` | id do modelo | Modelo usado pelo LiteLLM quando a IA real está ligada. |
+| `CD_DATABASE_URL` | URL SQLite | Caminho do banco local ou persistente em produção. |
+| `CD_SESSION_SECRET_KEY` | segredo longo | Criptografa tokens OAuth salvos em disco. Obrigatório com Google real. |
+| `CD_LOG_LEVEL` | `DEBUG`, `INFO`, `WARNING`, `ERROR` | Controla a verbosidade dos logs do backend. |
+| `CD_GRADING_CACHE_PATH` | caminho local | Cache temporário dos arquivos usados na correção. |
 
-LiteLLM smoke test:
+Para usar Google real, `CD_GOOGLE_PROVIDER=google` exige client ID, client secret,
+redirect URI e chave de sessão. Para usar IA real, `CD_GRADING_ENGINE=litellm`
+também exige a chave do provedor do modelo escolhido, como `OPENAI_API_KEY`,
+`ANTHROPIC_API_KEY` ou `GEMINI_API_KEY`.
 
-```powershell
-cd apps/api
-$env:CD_GRADING_ENGINE="litellm"
-$env:CD_LITELLM_MODEL="openai/gpt-5"
-uv run python scripts/smoke_litellm_grading.py
-```
+## Docker e Coolify
 
-## Docker / Coolify deployment
+O `Dockerfile` da raiz compila o frontend Vite e serve tudo pelo backend FastAPI na
+porta `8000`. Em produção, o app pode rodar em um único domínio.
 
-The root `Dockerfile` builds the Vite frontend and serves it from the FastAPI
-backend on port `8000`, so production can run on one domain.
+Para Coolify, a implantação esperada usa o fluxo de aplicação por repositório Git,
+build pack Dockerfile, porta exposta `8000` e volume persistente em `/data`. Esse
+volume guarda banco SQLite, tokens OAuth e caches.
 
-For Coolify deployment to `https://classroom.supernovasw.cloud`, use the Git
-repository application flow with the Dockerfile build pack, expose port `8000`,
-and mount a persistent volume at `/data`.
+O guia completo fica em [docs/coolify-deploy.md](docs/coolify-deploy.md).
 
-See [docs/coolify-deploy.md](docs/coolify-deploy.md) for the exact Coolify
-settings, required environment variables, Google OAuth redirect URI, and smoke
-checks.
+## Documentação recomendada
+
+- [docs/index.md](docs/index.md) - entrada da documentação.
+- [docs/architecture.md](docs/architecture.md) - visão geral do sistema e dos
+  fluxos principais.
+- [docs/constraints.md](docs/constraints.md) - limites do produto, privacidade,
+  Google OAuth, escopos e decisões de segurança.
+- [docs/grading-lifecycle.md](docs/grading-lifecycle.md) - ciclo de vida de um job
+  de correção.
+- [docs/information-architecture.md](docs/information-architecture.md) - telas,
+  navegação e estados do frontend.
+- [docs/api.md](docs/api.md) - referência das rotas.
+- [docs/decisions.md](docs/decisions.md) - decisões fechadas e histórico técnico.
+- [docs/coolify-deploy.md](docs/coolify-deploy.md) - implantação em produção.
