@@ -1,6 +1,6 @@
 ﻿# Decisões e histórico
 
-Este documento registra as decisões que moldam o Classroom Downloader, especialmente
+Este documento registra as decisões que moldam o Educator Prime, especialmente
 as que já foram discutidas, testadas ou descartadas. A função dele é evitar que uma
 pessoa, ou um agente, reabra o mesmo assunto sem uma informação nova de verdade.
 

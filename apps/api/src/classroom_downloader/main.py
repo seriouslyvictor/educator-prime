@@ -114,7 +114,7 @@ async def lifespan(_: FastAPI):
     yield
 
 
-app = FastAPI(title="Classroom Downloader API", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="Educator Prime API", version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

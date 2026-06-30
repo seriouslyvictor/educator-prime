@@ -1,1 +1,1 @@
-"""Classroom Downloader API."""
+"""Educator Prime API."""

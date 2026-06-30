@@ -1,6 +1,6 @@
-﻿# Arquitetura - Classroom Downloader
+﻿# Arquitetura - Educator Prime
 
-Este documento explica, em linguagem direta, como o Classroom Downloader se organiza.
+Este documento explica, em linguagem direta, como o Educator Prime se organiza.
 A ideia é que uma pessoa, ou outro agente, consiga entender em poucos minutos como
 as peças principais se conectam antes de abrir o código.
 
@@ -11,7 +11,7 @@ Para os limites do produto, privacidade e restrições impostas pelo Google, lei
 
 ## 1. O que é
 
-O Classroom Downloader ajuda professores a trabalhar com entregas do Google
+O Educator Prime ajuda professores a trabalhar com entregas do Google
 Classroom. Hoje ele faz duas coisas principais:
 
 1. **Exporta entregas** para uma pasta local organizada no computador do professor.

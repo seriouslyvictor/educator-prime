@@ -293,7 +293,7 @@ wheels = [
 ]
 
 [[package]]
-name = "classroom-downloader-api"
+name = "educator-prime-api"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [

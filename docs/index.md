@@ -1,4 +1,4 @@
-# Documentação — Classroom Downloader
+# Documentação — Educator Prime
 
 Ponto de partida da documentação do projeto. Comece pela visão geral e desça o nível
 de detalhe conforme a necessidade.

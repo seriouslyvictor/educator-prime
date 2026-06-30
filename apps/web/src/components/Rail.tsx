@@ -30,7 +30,7 @@ export function Rail({
       <div className="rail-brand">
         <div className="brand-mark">CD</div>
         <div>
-          <div className="brand-name">Classroom Downloader</div>
+          <div className="brand-name">Educator Prime</div>
           <div className="brand-sub">Exportações beta</div>
         </div>
       </div>

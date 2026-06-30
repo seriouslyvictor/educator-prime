@@ -25,7 +25,7 @@ export function LoginScreen({
       <aside className="ls-aside">
         <div className="ls-brand">
           <span className="ls-mark">CD</span>
-          Classroom Downloader
+          Educator Prime
         </div>
 
         <div className="ls-pitch">

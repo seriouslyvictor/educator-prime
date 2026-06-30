@@ -2,7 +2,7 @@ from classroom_downloader.main import _scrub_sentry_event, app
 
 
 def test_app_imports_without_sentry_dsn() -> None:
-    assert app.title == "Classroom Downloader API"
+    assert app.title == "Educator Prime API"
 
 
 def test_scrub_sentry_event_redacts_sensitive_shapes() -> None:

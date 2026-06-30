@@ -29,7 +29,7 @@ test("connect screen renders standalone layout without rail", async ({ page }) =
   await expect(page.locator("aside.rail")).toHaveCount(0);
 
   // The brand aside is visible (left panel).
-  await expect(page.getByText("Classroom Downloader")).toBeVisible();
+  await expect(page.getByText("Educator Prime")).toBeVisible();
 
   // The OAuth connect button is the primary action.
   await expect(

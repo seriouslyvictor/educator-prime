@@ -263,7 +263,7 @@ def test_static_frontend_serves_index_and_keeps_api_404(monkeypatch, tmp_path) -
     static_dir = tmp_path / "static"
     static_dir.mkdir()
     (static_dir / "index.html").write_text(
-        '<div id="root">Classroom Downloader app shell</div>',
+        '<div id="root">Educator Prime app shell</div>',
         encoding="utf-8",
     )
     monkeypatch.setattr(settings, "static_dir", str(static_dir))
@@ -274,9 +274,9 @@ def test_static_frontend_serves_index_and_keeps_api_404(monkeypatch, tmp_path) -
         api_missing = client.get("/api/not-a-real-route")
 
     assert root.status_code == 200
-    assert "Classroom Downloader app shell" in root.text
+    assert "Educator Prime app shell" in root.text
     assert nested.status_code == 200
-    assert "Classroom Downloader app shell" in nested.text
+    assert "Educator Prime app shell" in nested.text
     assert api_missing.status_code == 404
     assert api_missing.headers["content-type"].startswith("application/json")
 
