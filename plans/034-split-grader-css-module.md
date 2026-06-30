@@ -18,6 +18,32 @@
 - **Depends on**: archive/008-decompose-grader-review.md and archive/009-decompose-grader-setup-queue.md completed
 - **Category**: tech-debt
 - **Planned at**: commit `035af04`, 2026-06-29
+- **Status**: BLOCKED — abandoned during review (partial queue split reverted)
+
+## Outcome (2026-06-30)
+
+A first attempt split queue-exclusive selectors into `GraderQueue.module.css`
+and imported it from `GraderQueue.tsx`. `pnpm build`, `pnpm test:run`, and
+`pnpm lint` all passed, but a built-CSS inspection showed the entire moved block
+(`g-topbar`, `ai-empty-actions`, `q-card`, etc.) was **absent from the output
+bundle** — a silent visual regression that the build/test/lint gates cannot
+catch and that the plan's visual-smoke gate (unavailable headless here) was meant
+to catch.
+
+Root cause: with `vite.config.ts` using `generateScopedName: "[local]"`, the
+grader components reference global class-name strings, not the imported style
+object. `Grader.module.css` is still bundled only because several components
+genuinely use `graderStyles.x` (a used export keeps the module + its CSS side
+effect). A new per-screen module imported solely for its side effect (`void
+graderQueueStyles`) gets tree-shaken by Rollup, dropping its CSS. This makes a
+clean per-module CSS split incompatible with the current `[local]` setup.
+
+The partial commit was reverted (`781c07f`). Recommended path if revisited:
+either (a) rename the per-screen files to plain `.css` (non-module) imports,
+which are never tree-shaken — note this contradicts the plan's "new CSS modules"
++ "no vite config change" scoping, so it needs a fresh decision; or (b) drop
+this plan, since `[local]` scoping means the split yields no real isolation
+benefit (the original "hollow premise" caveat). Lowest-value plan in the batch.
 
 ## Why this matters
 
